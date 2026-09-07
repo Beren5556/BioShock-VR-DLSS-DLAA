@@ -9,12 +9,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("Instalador BioShock VR DLSS-DLAA Beta 0.2")]
-[assembly: AssemblyDescription("Instalador autonomo y reversible de BioShock VR DLSS-DLAA Beta 0.2")]
+[assembly: AssemblyTitle("Instalador BioShock VR DLSS-DLAA Beta 0.2.1")]
+[assembly: AssemblyDescription("Instalador autonomo y reversible de BioShock VR DLSS-DLAA Beta 0.2.1")]
 [assembly: AssemblyCompany("BioShock VR Community")]
 [assembly: AssemblyProduct("BioShock VR DLSS-DLAA Beta")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.2.1.0")]
+[assembly: AssemblyFileVersion("0.2.1.0")]
 
 namespace BioshockVrDlss45Installer
 {
@@ -62,7 +62,7 @@ namespace BioshockVrDlss45Installer
 
     internal static class InstallerCore
     {
-        internal const string DisplayVersion = "Beta 0.2";
+        internal const string DisplayVersion = "Beta 0.2.1";
         internal const string ExpectedGameSha256 = "AEC21A0072CFDB15E4B525E2320C87256F14F16894F714272069270AD099A05B";
         internal const string RequiredReleaseUrl = "https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2";
         internal const string ProjectUrl = "https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr";
@@ -80,14 +80,14 @@ namespace BioshockVrDlss45Installer
             new Payload("BioShockVR-DLSS45-Host64.exe", Path.Combine("host64", "BioShockVR-DLSS45-Host64.exe"), "480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453"),
             new Payload("nvngx_dlss.dll", Path.Combine("host64", "nvngx_dlss.dll"), "BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E"),
             new Payload("dlss-capabilities.ini", Path.Combine("host64", "dlss-capabilities.ini"), "7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77"),
-            new Payload("Lanzador BioShock VR DLSS-DLAA.exe", LauncherName, "73572143A1791504BF8207411BD7C0BE37061C8244733013A6D35A8B03718315"),
-            new Payload("LEEME-DLSS45.md", Path.Combine("BioShockVR-DLSS45", "LEEME-DLSS45.md"), "FE70E0E0741A39B1FB814689D805BE8D870A49438D245DF3AE3AB02244CEF7AC"),
-            new Payload("NVIDIA-DLSS-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "NVIDIA-DLSS-LICENSE.txt"), "DC2778A3283427285984CDB5B3F7F03EAE7D8A06057F672F2999C5EE7FD4F67D"),
-            new Payload("INFORMACION-DEL-PAQUETE.txt", Path.Combine("BioShockVR-DLSS45", "INFORMACION-DEL-PAQUETE.txt"), "461973B3559470DFA26DABCCE551483CDB6965F9F35BFF7C4262604F9206A50B"),
+            new Payload("Lanzador BioShock VR DLSS-DLAA.exe", LauncherName, "298E4E7E744DBD5EC11FF7A32083B1CA5EB787C7BD8A7F23C504E3062B57D0D4"),
+            new Payload("LEEME-DLSS45.md", Path.Combine("BioShockVR-DLSS45", "LEEME-DLSS45.md"), "8AEE2FCA8E2B2AA053FC483417402C81EAD38BFBA6FA9A0CE0A3C00E00E2EB5F"),
+            new Payload("NVIDIA-DLSS-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "NVIDIA-DLSS-LICENSE.txt"), "A3E28883672AB1B48187A0CC004EA468C76F6BEA15F33F0F38A970B7F7E04C64"),
+            new Payload("INFORMACION-DEL-PAQUETE.txt", Path.Combine("BioShockVR-DLSS45", "INFORMACION-DEL-PAQUETE.txt"), "C7D9799CC7D1E8CC4E4673B0BB913F8EC3A962BB6B6A030FB079602CC13AF449"),
             new Payload("dlss.ini.example", Path.Combine("BioShockVR-DLSS45", "dlss.ini.example"), "0C8D1260BC3A5782106D95E6D374CE87D03CA0F36D3C198527F3C3359B601329"),
             new Payload("BioShockVR-MIT-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "BioShockVR-MIT-LICENSE.txt"), "199384980B6925AA5DA072314C0C265BB097F41C7849A7AB0E6DE9294D3D8114"),
             new Payload("DLSS-Host-MIT-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "DLSS-Host-MIT-LICENSE.txt"), "1CE240E402901FB81EB82A60A6BAFD2FB913CD5746860B0A4EC52A5ACB49CED7"),
-            new Payload("THIRD_PARTY_NOTICES.md", Path.Combine("BioShockVR-DLSS45", "Licenses", "THIRD_PARTY_NOTICES.md"), "1237069D15F745E7F76F9B8C8E8FB2CB72FD9392783CEFA8123C16E4F3FB3763"),
+            new Payload("THIRD_PARTY_NOTICES.md", Path.Combine("BioShockVR-DLSS45", "Licenses", "THIRD_PARTY_NOTICES.md"), "56EB4D3AEF9087E47113609CE507856A0270A62B8C6E1734CDF0EE5A2B670C13"),
             new Payload("MinHook-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "MinHook-LICENSE.txt"), "4F21F857550D7BE854DA6EA5F2DA4E6775CA4E3FBB535E4F3D961C47D0BF3335"),
             new Payload("Dear-ImGui-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "Dear-ImGui-LICENSE.txt"), "F20418B409E53C8C9F4E90917FF395554A60320D4DFBF833DA89B339CAD8628A"),
             new Payload("OpenVR-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "OpenVR-LICENSE.txt"), "9E6D1480FB68E86CEAFED312F7E67DADCDC2A99B350B710D624B8F0F0F1A2329"),
@@ -448,7 +448,7 @@ namespace BioshockVrDlss45Installer
                 Type shortcutType = shortcut.GetType();
                 shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { launcherPath });
                 shortcutType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { Path.GetDirectoryName(launcherPath) });
-                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "BioShock VR DLSS-DLAA Beta 0.2" });
+                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "BioShock VR DLSS-DLAA Beta 0.2.1" });
                 shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { launcherPath + ",0" });
                 shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
             }
@@ -634,7 +634,7 @@ namespace BioshockVrDlss45Installer
             string temp = ManifestPath + ".new-" + Guid.NewGuid().ToString("N");
             List<string> lines = new List<string>();
             lines.Add("Format=2");
-            lines.Add("Version=0.2");
+            lines.Add("Version=0.2.1");
             lines.Add("GameDirectory=" + Encode(manifest.GameDirectory));
             lines.Add("BackupDirectory=" + Encode(manifest.BackupDirectory));
             lines.Add("ShortcutPath=" + Encode(manifest.ShortcutPath));
@@ -868,7 +868,7 @@ namespace BioshockVrDlss45Installer
 
         internal MainForm()
         {
-            Text = "Instalador de BioShock VR · DLSS/DLAA Beta 0.2";
+            Text = "Instalador de BioShock VR · DLSS/DLAA Beta 0.2.1";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -881,7 +881,7 @@ namespace BioshockVrDlss45Installer
             catch { }
 
             Label title = new Label();
-            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2";
+            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2.1";
             title.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
             title.ForeColor = SystemColors.ControlText;
             title.Location = new Point(20, 17);
@@ -889,7 +889,7 @@ namespace BioshockVrDlss45Installer
             Controls.Add(title);
 
             Label subtitle = new Label();
-            subtitle.Text = "Fork beta basado en BioShock VR v0.8.2";
+            subtitle.Text = "Mod original de Mohamad Balouza · Base BioShock VR v0.8.2";
             subtitle.ForeColor = SystemColors.GrayText;
             subtitle.Location = new Point(22, 51);
             subtitle.AutoSize = true;
@@ -1025,7 +1025,7 @@ namespace BioshockVrDlss45Installer
             }
 
             DialogResult answer = MessageBox.Show(this,
-                "Se instalará BioShock VR DLSS/DLAA Beta 0.2 y se guardará una copia de los archivos sustituidos.\r\n\r\n¿Quieres continuar?",
+                "Se instalará BioShock VR DLSS/DLAA Beta 0.2.1 y se guardará una copia de los archivos sustituidos.\r\n\r\n¿Quieres continuar?",
                 "Confirmar instalación", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
             if (answer != DialogResult.OK) return;
 
@@ -1099,13 +1099,13 @@ namespace BioshockVrDlss45Installer
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(520, 284);
+            ClientSize = new Size(520, 336);
             Font = new Font("Segoe UI", 9F);
             BackColor = SystemColors.Control;
             ShowInTaskbar = false;
 
             Label title = new Label();
-            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2";
+            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2.1";
             title.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
             title.Location = new Point(20, 18);
             title.AutoSize = true;
@@ -1115,22 +1115,23 @@ namespace BioshockVrDlss45Installer
             description.Text =
                 "Fork beta basado en BioShock VR v0.8.2, con integración experimental\r\n" +
                 "de NORMAL, DLAA y DLSS 4.5. El instalador incluye el mod completo.\r\n\r\n" +
-                "Mod original: BioShock VR v0.8.2\r\n" +
-                "Creador: Mohamad Balouza\r\n" +
-                "Proyecto: VR-Stereo-Hub";
+                "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\r\n" +
+                "Creador del mod original y de la implementación VR fundamental.\r\n" +
+                "Sin su enorme trabajo, este fork no existiría.\r\n" +
+                "Proyecto original: VR-Stereo-Hub · Versión base: v0.8.2";
             description.Location = new Point(22, 55);
-            description.Size = new Size(470, 112);
+            description.Size = new Size(470, 142);
             Controls.Add(description);
 
-            AddLink("Versión original v0.8.2", InstallerCore.RequiredReleaseUrl, 174);
-            AddLink("Proyecto oficial", InstallerCore.ProjectUrl, 198);
-            AddLink("Perfil de Mohamad Balouza", InstallerCore.CreatorUrl, 222);
+            AddLink("Versión original v0.8.2", InstallerCore.RequiredReleaseUrl, 220);
+            AddLink("Proyecto original", InstallerCore.ProjectUrl, 244);
+            AddLink("Perfil de Mohamad Balouza", InstallerCore.CreatorUrl, 268);
 
             Button close = new Button();
             close.Text = "Cerrar";
             close.FlatStyle = FlatStyle.System;
             close.DialogResult = DialogResult.OK;
-            close.Location = new Point(410, 244);
+            close.Location = new Point(410, 296);
             close.Size = new Size(88, 28);
             Controls.Add(close);
             AcceptButton = close;

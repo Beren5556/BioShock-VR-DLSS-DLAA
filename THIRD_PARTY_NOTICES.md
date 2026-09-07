@@ -1,5 +1,13 @@
 # Third-party notices
 
+## Original project base
+
+This fork is based on **BioShock VR v0.8.2**, created by
+[Mohamad Balouza](https://github.com/mohamad-balouza) and published by
+[VR-Stereo-Hub](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr) under the
+MIT license preserved in `LICENSE`. The original project provides the
+fundamental VR implementation; this fork would not exist without that work.
+
 This project vendors the following libraries as git submodules under `third_party/`. Each keeps
 its own license file in its submodule.
 

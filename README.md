@@ -2,14 +2,16 @@
 
 Fork comunitario y experimental de [BioShock VR v0.8.2](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2) para BioShock Remastered. Añade una ruta temporal independiente por ojo y un lanzador nativo de Windows con tres modos claros: NORMAL, DLAA y DLSS 4.5.
 
-> Versión actual: **v0.2.0-beta**. El proyecto permanece privado durante esta fase de pruebas.
+> Versión actual: **v0.2.1-beta**. Es una beta pública, comunitaria y no oficial.
+
+> **Agradecimiento principal:** este proyecto existe gracias a **[Mohamad Balouza](https://github.com/mohamad-balouza)**, creador de BioShock VR. Él realizó el trabajo fundamental y más difícil: llevar BioShock Remastered a VR con renderizado estereoscópico, seguimiento 6DOF y controladores de movimiento. Este fork construye sobre esa enorme base; no pretende sustituirla ni atribuirse su autoría. Visita y apoya el [proyecto original de VR-Stereo-Hub](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr).
 
 ## Descargar e instalar
 
-La distribución recomendada es el instalador autónomo de la [Release v0.2.0-beta](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.0-beta). No hace falta instalar antes el mod original.
+La distribución recomendada es el instalador autónomo de la [Release v0.2.1-beta](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.1-beta). No hace falta instalar antes el mod original.
 
 1. Cierra BioShock Remastered y sus componentes VR.
-2. Ejecuta **Instalador BioShock VR DLSS-DLAA Beta 0.2.exe**.
+2. Ejecuta **Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe**.
 3. Selecciona la carpeta del juego que contiene BioshockHD.exe; normalmente termina en BioShock Remastered\Build\Final.
 4. Instala y abre el acceso directo **BioShock VR DLSS-DLAA Beta**.
 5. Elige NORMAL, DLAA o DLSS y lanza el juego.
@@ -29,9 +31,9 @@ Esta beta no contiene DLSS 5 Neural Rendering. Tampoco expone FXAA ni el antiguo
 
 | Archivo | SHA-256 |
 |---|---|
-| Instalador BioShock VR DLSS-DLAA Beta 0.2.exe | 08EEE09B4DF57997C84DE441BC3061FCBFD0E9983F5DD1819C20300E80F9D5E8 |
+| Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe | 7B79BF92BDFEFFF1F857E783F8D9EDA11A62010BBA9C915C1F167BFBA07A6A69 |
 
-La lista verificable también está en [release/SHA256SUMS-v0.2.0-beta.txt](release/SHA256SUMS-v0.2.0-beta.txt).
+La lista verificable también está en [release/SHA256SUMS-v0.2.1-beta.txt](release/SHA256SUMS-v0.2.1-beta.txt).
 
 ## Qué contiene el repositorio
 
@@ -54,12 +56,14 @@ Clona también los submódulos:
 
 La construcción del mod requiere Visual Studio 2022 con MSVC x86 y CMake. El host requiere MSVC x64 y un SDK NVIDIA NGX aportado localmente por el desarrollador. Consulta [docs/BUILDING.md](docs/BUILDING.md) y [docs/TESTING.md](docs/TESTING.md).
 
-## Créditos y procedencia
+## Créditos y agradecimientos
 
-- **BioShock VR v0.8.2**, creado por [Mohamad Balouza](https://github.com/mohamad-balouza) y publicado por [VR-Stereo-Hub](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr), es la base de este fork bajo licencia MIT.
+- **Agradecimiento especial a [Mohamad Balouza](https://github.com/mohamad-balouza)**, creador de **BioShock VR**, por resolver la parte esencial de llevar la trilogía a realidad virtual. El renderizado estéreo, el seguimiento de cabeza, los controladores de movimiento y la integración base con los juegos son fruto de su trabajo. Sin esa base, este fork no existiría.
+- **[BioShock VR v0.8.2](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2)**, publicado por [VR-Stereo-Hub](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr), es la versión exacta sobre la que se construye este fork y se conserva bajo licencia MIT.
+- Este fork de **Beren5556** se limita a la adaptación DLSS/DLAA, el transporte temporal por ojo, el lanzador, el instalador y su documentación específica.
 - El host x64 parte de [DLSS5-Feeder](https://github.com/jlrouzies-fr/DLSS5-Feeder), de Jean-Laurent ROUZIES, e incorpora por procedencia partes de [dlss5-bridge](https://github.com/NIGos/dlss5-bridge), de NIGos; ambos bajo licencia MIT. Su nombre histórico en algunos archivos se conserva por trazabilidad; esta Release se compila en modo exclusivo DLSS 4.5.
 - NVIDIA DLSS/NGX se utiliza conforme a la licencia incluida en [docs/licenses/NVIDIA-DLSS-LICENSE.txt](docs/licenses/NVIDIA-DLSS-LICENSE.txt). This software contains source code provided by NVIDIA Corporation.
-- Las demás atribuciones se detallan en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) y [PROVENANCE.md](PROVENANCE.md).
+- La relación completa se conserva en [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) y [PROVENANCE.md](PROVENANCE.md).
 
 ## Licencia y marcas
 
@@ -69,4 +73,4 @@ Proyecto no oficial, sin afiliación ni respaldo de 2K Games, Take-Two Interacti
 
 ## Estado beta
 
-La integración se ha validado funcionalmente con el binario de juego indicado, pero sigue siendo experimental. Antes de compartir diagnósticos, conserva los registros de %LOCALAPPDATA%\BioshockVR y consulta las [notas de la versión](docs/releases/v0.2.0-beta.md).
+La integración se ha validado funcionalmente con el binario de juego indicado, pero sigue siendo experimental. Antes de compartir diagnósticos, conserva los registros de %LOCALAPPDATA%\BioshockVR y consulta las [notas de la versión](docs/releases/v0.2.1-beta.md).

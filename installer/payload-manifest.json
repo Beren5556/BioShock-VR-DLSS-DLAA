@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "release": "v0.2.0-beta",
+  "release": "v0.2.1-beta",
   "expectedGame": {
     "file": "BioshockHD.exe",
     "architecture": "x86",
     "sha256": "AEC21A0072CFDB15E4B525E2320C87256F14F16894F714272069270AD099A05B"
   },
   "installer": {
-    "file": "Instalador BioShock VR DLSS-DLAA Beta 0.2.exe",
-    "sha256": "08EEE09B4DF57997C84DE441BC3061FCBFD0E9983F5DD1819C20300E80F9D5E8"
+    "file": "Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe",
+    "sha256": "7B79BF92BDFEFFF1F857E783F8D9EDA11A62010BBA9C915C1F167BFBA07A6A69"
   },
   "payload": [
     {
@@ -21,7 +21,7 @@
       "sourcePath": "bioshockvr.dll",
       "destinationPath": "bioshockvr.dll",
       "sha256": "44B0FB0946330AB7F471D230A3E27D686CDFD400B2CF251B70BE6A9364986E7F",
-      "origin": "BioShock VR DLSS/DLAA Beta 0.2 fork"
+      "origin": "BioShock VR DLSS/DLAA Beta 0.2.1 fork"
     },
     {
       "sourcePath": "bvr_steamvr32.dll",
@@ -51,13 +51,13 @@
       "sourcePath": "host64/dlss-capabilities.ini",
       "destinationPath": "host64/dlss-capabilities.ini",
       "sha256": "7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77",
-      "origin": "BioShock VR DLSS/DLAA Beta 0.2"
+      "origin": "BioShock VR DLSS/DLAA Beta 0.2.1"
     },
     {
       "sourcePath": "Lanzador BioShock VR DLSS-DLAA.exe",
       "destinationPath": "Lanzador BioShock VR DLSS-DLAA.exe",
-      "sha256": "73572143A1791504BF8207411BD7C0BE37061C8244733013A6D35A8B03718315",
-      "origin": "BioShock VR DLSS/DLAA launcher 0.2.0.0"
+      "sha256": "298E4E7E744DBD5EC11FF7A32083B1CA5EB787C7BD8A7F23C504E3062B57D0D4",
+      "origin": "BioShock VR DLSS/DLAA launcher 0.2.1.0"
     }
   ]
 }

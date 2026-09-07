@@ -2,9 +2,25 @@
 
 Este proyecto sigue versiones con el formato MAJOR.MINOR.PATCH y sufijos de prepublicación cuando corresponde.
 
+## 0.2.1-beta · 2026-09-07
+
+Primera beta pública del fork, basada en el mismo núcleo funcional validado de 0.2.0-beta.
+
+### Cambiado
+
+- Créditos destacados y agradecimiento expreso a Mohamad Balouza por crear BioShock VR y realizar el trabajo fundamental sobre el que se apoya este fork.
+- Enlaces visibles al proyecto original y a su versión v0.8.2 en GitHub, el instalador, el lanzador y la documentación instalada.
+- Documentación, política de seguridad y metadatos preparados para publicación abierta.
+- Versión del lanzador y del instalador actualizada a 0.2.1 sin modificar el payload funcional del mod ni del host DLSS.
+
+### Validación
+
+- Auditoría del árbol publicado y del historial añadido por el fork.
+- Verificación de licencias, procedencia, hashes, construcción y pruebas reversibles del instalador.
+
 ## 0.2.0-beta · 2026-09-07
 
-Primera versión privada preparada para distribución entre probadores.
+Primera versión preparada para distribución entre probadores.
 
 ### Añadido
 

@@ -1,4 +1,4 @@
-BIOSHOCK VR · DLSS/DLAA BETA 0.2
+BIOSHOCK VR · DLSS/DLAA BETA 0.2.1
 
 QUÉ ES
 Este instalador contiene un fork beta de BioShock VR v0.8.2 con soporte
@@ -12,6 +12,13 @@ AUTORÍA DEL MOD ORIGINAL
 - BioShock VR v0.8.2
 - Creador: Mohamad Balouza
 - Proyecto: VR-Stereo-Hub
+
+AGRADECIMIENTO ESPECIAL
+Mohamad Balouza realizó el trabajo fundamental y más difícil para llevar
+BioShock a VR: renderizado estereoscópico, seguimiento 6DOF, controladores de
+movimiento e integración con el juego. Este fork añade DLSS/DLAA y herramientas
+de distribución sobre esa enorme base. Sin su trabajo, no existiría.
+
 - Versión base:
   https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2
 - Proyecto:

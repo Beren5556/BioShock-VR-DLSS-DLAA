@@ -1,6 +1,8 @@
 # Contribuir
 
-El repositorio está en beta privada. Los colaboradores deben abrir una rama corta, explicar el efecto observable del cambio y adjuntar la validación realizada.
+El repositorio está en beta pública. Los colaboradores deben abrir una rama corta, explicar el efecto observable del cambio y adjuntar la validación realizada.
+
+Este es un fork de [BioShock VR](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr), creado por Mohamad Balouza. Toda contribución debe conservar esa atribución y distinguir con claridad el trabajo original de los cambios específicos de este fork.
 
 ## Reglas del proyecto
 

@@ -1,4 +1,4 @@
-# DLSS 4.5 experimental 0.2 (diagnostica)
+# DLSS 4.5 experimental 0.2.1 (diagnostica)
 
 Esta version corrige dos errores confirmados de la 0.1 que podian degradar la
 imagen y producir movimiento temporal incorrecto:
@@ -51,7 +51,7 @@ espacial del mod son rutas distintas y no se habilitan simultaneamente.
 
 ## Limites conocidos de esta version
 
-Esta 0.2 es diagnostica: corrige errores objetivos, pero la mejora visual debe
+Esta 0.2.1 es diagnostica: corrige errores objetivos, pero la mejora visual debe
 confirmarse dentro del visor.
 
 - El juego elige dinamicamente un plano lejano de 1024 o 65536 uu. La ruta de
@@ -75,4 +75,3 @@ Los registros principales quedan en:
 %LOCALAPPDATA%\BioshockVR\BioShockVR-DLSS45-eye0.log
 %LOCALAPPDATA%\BioshockVR\BioShockVR-DLSS45-eye1.log
 ```
-

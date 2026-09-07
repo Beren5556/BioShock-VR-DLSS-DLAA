@@ -2,6 +2,10 @@
 
 Este documento separa la base original, las adaptaciones del fork y los componentes que conservan términos propios.
 
+## Agradecimiento principal
+
+BioShock VR y la mayor parte del trabajo fundamental de realidad virtual fueron creados por **Mohamad Balouza**. Su implementación hizo posible el renderizado estereoscópico, el seguimiento 6DOF, los controladores de movimiento y la integración con BioShock. Este fork añade una ruta DLSS/DLAA y herramientas de distribución sobre esa base; no reclama la autoría del mod original. Nuestro agradecimiento expreso es para Mohamad Balouza y para VR-Stereo-Hub por mantener y publicar el proyecto.
+
 ## Base BioShock VR
 
 - Proyecto: https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr
@@ -43,9 +47,9 @@ El SDK de desarrollo, sus cabeceras y bibliotecas de importación no se almacena
 
 Las dependencias heredadas, sus revisiones y licencias están descritas en THIRD_PARTY_NOTICES.md y dentro de cada submódulo. El archivo del juego BioshockHD.exe y los recursos de BioShock Remastered no forman parte del repositorio ni de la Release.
 
-## Artefacto v0.2.0-beta
+## Artefacto v0.2.1-beta
 
-- Archivo: Instalador BioShock VR DLSS-DLAA Beta 0.2.exe
-- SHA-256: 08EEE09B4DF57997C84DE441BC3061FCBFD0E9983F5DD1819C20300E80F9D5E8
-- Lanzador contenido, SHA-256: 73572143A1791504BF8207411BD7C0BE37061C8244733013A6D35A8B03718315
+- Archivo: Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe
+- SHA-256: 7B79BF92BDFEFFF1F857E783F8D9EDA11A62010BBA9C915C1F167BFBA07A6A69
+- Lanzador contenido, SHA-256: 298E4E7E744DBD5EC11FF7A32083B1CA5EB787C7BD8A7F23C504E3062B57D0D4
 - Host x64 contenido, SHA-256: 480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453

@@ -38,12 +38,13 @@ try {
 
     $required = @(
         'README.md',
+        'ACKNOWLEDGEMENTS.md',
         'CHANGELOG.md',
         'PROVENANCE.md',
         'SECURITY.md',
         'LICENSE',
         'installer/payload-manifest.json',
-        'release/SHA256SUMS-v0.2.0-beta.txt',
+        'release/SHA256SUMS-v0.2.1-beta.txt',
         'apps/launcher/src/BioshockVrLauncher.cs',
         'installer/src/BioshockVrDlss45StandaloneInstaller.cs'
     )
@@ -52,7 +53,7 @@ try {
     $manifestText = Read-Utf8 'installer/payload-manifest.json'
     $manifest = $manifestText | ConvertFrom-Json
     Assert-True ($manifest.schemaVersion -eq 1) 'Unexpected payload manifest schema.'
-    Assert-True ($manifest.release -eq 'v0.2.0-beta') 'Unexpected payload manifest release.'
+    Assert-True ($manifest.release -eq 'v0.2.1-beta') 'Unexpected payload manifest release.'
     Assert-True (@($manifest.payload).Count -eq 8) 'The payload manifest must contain 8 binary inputs.'
     Assert-True ($manifest.expectedGame.sha256 -match '^[0-9A-F]{64}$') 'Invalid expected game hash.'
     Assert-True ($manifest.installer.sha256 -match '^[0-9A-F]{64}$') 'Invalid installer hash.'
@@ -62,12 +63,12 @@ try {
         Assert-True ([string]$entry.sha256 -match '^[0-9A-F]{64}$') "Invalid payload hash: $($entry.sourcePath)"
     }
 
-    $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.0-beta.txt').Trim()
+    $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.1-beta.txt').Trim()
     $expectedSum = "$($manifest.installer.sha256) *$($manifest.installer.file)"
     Assert-True ($sumLine -eq $expectedSum) 'Release checksum does not match the payload manifest.'
 
     $cmake = Read-Utf8 'CMakeLists.txt'
-    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.0-beta")')) 'CMake distribution version is not v0.2.0-beta.'
+    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.1-beta")')) 'CMake distribution version is not v0.2.1-beta.'
     Assert-True ($cmake.Contains('project(BioshockVR VERSION 0.8.2')) 'The upstream base must remain v0.8.2.'
 
     $launcher = Read-Utf8 'apps/launcher/src/BioshockVrLauncher.cs'
@@ -84,7 +85,7 @@ try {
 
     $installer = Read-Utf8 'installer/src/BioshockVrDlss45StandaloneInstaller.cs'
     Assert-True ([regex]::Matches($installer, 'new Payload\(').Count -eq 20) 'Installer source must embed 20 resources.'
-    Assert-True ($installer.Contains('[assembly: AssemblyVersion("0.2.0.0")]')) 'Installer version is not 0.2.0.0.'
+    Assert-True ($installer.Contains('[assembly: AssemblyVersion("0.2.1.0")]')) 'Installer version is not 0.2.1.0.'
 
     & git grep -n -I -E 'C:\\Users\\Beren|E:\\SteamLibrary|gho_[A-Za-z0-9_]{20,}' -- .
     $grepExit = $LASTEXITCODE

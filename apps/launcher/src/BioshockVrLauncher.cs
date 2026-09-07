@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Complemento DLSS 4.5 para BioShock VR - Beren5556")]
 [assembly: AssemblyDescription("Lanzador y editor seguro con modos Normal, DLAA y DLSS 4.5")]
 [assembly: AssemblyProduct("Complemento DLSS 4.5 para BioShock VR")]
-[assembly: AssemblyVersion("0.2.0.0")]
-[assembly: AssemblyFileVersion("0.2.0.0")]
+[assembly: AssemblyVersion("0.2.1.0")]
+[assembly: AssemblyFileVersion("0.2.1.0")]
 
 namespace BioshockVrLauncher
 {
@@ -1612,7 +1612,7 @@ namespace BioshockVrLauncher
             _toolTip.InitialDelay = 350;
             _toolTip.ReshowDelay = 100;
 
-            Text = "BioShock VR · DLSS/DLAA Beta 0.2";
+            Text = "BioShock VR · DLSS/DLAA Beta 0.2.1";
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -1804,7 +1804,7 @@ namespace BioshockVrLauncher
             header.Controls.Add(title);
 
             Label subtitle = new Label();
-            subtitle.Text = "Fork beta 0.2 basado en BioShock VR v0.8.2 · Integración de Beren5556";
+            subtitle.Text = "Mod original de Mohamad Balouza · Fork DLSS/DLAA de Beren5556";
             subtitle.ForeColor = SystemColors.GrayText;
             subtitle.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
             subtitle.AutoSize = true;
@@ -5025,10 +5025,13 @@ namespace BioshockVrLauncher
         private void ShowCreditsAndLicenses()
         {
             MessageBox.Show(this,
-                "Complemento DLSS 4.5 para BioShock VR · Experimental 0.2\n" +
-                "Integración y lanzador: Beren5556\n\n" +
-                "Requiere BioShock VR v0.8.2, creado por Mohamad Balouza " +
-                "y publicado por VR-Stereo-Hub (MIT).\n" +
+                "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.1\n" +
+                "Integración DLSS/DLAA y lanzador: Beren5556\n\n" +
+                "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\n" +
+                "Creador de BioShock VR y de la implementación VR fundamental " +
+                "sobre la que se construye este fork. Sin su enorme trabajo, " +
+                "este proyecto no existiría. Publicado por VR-Stereo-Hub (MIT).\n" +
+                "Versión base exacta: BioShock VR v0.8.2\n" +
                 "Proyecto: https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr\n" +
                 "Creador: https://github.com/mohamad-balouza\n\n" +
                 "Host DLSS: Jean-Laurent ROUZIES y NIGos (MIT).\n" +

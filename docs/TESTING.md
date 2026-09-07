@@ -26,7 +26,7 @@ La batería comprueba:
 
 Las pruebas crean un directorio con GUID bajo %TEMP%\BvrInstallerTests y solo lo eliminan tras un PASS completo. Si fallan, lo conservan para diagnóstico. Usa TestOutputRoot si necesitas otro directorio corto y dedicado.
 
-## Validación registrada para v0.2.0-beta
+## Validación registrada para v0.2.1-beta
 
 La versión publicada superó:
 
@@ -36,7 +36,7 @@ La versión publicada superó:
 - rechazo de ruta incompatible sin escrituras;
 - 13 archivos de la instalación real vigilados sin cambios.
 
-Instalador validado: SHA-256 08EEE09B4DF57997C84DE441BC3061FCBFD0E9983F5DD1819C20300E80F9D5E8.
+Instalador validado: SHA-256 7B79BF92BDFEFFF1F857E783F8D9EDA11A62010BBA9C915C1F167BFBA07A6A69.
 
 ## Límites
 
