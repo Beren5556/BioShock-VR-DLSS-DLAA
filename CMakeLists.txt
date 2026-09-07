@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
 
-# VERSION is the single source of truth for the version the mod logs and shows.
-# Bump it here and nowhere else; src/CMakeLists.txt generates bvr_version.h from
-# it at build time, stamped with `git describe`.
+# This tree is an add-on distribution derived from upstream v0.8.2. Keep the
+# upstream base in project(VERSION), and give the add-on its own explicit public
+# identity so logs/screenshots never imply that this is an upstream release.
 project(BioshockVR VERSION 0.8.2 LANGUAGES C CXX)
+set(BVR_DISTRIBUTION_NAME "BioShock VR DLSS/DLAA Beta")
+set(BVR_DISTRIBUTION_VERSION "0.2.0-beta")
+set(BVR_DISTRIBUTION_BUILD_ID "beren5556-v0.2.0-beta")
 
 # BioshockHD.exe is 32-bit x86. Everything we inject must be too.
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)

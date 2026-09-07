@@ -1,16 +1,21 @@
-# Regenerates bvr_version.h so the logged version can never drift from the tree.
-# Run via `cmake -P` from a build-time custom target with BVR_VERSION, BVR_SRC,
-# BVR_IN and BVR_OUT defined.
+# Regenerates bvr_version.h so the logged version can never drift from the
+# selected distribution identity. Run via `cmake -P` from a build-time custom
+# target with BVR_VERSION, BVR_BASE_VERSION, BVR_PRODUCT_NAME, BVR_SRC, BVR_IN
+# and BVR_OUT defined.
 #
 # Writes through a temp file and copy_if_different so an unchanged git state does
 # not force a rebuild of every TU that includes the header.
 
-set(BVR_BUILD_ID "nogit")
+set(BVR_BUILD_ID "source")
 
-find_package(Git QUIET)
-if(Git_FOUND)
+if(DEFINED BVR_BUILD_ID_OVERRIDE AND NOT BVR_BUILD_ID_OVERRIDE STREQUAL "")
+    set(BVR_BUILD_ID "${BVR_BUILD_ID_OVERRIDE}")
+else()
+    find_package(Git QUIET)
+endif()
+if(Git_FOUND AND BVR_BUILD_ID STREQUAL "source")
     execute_process(
-        COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
         WORKING_DIRECTORY "${BVR_SRC}"
         OUTPUT_VARIABLE _describe
         OUTPUT_STRIP_TRAILING_WHITESPACE

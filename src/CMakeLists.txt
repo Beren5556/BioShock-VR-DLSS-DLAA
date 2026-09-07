@@ -21,12 +21,16 @@ add_library(bioshockvr SHARED
     core/debug/value_scan.h
     core/gfx/blit.cpp
     core/gfx/blit.h
+    core/gfx/dlss45_client.cpp
+    core/gfx/dlss45_client.h
     core/gfx/frame_inspector.cpp
     core/gfx/frame_inspector.h
     core/gfx/gfx_hud.cpp
     core/gfx/gfx_hud.h
     core/gfx/hud_capture.cpp
     core/gfx/hud_capture.h
+    core/gfx/spatial_upscaler.cpp
+    core/gfx/spatial_upscaler.h
     core/hooks/d3d11_hook.cpp
     core/hooks/d3d11_hook.h
     core/hooks/heap_scan.cpp
@@ -77,6 +81,8 @@ add_library(bioshockvr SHARED
     game/bioshock1r/recorder.h
     game/bioshock1r/scenedraw.cpp
     game/bioshock1r/scenedraw.h
+    game/bioshock1r/temporal_guides.cpp
+    game/bioshock1r/temporal_guides.h
     game/bioshock2r/aim.cpp
     game/bioshock2r/aim.h
     game/bioshock2r/bioshock2r_adapter.cpp
@@ -164,7 +170,10 @@ set_target_properties(bioshockvr PROPERTIES PREFIX "")
 set(BVR_VERSION_HEADER "${CMAKE_BINARY_DIR}/generated/bvr_version.h")
 # Once at configure time so the header exists for a fresh tree and for IDE parsing.
 execute_process(COMMAND ${CMAKE_COMMAND}
-        -DBVR_VERSION=${PROJECT_VERSION}
+        "-DBVR_VERSION=${BVR_DISTRIBUTION_VERSION}"
+        "-DBVR_BASE_VERSION=${PROJECT_VERSION}"
+        "-DBVR_PRODUCT_NAME=${BVR_DISTRIBUTION_NAME}"
+        "-DBVR_BUILD_ID_OVERRIDE=${BVR_DISTRIBUTION_BUILD_ID}"
         -DBVR_SRC=${PROJECT_SOURCE_DIR}
         -DBVR_IN=${PROJECT_SOURCE_DIR}/cmake/bvr_version.h.in
         -DBVR_OUT=${BVR_VERSION_HEADER}
@@ -172,14 +181,24 @@ execute_process(COMMAND ${CMAKE_COMMAND}
 add_custom_target(bvr_version ALL
     BYPRODUCTS "${BVR_VERSION_HEADER}"
     COMMAND ${CMAKE_COMMAND}
-            -DBVR_VERSION=${PROJECT_VERSION}
+            "-DBVR_VERSION=${BVR_DISTRIBUTION_VERSION}"
+            "-DBVR_BASE_VERSION=${PROJECT_VERSION}"
+            "-DBVR_PRODUCT_NAME=${BVR_DISTRIBUTION_NAME}"
+            "-DBVR_BUILD_ID_OVERRIDE=${BVR_DISTRIBUTION_BUILD_ID}"
             -DBVR_SRC=${PROJECT_SOURCE_DIR}
             -DBVR_IN=${PROJECT_SOURCE_DIR}/cmake/bvr_version.h.in
             -DBVR_OUT=${BVR_VERSION_HEADER}
             -P ${PROJECT_SOURCE_DIR}/cmake/GenerateVersion.cmake
-    COMMENT "Stamping bvr_version.h (${PROJECT_VERSION} + git describe)"
+    COMMENT "Stamping bvr_version.h (${BVR_DISTRIBUTION_VERSION}, base ${PROJECT_VERSION})"
     VERBATIM)
 add_dependencies(bioshockvr bvr_version)
+
+# If a configuration emits CodeView data, embed only the PDB filename rather
+# than a developer-machine absolute path. Release normally emits no PDB at all;
+# this also keeps accidental symbol-enabled RC builds free of private paths.
+if(MSVC)
+    target_link_options(bioshockvr PRIVATE "/PDBALTPATH:bioshockvr.pdb")
+endif()
 
 target_include_directories(bioshockvr PRIVATE . "${CMAKE_BINARY_DIR}/generated")
 target_link_libraries(bioshockvr PRIVATE
@@ -202,6 +221,33 @@ if(BIOSHOCKVR_WITH_OPENXR)
     add_executable(xr_hello32 tools/xr_hello32/main.cpp)
     target_link_libraries(xr_hello32 PRIVATE openxr_loader d3d11 dxgi)
 endif()
+
+# --- spatial_upscaler_test32 - deterministic D3D11/WARP test -----------------
+# Exercises the actual injected shader and validates basic output plus state
+# restoration without a game or headset. It is a developer tool and the
+# release packager's explicit file list does not ship it.
+add_executable(spatial_upscaler_test32
+    tools/spatial_upscaler_test/main.cpp
+    core/gfx/spatial_upscaler.cpp
+    core/gfx/spatial_upscaler.h
+    core/util/log.cpp
+    core/util/log.h
+)
+target_include_directories(spatial_upscaler_test32 PRIVATE .)
+target_link_libraries(spatial_upscaler_test32 PRIVATE d3d11 d3dcompiler shell32)
+
+# --- temporal_guides_test32 - deterministic D3D11/WARP test -----------------
+# Validates main-DSV voting, D24->R32 conversion and independent L/R camera
+# histories without loading the game or talking to an NGX/IPC host.
+add_executable(temporal_guides_test32
+    tools/temporal_guides_test/main.cpp
+    game/bioshock1r/temporal_guides.cpp
+    game/bioshock1r/temporal_guides.h
+    core/util/log.cpp
+    core/util/log.h
+)
+target_include_directories(temporal_guides_test32 PRIVATE .)
+target_link_libraries(temporal_guides_test32 PRIVATE d3d11 d3dcompiler shell32)
 
 # --- bvr_xrsim32 - the simulated OpenXR runtime -------------------------------
 # A Quest-3-shaped 32-bit OpenXR runtime so an agent can test the mod with no

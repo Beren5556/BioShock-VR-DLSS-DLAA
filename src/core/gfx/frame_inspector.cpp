@@ -14,6 +14,7 @@
 
 #include "core/gfx/gfx_hud.h"
 #include "core/gfx/hud_capture.h"
+#include "game/bioshock1r/temporal_guides.h"
 
 #include "core/util/log.h"
 
@@ -578,6 +579,9 @@ void STDMETHODCALLTYPE DrawIndexedDetour(ID3D11DeviceContext* ctx, UINT indexCou
             return;
         }
     }
+    // Only count draws that actually reach D3D11 when voting for the principal
+    // scene depth buffer. A mesh veto above returns before this tap.
+    if (t_suppress == 0) bvr::b1r::temporal_guides::on_draw_indexed(ctx);
     if (should_record()) {
         ++t_suppress; // our own Get* calls must not recurse into recording
         Event& ev = push_event(EventKind::DrawIndexed, _ReturnAddress(),
@@ -709,6 +713,11 @@ void STDMETHODCALLTYPE OMSetRenderTargetsDetour(ID3D11DeviceContext* ctx, UINT n
         --t_suppress;
     }
     g_origOMSetRenderTargets(ctx, numViews, rtvs, dsv);
+    // Temporal depth capture runs after the actual bind: its previous DSV is
+    // no longer an output when it queues CopySubresourceRegion. The tap is an
+    // armed-off no-op until the BioShock 1 DLSS path explicitly calls prepare.
+    if (t_suppress == 0)
+        bvr::b1r::temporal_guides::on_setrt(ctx, numViews, rtvs, dsv);
 }
 
 void STDMETHODCALLTYPE ClearRtvDetour(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv,
@@ -735,6 +744,11 @@ void STDMETHODCALLTYPE ClearDsvDetour(ID3D11DeviceContext* ctx, ID3D11DepthStenc
         --t_suppress;
     }
     g_origClearDsv(ctx, dsv, flags, depth, stencil);
+    // Diagnostic v0.2: observe the clear convention of every compatible DSV.
+    // The guide tap is armed-off until prepare(), rejects foreign/deferred
+    // contexts, and only retains bounded counters/one float per candidate.
+    if (t_suppress == 0)
+        bvr::b1r::temporal_guides::on_clear_dsv(ctx, dsv, flags, depth, stencil);
 }
 
 void STDMETHODCALLTYPE DrawAutoDetour(ID3D11DeviceContext* ctx) {

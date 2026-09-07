@@ -380,7 +380,11 @@ int current_eye_sign();
 // swapchain (same pair as AER). Presents without a tag take the mono/AER
 // path unchanged. If the ring depth ever exceeds one pair the render thread
 // clears it and logs (self-heal after a mode-boundary skew).
-void sr_push_eye(int eyeSign); // game thread, at submit; -1 left, +1 right
+// Returns a process-lifetime monotonic build tag (0 when the ring rejected the
+// push). BioShock 1 carries this exact id through its CalcView camera
+// publication so Present can reject a color/depth/camera mismatch safely.
+// Other adapters may ignore the return value and keep sign-only behaviour.
+uint64_t sr_push_eye(int eyeSign); // game thread, at submit; -1 left, +1 right
 
 // --- s62: the [pair] probe (issue #31, BS2 left-eye double image) -----------
 // Cumulative counters over the per-eye present pairing layer - the quantity

@@ -1,8 +1,10 @@
 #pragma once
 // GENERATED at build time by cmake/GenerateVersion.cmake - do not edit.
-// See docs/ARCHITECTURE.md decision log (2026-07-29): the version used to be a
-// hand-edited #define and sat at "0.1.0" across three shipped releases, which
-// made every external crash report unattributable.
+// This add-on has a distinct public identity and explicitly names the upstream
+// version it is based on; it must not present itself as an upstream release.
 
-#define BVR_VERSION  "@BVR_VERSION@"   // from project(... VERSION) in CMakeLists.txt
-#define BVR_BUILD_ID "@BVR_BUILD_ID@"  // git describe --tags --always --dirty
+#define BVR_PRODUCT_NAME "@BVR_PRODUCT_NAME@"
+#define BVR_VERSION      "@BVR_VERSION@"
+#define BVR_BASE_VERSION "@BVR_BASE_VERSION@"
+#define BVR_BUILD_ID     "@BVR_BUILD_ID@"
+#define BVR_IDENTITY BVR_PRODUCT_NAME " v" BVR_VERSION " (basado en v" BVR_BASE_VERSION ")"

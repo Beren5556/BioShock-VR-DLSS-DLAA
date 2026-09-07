@@ -30,3 +30,24 @@ desktop.ini
 
 # release zips built by tools/package.ps1
 /dist/
+
+# Fork build and validation output
+/artifacts/
+/apps/launcher/build/
+/installer/Payload/
+/installer/.installer-build-*/
+/components/dlss-host/external/ngx/
+/components/dlss-host/host/*.obj
+/components/dlss-host/host/*.res
+/components/dlss-host/host/*.pdb
+/components/dlss-host/host/*.tmp.exe
+/components/dlss-host/host/BioShockVR-DLSS45-Host64.exe
+
+# Proprietary/local inputs: publish only inside an authorized Release asset
+nvngx_dlss.dll
+BioshockHD.exe
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example

@@ -123,11 +123,12 @@ uint64_t g_lockOnAssertMs = 0;
 constexpr float kMoveYawSign = 1.0f;
 std::atomic<bool>  g_recenterRequested{true};  // auto-recenter on first drive
 std::atomic<bool>  g_vrDriving{false};         // telemetry for the UI
-std::atomic<bool>  g_forceHeadsetFov{false};   // session 4: now writes the REAL control (the
+std::atomic<bool>  g_forceHeadsetFov{true};    // session 4: now writes the REAL control (the
                                                // UShockUserSettings HorizontalFOV int that the
                                                // renderer consumes per frame, no 130 cap) when
-                                               // it is resolved. Still default OFF: widening
-                                               // is the user's in-headset call.
+                                               // it is resolved. Enabled in this local build so
+                                               // the square render target covers the headset's
+                                               // full vertical FOV instead of the narrower game FOV.
 
 // Session 4: direct game-FOV write through the settings object (the video
 // option's storage). Distinct from the dead PC+0xE0 override above.
@@ -264,11 +265,63 @@ int32_t g_cineLookPitch = 0, g_cineLookYaw = 0, g_cineLookRoll = 0;
 uint64_t g_lastCalcViewMs = 0;
 
 // Session 21 fg view-sync stash: the final per-eye camera (post eye offset)
-// of the current pair. Game thread only (1t); freshness-gated by stamp so a
-// mode flip cannot leave scenedraw substituting stale poses.
+// of the current pair. DLSS guide generation consumes this from Present, which
+// is not guaranteed to be the game thread, so publish/read a coherent pose
+// under a slim reader/writer lock. The two writes per stereo pair are far from
+// the draw-call hot path; this avoids both torn poses and a C++ data race.
 FVector g_eyeCamLoc[2] = {};
 FRotator g_eyeCamRot[2] = {};
 uint64_t g_eyeCamStampMs[2] = {};
+constexpr uint32_t kEyeCamHistory = 16; // > the core eye-tag ring (8)
+struct EyeCamPublication {
+    FVector location{};
+    FRotator rotation{};
+    uint64_t buildId = 0;
+    uint64_t stampMs = 0;
+    uint32_t publications = 0;
+};
+EyeCamPublication g_eyeCamHistory[2][kEyeCamHistory] = {};
+SRWLOCK g_eyeCamLock = SRWLOCK_INIT;
+
+void publish_eye_cam(int eye, const FVector& loc, const FRotator& rot, uint64_t stampMs,
+                     uint64_t buildId) {
+    if (eye < 0 || eye > 1) return;
+    AcquireSRWLockExclusive(&g_eyeCamLock);
+    g_eyeCamLoc[eye] = loc;
+    g_eyeCamRot[eye] = rot;
+    g_eyeCamStampMs[eye] = stampMs;
+    if (buildId) {
+        EyeCamPublication& sample =
+            g_eyeCamHistory[eye][buildId & (kEyeCamHistory - 1)];
+        if (sample.buildId == buildId) {
+            ++sample.publications;
+            sample.location = loc;
+            sample.rotation = rot;
+            sample.stampMs = stampMs;
+        } else {
+            sample = {loc, rot, buildId, stampMs, 1};
+        }
+    }
+    ReleaseSRWLockExclusive(&g_eyeCamLock);
+}
+
+uint64_t active_build_id_for_eye(int eye) {
+    int buildEye = -1;
+    uint64_t buildId = 0;
+    return scenedraw::current_eye_build(&buildEye, &buildId) && buildEye == eye
+               ? buildId
+               : 0;
+}
+
+void read_eye_cam_pair(FVector loc[2], FRotator rot[2], uint64_t stampMs[2]) {
+    AcquireSRWLockShared(&g_eyeCamLock);
+    for (int eye = 0; eye < 2; ++eye) {
+        loc[eye] = g_eyeCamLoc[eye];
+        rot[eye] = g_eyeCamRot[eye];
+        stampMs[eye] = g_eyeCamStampMs[eye];
+    }
+    ReleaseSRWLockShared(&g_eyeCamLock);
+}
 
 float* fov_ptr(void* pc) {
     return reinterpret_cast<float*>(static_cast<uint8_t*>(pc) + patterns::kFovLiveOffset);
@@ -490,15 +543,19 @@ void apply_command(const char* cmd, const char* args) {
             // with the roll (|z| -> halfIpd at 90 deg); pre-fix it stayed
             // horizontal at every roll.
             uint64_t nowMs = GetTickCount64();
+            FVector eyeLoc[2]{};
+            FRotator eyeRot[2]{};
+            uint64_t eyeStampMs[2]{};
+            read_eye_cam_pair(eyeLoc, eyeRot, eyeStampMs);
             BVR_LOG("[b1r] eyecam L=(%.3f %.3f %.3f) R=(%.3f %.3f %.3f) "
                     "d=(%.3f %.3f %.3f) ageL=%llums ageR=%llums",
-                    g_eyeCamLoc[0].x, g_eyeCamLoc[0].y, g_eyeCamLoc[0].z,
-                    g_eyeCamLoc[1].x, g_eyeCamLoc[1].y, g_eyeCamLoc[1].z,
-                    g_eyeCamLoc[1].x - g_eyeCamLoc[0].x,
-                    g_eyeCamLoc[1].y - g_eyeCamLoc[0].y,
-                    g_eyeCamLoc[1].z - g_eyeCamLoc[0].z,
-                    static_cast<unsigned long long>(nowMs - g_eyeCamStampMs[0]),
-                    static_cast<unsigned long long>(nowMs - g_eyeCamStampMs[1]));
+                    eyeLoc[0].x, eyeLoc[0].y, eyeLoc[0].z,
+                    eyeLoc[1].x, eyeLoc[1].y, eyeLoc[1].z,
+                    eyeLoc[1].x - eyeLoc[0].x,
+                    eyeLoc[1].y - eyeLoc[0].y,
+                    eyeLoc[1].z - eyeLoc[0].z,
+                    static_cast<unsigned long long>(nowMs - eyeStampMs[0]),
+                    static_cast<unsigned long long>(nowMs - eyeStampMs[1]));
         } else {
             int32_t* opt = patterns::hfov_option_ptr();
             float tanH = 0.0f, tanV = 0.0f;
@@ -1070,9 +1127,8 @@ void __fastcall CalcViewDetour(void* self, void* edx, void** viewActor,
             *loc = g_srBaseLoc;
             *rot = g_srBaseRot;
             if (g_srBaseEyed) apply_eye_offset(loc, *rot, +1);
-            g_eyeCamLoc[1] = *loc; // fg view-sync stash, RIGHT eye
-            g_eyeCamRot[1] = *rot;
-            g_eyeCamStampMs[1] = GetTickCount64();
+            publish_eye_cam(1, *loc, *rot, GetTickCount64(),
+                            active_build_id_for_eye(1)); // RIGHT eye
         } else if (rot) {
             rot->yaw += static_cast<int32_t>(reentryYawDeg * kRotUnitsPerDegree);
         }
@@ -1698,9 +1754,8 @@ void __fastcall CalcViewDetour(void* self, void* edx, void** viewActor,
         // so this suppression is load-bearing, not belt-and-suspenders.
         g_srBaseEyed = strictGameplay && !bvr::vr::cinematic_active();
         if (g_srBaseEyed) apply_eye_offset(loc, *rot, -1);
-        g_eyeCamLoc[0] = *loc; // fg view-sync stash, LEFT eye
-        g_eyeCamRot[0] = *rot;
-        g_eyeCamStampMs[0] = GetTickCount64();
+        publish_eye_cam(0, *loc, *rot, GetTickCount64(),
+                        active_build_id_for_eye(0)); // LEFT eye
     } else {
         g_srBaseValid = false;
     }
@@ -1908,13 +1963,48 @@ void get_recenter_state(bvr::vr::HeadPose* pose, int32_t* yawUnits, float* world
 
 bool driven_eye_cam(int eye, float loc[3], int32_t rot[3]) {
     if (eye < 0 || eye > 1) return false;
-    if (GetTickCount64() - g_eyeCamStampMs[eye] > 200) return false; // stale/idle
-    loc[0] = g_eyeCamLoc[eye].x;
-    loc[1] = g_eyeCamLoc[eye].y;
-    loc[2] = g_eyeCamLoc[eye].z;
-    rot[0] = g_eyeCamRot[eye].pitch;
-    rot[1] = g_eyeCamRot[eye].yaw;
-    rot[2] = g_eyeCamRot[eye].roll;
+    FVector eyeLoc{};
+    FRotator eyeRot{};
+    uint64_t stampMs = 0;
+    AcquireSRWLockShared(&g_eyeCamLock);
+    eyeLoc = g_eyeCamLoc[eye];
+    eyeRot = g_eyeCamRot[eye];
+    stampMs = g_eyeCamStampMs[eye];
+    ReleaseSRWLockShared(&g_eyeCamLock);
+    if (!stampMs || GetTickCount64() - stampMs > 200) return false; // stale/idle
+    loc[0] = eyeLoc.x;
+    loc[1] = eyeLoc.y;
+    loc[2] = eyeLoc.z;
+    rot[0] = eyeRot.pitch;
+    rot[1] = eyeRot.yaw;
+    rot[2] = eyeRot.roll;
+    return true;
+}
+
+bool driven_eye_cam_for_build(int eye, uint64_t buildId, DrivenEyeCamera* out) {
+    if (out) *out = {};
+    if (!out || eye < 0 || eye > 1 || !buildId) return false;
+
+    EyeCamPublication sample{};
+    AcquireSRWLockShared(&g_eyeCamLock);
+    const EyeCamPublication& stored =
+        g_eyeCamHistory[eye][buildId & (kEyeCamHistory - 1)];
+    if (stored.buildId == buildId) sample = stored;
+    ReleaseSRWLockShared(&g_eyeCamLock);
+
+    if (sample.buildId != buildId || !sample.stampMs ||
+        GetTickCount64() - sample.stampMs > 200) {
+        return false;
+    }
+    out->location[0] = sample.location.x;
+    out->location[1] = sample.location.y;
+    out->location[2] = sample.location.z;
+    out->rotation[0] = sample.rotation.pitch;
+    out->rotation[1] = sample.rotation.yaw;
+    out->rotation[2] = sample.rotation.roll;
+    out->buildId = sample.buildId;
+    out->stampMs = sample.stampMs;
+    out->publications = sample.publications;
     return true;
 }
 

@@ -1,0 +1,47 @@
+BIOSHOCK VR · DLSS/DLAA BETA 0.2
+
+QUÉ ES
+Este instalador contiene un fork beta de BioShock VR v0.8.2 con soporte
+experimental para los modos de imagen NORMAL, DLAA y DLSS 4.5.
+
+El paquete es autónomo respecto al mod: partiendo de una instalación compatible
+y original de BioShock Remastered, instala el mod VR, sus componentes SteamVR,
+el fork beta, el host DLSS, el runtime NVIDIA necesario y el lanzador.
+
+AUTORÍA DEL MOD ORIGINAL
+- BioShock VR v0.8.2
+- Creador: Mohamad Balouza
+- Proyecto: VR-Stereo-Hub
+- Versión base:
+  https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2
+- Proyecto:
+  https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr
+- Creador:
+  https://github.com/mohamad-balouza
+
+MODOS DE IMAGEN DEL FORK
+- NORMAL: renderizado sin DLSS ni DLAA.
+- DLAA: antialiasing temporal a resolución nativa.
+- DLSS 4.5 SR: reconstrucción desde una resolución interna menor.
+
+FXAA y el antiguo reescalado espacial no forman parte de las opciones del
+lanzador. Al guardar o iniciar, ambos quedan desactivados.
+
+INSTALACIÓN Y RESTAURACIÓN
+- El instalador solo pide la carpeta Build\Final del juego.
+- Verifica que BioshockHD.exe sea la versión compatible probada.
+- No modifica tus archivos INI durante la instalación.
+- Guarda una copia de cualquier archivo que vaya a sustituir.
+- El botón Restaurar devuelve los archivos que existían antes de instalar.
+- Crea un acceso directo del lanzador en el Escritorio.
+
+COMPONENTES INCLUIDOS
+- Proxy de carga x86 y componentes SteamVR del mod base.
+- Fork beta bioshockvr.dll.
+- Host x64 y runtime NVIDIA DLSS 4.5 (NGX 310.7.0.0).
+- Lanzador de configuración para NORMAL, DLAA y DLSS.
+- Licencias y avisos de terceros.
+
+No incluye DLSS 5, Neural Rendering, RenoDX ni ReShade.
+
+Las licencias se instalan dentro de BioShockVR-DLSS45\Licenses.

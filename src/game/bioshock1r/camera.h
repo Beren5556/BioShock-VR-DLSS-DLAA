@@ -37,6 +37,19 @@ void set_recenter_state(const bvr::vr::HeadPose& pose, int32_t yawUnits, float w
 // no fresh stash exists (stereo off, drive idle > 200 ms, or never driven).
 bool driven_eye_cam(int eye, float loc[3], int32_t rot[3]);
 
+struct DrivenEyeCamera {
+    float location[3] = {};
+    int32_t rotation[3] = {};
+    uint64_t buildId = 0;
+    uint64_t stampMs = 0;
+    uint32_t publications = 0;
+};
+
+// Exact-build variant used by temporal reconstruction. Unlike
+// driven_eye_cam(), this never returns the merely-latest camera: the requested
+// build id must still be present in the bounded per-eye publication ring.
+bool driven_eye_cam_for_build(int eye, uint64_t buildId, DrivenEyeCamera* out);
+
 // Session 22 cinematic fallback, called from scenedraw's BuildDetour (same
 // game thread): scripted cameras bypass eventPlayerCalcView, so the FOV
 // write's normal restore path cannot run during them.

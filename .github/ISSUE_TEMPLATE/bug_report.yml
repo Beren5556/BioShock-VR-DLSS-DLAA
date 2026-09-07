@@ -1,0 +1,39 @@
+name: Informe de fallo
+description: Comunicar un problema reproducible de la beta privada
+title: "[Fallo] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: No adjuntes BioshockHD.exe, archivos del juego, credenciales ni volcados sin revisar.
+  - type: input
+    id: version
+    attributes:
+      label: Versión y SHA-256
+      placeholder: v0.2.0-beta · 08EEE09B...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Entorno
+      description: Windows, GPU, controlador, visor y runtime VR.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado y resultado real
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Extractos de registro revisados
+      description: Retira nombres de usuario, rutas personales y cualquier dato sensible.

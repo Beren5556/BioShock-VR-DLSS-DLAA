@@ -15,4 +15,9 @@ void on_resize(); // drop backbuffer references before ResizeBuffers
 // F10, and it doubles as the user's recovery if a keyboard state wedges.
 void set_visible(bool on);
 
+// Present-thread snapshot used by temporal render paths. The overlay is drawn
+// between on_present_begin and on_present_end, so feeding it into DLSS would
+// give UI pixels no matching depth or motion vectors.
+bool visible();
+
 } // namespace bvr::overlay

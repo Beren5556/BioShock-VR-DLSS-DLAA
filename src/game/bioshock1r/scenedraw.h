@@ -33,6 +33,11 @@ void handle_command(const char* args);
 // submit (watch for double-applied yaw if it ever fires).
 bool second_pass_for_current_thread(float* yawDegOut);
 
+// Diagnostic identity of the eye Build currently executing on this thread.
+// The id is the same one queued for Present by vr::sr_push_eye. False outside
+// the original Build body or when the eye-tag ring rejected the push.
+bool current_eye_build(int* eyeOut, uint64_t* buildIdOut);
+
 // CalcViewDetour telemetry tap: attributes the call as inside/outside the
 // hooked call on this thread. Cheap (two relaxed atomics).
 void note_calcview();

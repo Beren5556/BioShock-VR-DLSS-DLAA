@@ -161,6 +161,8 @@ std::atomic<uint32_t> g_secondCalls{0};
 std::atomic<uint32_t> g_activeTid{0};
 std::atomic<int>      g_activeDepth{0};
 std::atomic<uint32_t> g_secondPassTid{0};
+thread_local int t_eyeBuild = -1;
+thread_local uint64_t t_eyeBuildId = 0;
 std::atomic<uint32_t> g_calcInside{0};
 std::atomic<uint32_t> g_calcOutside{0};
 std::atomic<uint32_t> g_secondPassHits{0};
@@ -175,6 +177,21 @@ uint32_t g_beatDrain = 0, g_beatFlush = 0, g_beatSubmit = 0, g_beatBuild = 0,
          g_beatSecond = 0, g_beatCalcIn = 0, g_beatCalcOut = 0,
          g_beatForced = 0;
 uint64_t g_beatPresents = 0;
+
+struct ScopedEyeBuild {
+    int previousEye = -1;
+    uint64_t previousId = 0;
+
+    ScopedEyeBuild(int eye, uint64_t id)
+        : previousEye(t_eyeBuild), previousId(t_eyeBuildId) {
+        t_eyeBuild = id ? eye : -1;
+        t_eyeBuildId = id;
+    }
+    ~ScopedEyeBuild() {
+        t_eyeBuild = previousEye;
+        t_eyeBuildId = previousId;
+    }
+};
 
 // Submit (game) thread only: present count at the previous submit entry, for
 // the submits-per-present instrument in the dump lines.
@@ -745,12 +762,16 @@ void maybe_second_build(void* ecx, void* edx, void* a1, void* a2, void* a3,
     uint32_t presentsBefore =
         static_cast<uint32_t>(bvr::d3d11_hook::present_count());
     uint32_t submitsBefore = g_submitEntries.load(std::memory_order_relaxed);
-    if (stereo) bvr::vr::sr_push_eye(+1); // pass 2 = RIGHT eye (see BuildDetour)
+    const uint64_t rightBuildId = stereo ? bvr::vr::sr_push_eye(+1) : 0;
     LARGE_INTEGER t2, t3;
     QueryPerformanceCounter(&t2);
     g_secondPassTid.store(tid, std::memory_order_relaxed);
-    bool ok = call_build_guarded(reinterpret_cast<BuildFn>(g_build.original),
-                                 ecx, edx, a1, a2, a3, a4);
+    bool ok = false;
+    {
+        ScopedEyeBuild eyeBuild(1, rightBuildId);
+        ok = call_build_guarded(reinterpret_cast<BuildFn>(g_build.original),
+                                ecx, edx, a1, a2, a3, a4);
+    }
     g_secondPassTid.store(0, std::memory_order_relaxed); // also on fault path
     QueryPerformanceCounter(&t3);
     uint32_t call2Us = qpc_us(t2, t3);
@@ -811,13 +832,18 @@ void __fastcall BuildDetour(void* ecx, void* edx, void* a1, void* a2, void* a3,
     // inline inside this very call in single-threaded mode), so the tag is
     // in the ring by the time Present-tail pops it. Pass 2's tag is pushed
     // in maybe_second_build the same way.
-    if (depth == 0 && g_stereo.load(std::memory_order_relaxed))
-        bvr::vr::sr_push_eye(-1);
+    const uint64_t leftBuildId =
+        depth == 0 && g_stereo.load(std::memory_order_relaxed)
+            ? bvr::vr::sr_push_eye(-1)
+            : 0;
 
     LARGE_INTEGER t0, t1;
     QueryPerformanceCounter(&t0);
-    reinterpret_cast<BuildFn>(g_build.original)(ecx, edx, a1, a2, a3,
-                                                a4); // never guarded
+    {
+        ScopedEyeBuild eyeBuild(0, leftBuildId);
+        reinterpret_cast<BuildFn>(g_build.original)(ecx, edx, a1, a2, a3,
+                                                    a4); // never guarded
+    }
     QueryPerformanceCounter(&t1);
     g_call1Us.store(qpc_us(t0, t1), std::memory_order_relaxed);
 
@@ -1632,6 +1658,13 @@ bool second_pass_for_current_thread(float* yawDegOut) {
     if (t == 0 || t != GetCurrentThreadId()) return false;
     g_secondPassHits.fetch_add(1, std::memory_order_relaxed);
     *yawDegOut = g_secondYawDeg.load(std::memory_order_relaxed);
+    return true;
+}
+
+bool current_eye_build(int* eyeOut, uint64_t* buildIdOut) {
+    if (!t_eyeBuildId || t_eyeBuild < 0 || t_eyeBuild > 1) return false;
+    if (eyeOut) *eyeOut = t_eyeBuild;
+    if (buildIdOut) *buildIdOut = t_eyeBuildId;
     return true;
 }
 

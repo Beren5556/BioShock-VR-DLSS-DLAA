@@ -1,0 +1,14 @@
+; DLSS 4.5 experimental para BioShock Remastered VR.
+; La lanzadera administra este archivo en %LOCALAPPDATA%\BioshockVR\dlss.ini.
+; "off" conserva DLSS desactivado. No activa el reescalado espacial.
+[dlss]
+mode=off
+runtime=310.7.0
+preset=auto
+quality=auto
+outputWidth=4056
+outputHeight=4056
+
+; Ajuste avanzado usado para reconstruir movimiento de cámara desde profundidad.
+; No modificar salvo que se calibre específicamente la proyección del juego.
+nearPlaneUu=10.0

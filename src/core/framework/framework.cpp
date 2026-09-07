@@ -42,7 +42,8 @@ HMODULE self_module() {
 void log_environment() {
     HMODULE self = self_module();
     const IMAGE_NT_HEADERS* selfNt = nt_headers(self);
-    BVR_LOG("build: %s (%s) module %p pe-timestamp 0x%08X", BVR_VERSION, BVR_BUILD_ID, self,
+    BVR_LOG("producto: %s", BVR_IDENTITY);
+    BVR_LOG("build tecnico: %s module %p pe-timestamp 0x%08X", BVR_BUILD_ID, self,
             selfNt ? selfNt->FileHeader.TimeDateStamp : 0u);
 
     // RtlGetVersion, not GetVersionEx: the latter lies without a manifest.
@@ -107,7 +108,7 @@ void init() {
     // game layer supplies the per-game data subdir so two games never share a
     // log/config folder.
     log::init(game::host_data_subdir());
-    BVR_LOG("bioshockvr %s starting", BVR_VERSION);
+    BVR_LOG("%s iniciando", BVR_IDENTITY);
 
     char exePath[MAX_PATH];
     GetModuleFileNameA(nullptr, exePath, MAX_PATH);

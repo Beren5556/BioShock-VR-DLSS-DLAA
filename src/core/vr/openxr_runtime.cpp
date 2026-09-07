@@ -7,9 +7,13 @@
 #include "core/vr/openxr_runtime.h"
 
 #include "core/gfx/blit.h"
+#include "core/gfx/dlss45_client.h"
 #include "core/gfx/hud_capture.h"
+#include "core/gfx/spatial_upscaler.h"
+#include "core/ui/overlay.h"
 #include "core/util/log.h"
 #include "core/util/xr_math.h"
+#include "game/bioshock1r/temporal_guides.h"
 
 #ifdef BVR_WITH_OPENXR
 
@@ -29,8 +33,10 @@
 #include <tlhelp32.h>
 #include <shlobj.h>
 #include <share.h>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <vector>
@@ -49,12 +55,13 @@ std::atomic<bool> g_sessionBegun{false}; // read from the game thread via vr_cam
 bool g_frameOpen = false;
 XrFrameState g_frameState{XR_TYPE_FRAME_STATE};
 
-// Two identical backbuffer-sized swapchains: index 0 serves the quad screen
+// Two identical eye swapchains: index 0 serves the quad screen
 // and mono projection (and the left eye under AlternateEye), index 1 exists
 // only for the AlternateEye right eye. Both live and die together.
 XrSwapchain g_swapchains[2] = {XR_NULL_HANDLE, XR_NULL_HANDLE};
 std::vector<XrSwapchainImageD3D11KHR> g_images[2];
-uint32_t g_swapW = 0, g_swapH = 0;
+uint32_t g_swapW = 0, g_swapH = 0;     // OpenXR output dimensions
+uint32_t g_renderW = 0, g_renderH = 0; // game backbuffer dimensions
 uint32_t g_backbufferFmt = 0; // DXGI format the live swapchains were built for
 // Set by on_resize (which runs inside the game's ResizeBuffersDetour, at an
 // arbitrary point in the frame) and consumed by the frame loop at a point where
@@ -63,6 +70,46 @@ std::atomic<bool> g_resizePending{false};
 
 ID3D11Device* g_device = nullptr;          // game device, AddRef'd
 ID3D11DeviceContext* g_context = nullptr;  // immediate context, AddRef'd
+
+// DLSS 4.5 is deliberately a separate temporal path. BioShock is x86, so
+// NGX itself lives in two x64 helpers (one history per eye); this module only
+// owns the D3D11-side transport and guide generation. A spatial shader remains
+// prepared as a fail-open path for menus and other untagged frames when SR has
+// a larger OpenXR output than the game's backbuffer.
+constexpr float kDlss45FallbackSharpness = 0.20f;
+struct Dlss45Config {
+    bool filePresent = false;
+    bool valid = true;
+    bvr::dlss45::Mode mode = bvr::dlss45::Mode::Off;
+    uint32_t outputWidth = 0;
+    uint32_t outputHeight = 0;
+    float nearPlaneUu = 10.0f;
+};
+bool g_dlss45Requested = false;
+bool g_dlss45Active = false;
+bool g_dlss45Faulted = false;
+bool g_dlss45SpatialFallback = false;
+bvr::dlss45::Mode g_dlss45Mode = bvr::dlss45::Mode::Off;
+const char* g_dlss45Status = "desactivado";
+// DLSS is temporal per eye, but a displayed pair must not mix a reconstructed
+// left eye with a spatial/direct right eye. These present-thread latches keep
+// the pair coherent even when XR pair pacing is disabled.
+bool g_dlss45HaveLeft = false;
+bool g_dlss45PairSpatial = false;
+bool g_dlss45ForceNextPairSpatial = false;
+uint64_t g_dlss45LeftBuildId = 0;
+uint64_t g_dlss45LastLeftBuildId = 0;
+uint64_t g_dlss45LastRightBuildId = 0;
+uint64_t g_dlss45DiagLogMs = 0;
+std::atomic<uint32_t> g_dlss45Frames{0};
+std::atomic<uint32_t> g_dlss45FallbackFrames{0};
+std::atomic<uint32_t> g_dlss45MixedPairRecoveries{0};
+std::atomic<uint32_t> g_dlss45TagMismatches{0};
+
+Dlss45Config read_dlss45_config();
+bool dlss45_host_path(wchar_t* out /*MAX_PATH*/);
+
+bool xr_root_dir(wchar_t* out /*MAX_PATH*/);
 
 // M7 aim laser. One tiny swapchain holding a soft dot, drawn as several quad
 // layers along the aim ray. Runtimes are only required to accept 16 layers, so
@@ -326,11 +373,15 @@ XrPosef parallel_eye_tag(const XrPosef& l, const XrPosef& r, int eye, float ipdM
 // M4 rung 2 (SequentialReentry): SPSC eye-tag ring, game thread pushes at
 // engine submit, render thread pops at Present-tail (see header). Normal
 // depth is <= 2 (one L/R pair in flight); deeper means a skew - the consumer
-// clears it. Ring slots hold the eye sign; indices are monotonic.
+// clears it. Ring slots hold the eye sign plus a process-lifetime monotonic
+// build id. The id is diagnostic metadata only for adapters that opt into it;
+// the established sign-only consumers remain unchanged.
 constexpr uint32_t kSrRingSize = 8; // power of two
 std::atomic<uint32_t> g_srHead{0};  // push cursor (game thread)
 std::atomic<uint32_t> g_srTail{0};  // pop cursor (render thread)
 std::atomic<int8_t> g_srRing[kSrRingSize] = {};
+std::atomic<uint64_t> g_srRingBuildId[kSrRingSize] = {};
+std::atomic<uint64_t> g_srNextBuildId{0};
 std::atomic<uint32_t> g_srPushed{0}, g_srPopped{0}, g_srDropped{0},
     g_srCleared{0};
 std::atomic<bool> g_loggedFirstSr{false};
@@ -888,23 +939,31 @@ bool g_mirrorHeld = false;               // a left image has been snapshotted
 std::atomic<uint32_t> g_mirrorHolds{0}, g_mirrorBlits{0};
 std::atomic<bool> g_loggedFirstMirror{false};
 
-// Pop one tag; 0 = none pending (mono/AER frame).
-int sr_pop_eye() {
+struct SrEyeTag {
+    int sign = 0;
+    uint64_t buildId = 0;
+};
+
+// Pop one tag; sign 0 = none pending (mono/AER frame).
+SrEyeTag sr_pop_eye() {
     uint32_t tail = g_srTail.load(std::memory_order_relaxed);
     uint32_t head = g_srHead.load(std::memory_order_acquire);
-    if (tail == head) return 0;
+    if (tail == head) return {};
     if (head - tail > 2) {
         // More than a pair in flight: submit/present pairing skewed (mode
         // boundary). Drop everything and resync from mono.
         g_srTail.store(head, std::memory_order_relaxed);
         g_srCleared.fetch_add(1, std::memory_order_relaxed);
         BVR_LOG("xr: sr tag ring skewed (depth %u) - cleared", head - tail);
-        return 0;
+        return {};
     }
-    int sign = g_srRing[tail & (kSrRingSize - 1)].load(std::memory_order_relaxed);
+    const uint32_t slot = tail & (kSrRingSize - 1);
+    SrEyeTag tag{};
+    tag.sign = g_srRing[slot].load(std::memory_order_relaxed);
+    tag.buildId = g_srRingBuildId[slot].load(std::memory_order_relaxed);
     g_srTail.store(tail + 1, std::memory_order_release);
     g_srPopped.fetch_add(1, std::memory_order_relaxed);
-    return sign;
+    return tag;
 }
 
 const char* res_str(XrResult r) {
@@ -1125,19 +1184,45 @@ void sample_foreground() {
 // very stall it was built to describe. An instrument that shares a lock with
 // its subject is not an instrument.
 FILE* g_traceFile = nullptr;
+INIT_ONCE g_traceInitOnce = INIT_ONCE_STATIC_INIT;
+constexpr ULONGLONG kPaceTraceMaxBytes = 8ull * 1024ull * 1024ull;
+
+BOOL CALLBACK init_trace_file(PINIT_ONCE, PVOID, PVOID*) {
+    wchar_t path[MAX_PATH];
+    const wchar_t* base = bvr::log::data_dir();
+    if (!base || !base[0]) return FALSE;
+    swprintf_s(path, L"%s\\pacetrace.log", base);
+
+    // Keep one bounded previous trace. Rotation runs exactly once, before this
+    // process opens the append handle, so the existing per-FILE CRT locking and
+    // the tracer's independence from BVR_LOG remain unchanged.
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (GetFileAttributesExW(path, GetFileExInfoStandard, &data)) {
+        ULARGE_INTEGER size{};
+        size.HighPart = data.nFileSizeHigh;
+        size.LowPart = data.nFileSizeLow;
+        if (size.QuadPart >= kPaceTraceMaxBytes) {
+            wchar_t previous[MAX_PATH];
+            swprintf_s(previous, L"%s\\pacetrace.previous.log", base);
+            // If another process still owns the file the move fails safely and
+            // we simply append; trace availability is more important than a
+            // mandatory rotation.
+            MoveFileExW(path, previous,
+                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+        }
+    }
+
+    // _SH_DENYWR so the file can be tailed WHILE the game is frozen -
+    // the default deny-all open made the trace unreadable at exactly the
+    // moment it mattered.
+    g_traceFile = _wfsopen(path, L"a", _SH_DENYWR);
+    return g_traceFile ? TRUE : FALSE;
+}
 
 void trace_write(const char* line) {
-    if (!g_traceFile) {
-        wchar_t path[MAX_PATH];
-        const wchar_t* base = bvr::log::data_dir();
-        if (!base || !base[0]) return;
-        swprintf_s(path, L"%s\\pacetrace.log", base);
-        // _SH_DENYWR so the file can be tailed WHILE the game is frozen -
-        // the default deny-all open made the trace unreadable at exactly the
-        // moment it mattered.
-        g_traceFile = _wfsopen(path, L"a", _SH_DENYWR);
-        if (!g_traceFile) return;
-    }
+    if (!InitOnceExecuteOnce(&g_traceInitOnce, init_trace_file, nullptr, nullptr) ||
+        !g_traceFile)
+        return;
     SYSTEMTIME st{};
     GetLocalTime(&st);
     fprintf(g_traceFile, "[%02u:%02u:%02u.%03u] %s\n", st.wHour, st.wMinute, st.wSecond,
@@ -1858,9 +1943,18 @@ void destroy_swapchains() {
         }
         g_images[i].clear();
     }
+    bvr::dlss45::release();
+    bvr::b1r::temporal_guides::shutdown();
+    g_dlss45Active = false;
+    g_dlss45SpatialFallback = false;
+    g_dlss45HaveLeft = false;
+    g_dlss45PairSpatial = false;
+    g_dlss45ForceNextPairSpatial = false;
+    g_dlss45LeftBuildId = 0;
+    bvr::spatial_upscaler::release();
     destroy_laser();
     destroy_hud_swapchain();
-    g_swapW = g_swapH = 0;
+    g_swapW = g_swapH = g_renderW = g_renderH = 0;
     g_backbufferFmt = 0;
     // Whatever a queued rebuild was for, it has just happened.
     g_resizePending.store(false, std::memory_order_relaxed);
@@ -2072,6 +2166,16 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
     DXGI_SWAP_CHAIN_DESC desc{};
     if (FAILED(swapchain->GetDesc(&desc))) return false;
 
+    // Get the real resource description rather than trusting BufferDesc alone:
+    // borderless ResizeBuffers may leave fields there as UNKNOWN/zero.
+    D3D11_TEXTURE2D_DESC backbufferDesc{};
+    ID3D11Texture2D* backbuffer = nullptr;
+    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer))) || !backbuffer)
+        return false;
+    backbuffer->GetDesc(&backbufferDesc);
+    backbuffer->Release();
+    if (!backbufferDesc.Width || !backbufferDesc.Height) return false;
+
     // Pick a swapchain format CopyResource-compatible with the backbuffer
     // (same typeless family). Prefer the sRGB view so the compositor reads the
     // game's gamma-encoded output correctly.
@@ -2091,42 +2195,219 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
         return false;
     }
 
+    const uint32_t renderW = backbufferDesc.Width;
+    const uint32_t renderH = backbufferDesc.Height;
+    uint32_t outputW = renderW;
+    uint32_t outputH = renderH;
+    g_dlss45Active = false;
+    g_dlss45SpatialFallback = false;
+    g_dlss45HaveLeft = false;
+    g_dlss45PairSpatial = false;
+    g_dlss45ForceNextPairSpatial = false;
+    g_dlss45LeftBuildId = 0;
+
+    XrSystemProperties properties{XR_TYPE_SYSTEM_PROPERTIES};
+    const bool haveProperties =
+        XR_SUCCEEDED(xrGetSystemProperties(g_instance, g_system, &properties));
+    auto exceedsRuntime = [&](uint32_t width, uint32_t height) {
+        return haveProperties &&
+               (width > properties.graphicsProperties.maxSwapchainImageWidth ||
+                height > properties.graphicsProperties.maxSwapchainImageHeight);
+    };
+    auto exactAspect = [&](uint32_t width, uint32_t height) {
+        return static_cast<uint64_t>(width) * renderH ==
+               static_cast<uint64_t>(height) * renderW;
+    };
+    const bool simpleBackbuffer = backbufferDesc.SampleDesc.Count == 1 &&
+                                  backbufferDesc.MipLevels == 1 &&
+                                  backbufferDesc.ArraySize == 1;
+
+    // DLSS 4.5 is the only optional image path exposed by this add-on. When it
+    // is off, invalid or unavailable, use the original native direct copy.
+    // The spatial shader below is retained solely as the internal SR safety
+    // path for menus/transitions that have no valid temporal guides.
+    const Dlss45Config dlss = read_dlss45_config();
+    g_dlss45Mode = dlss.mode;
+    g_dlss45Requested = dlss.mode != bvr::dlss45::Mode::Off;
+    if (!dlss.filePresent) {
+        g_dlss45Status = "sin dlss.ini";
+    } else if (!g_dlss45Requested) {
+        g_dlss45Status = "desactivado en dlss.ini";
+    } else if (!dlss.valid) {
+        g_dlss45Status = "dlss.ini no valido (requiere runtime 310.7.0)";
+    } else if (g_dlss45Faulted) {
+        g_dlss45Status = "desactivado tras un fallo; reinicia el juego";
+    } else {
+        bool valid = simpleBackbuffer && dlss.outputWidth && dlss.outputHeight &&
+                     exactAspect(dlss.outputWidth, dlss.outputHeight) &&
+                     !exceedsRuntime(dlss.outputWidth, dlss.outputHeight);
+        const char* invalidReason = nullptr;
+        if (!simpleBackbuffer)
+            invalidReason = "backbuffer no compatible";
+        else if (!dlss.outputWidth || !dlss.outputHeight)
+            invalidReason = "faltan outputWidth/outputHeight";
+        else if (!exactAspect(dlss.outputWidth, dlss.outputHeight))
+            invalidReason = "la relacion de aspecto no coincide";
+        else if (exceedsRuntime(dlss.outputWidth, dlss.outputHeight))
+            invalidReason = "la salida supera el limite OpenXR";
+        else if (dlss.mode == bvr::dlss45::Mode::Dlaa &&
+                 (dlss.outputWidth != renderW || dlss.outputHeight != renderH)) {
+            valid = false;
+            invalidReason = "DLAA exige salida 1:1";
+        } else if (dlss.mode == bvr::dlss45::Mode::SuperResolution &&
+                   (dlss.outputWidth <= renderW || dlss.outputHeight <= renderH)) {
+            valid = false;
+            invalidReason = "DLSS SR exige una salida mayor";
+        }
+
+        wchar_t hostPath[MAX_PATH] = {};
+        if (valid && !dlss45_host_path(hostPath)) {
+            valid = false;
+            invalidReason = "no se pudo resolver host64";
+        }
+
+        // SR also needs a non-temporal renderer for menus/cinematics and for a
+        // missing guide frame; without it a larger XR texture could not receive
+        // the native-size backbuffer safely.
+        const bool needsSpatialFallback =
+            valid && dlss.mode == bvr::dlss45::Mode::SuperResolution;
+        bool fallbackReady = !needsSpatialFallback;
+        if (needsSpatialFallback) {
+            fallbackReady = bvr::spatial_upscaler::prepare(
+                g_device, renderW, renderH, backbufferDesc.Format,
+                dlss.outputWidth, dlss.outputHeight, static_cast<DXGI_FORMAT>(pick));
+            if (!fallbackReady) invalidReason = "no se pudo crear el respaldo espacial";
+        }
+
+        bvr::b1r::temporal_guides::PrepareDesc guideDesc{};
+        guideDesc.width = renderW;
+        guideDesc.height = renderH;
+        guideDesc.nearPlane = dlss.nearPlaneUu;
+        // BioShockHD.exe's projection builder at RVA 0x571ED0 is the standard
+        // finite-far D3D row-vector form (m22=F/(F-N), m32=-NF/(F-N)). The
+        // gameplay far branch is 65536 uu; the alternate 1024-uu branch is
+        // covered by the guide tests and called out by diagnostic telemetry
+        // until its runtime selector is published at this seam.
+        guideDesc.farPlane = 65536.0f;
+        guideDesc.depthInverted = false;
+        const bool guidesReady = valid && fallbackReady &&
+                                 bvr::b1r::temporal_guides::prepare(g_device, guideDesc);
+        if (valid && fallbackReady && !guidesReady)
+            invalidReason = "no se pudieron crear profundidad/movimiento";
+
+        const bool bridgeReady = guidesReady && bvr::dlss45::prepare(
+            g_device, renderW, renderH, backbufferDesc.Format,
+            dlss.outputWidth, dlss.outputHeight, dlss.mode,
+            guideDesc.depthInverted, hostPath);
+        if (bridgeReady) {
+            outputW = dlss.outputWidth;
+            outputH = dlss.outputHeight;
+            g_dlss45Active = true;
+            g_dlss45SpatialFallback = needsSpatialFallback;
+            g_dlss45Status = "activo";
+            BVR_LOG("[dlss45] active: render %ux%u -> OpenXR %ux%u, mode=%s, "
+                    "two independent eye histories, depth=standard finite "
+                    "(near %.3f far %.1f; runtime far selector not yet published)",
+                    renderW, renderH, outputW, outputH,
+                    dlss.mode == bvr::dlss45::Mode::Dlaa ? "DLAA" : "DLSS SR",
+                    guideDesc.nearPlane, guideDesc.farPlane);
+        } else {
+            if (!invalidReason) invalidReason = bvr::dlss45::status();
+            g_dlss45Status = invalidReason ? invalidReason : "fallo al iniciar el puente";
+            bvr::dlss45::release();
+            bvr::b1r::temporal_guides::shutdown();
+            if (fallbackReady && needsSpatialFallback) bvr::spatial_upscaler::release();
+            BVR_LOG("[dlss45] unavailable: %s - using native direct copy",
+                    g_dlss45Status);
+        }
+    }
+
     XrSwapchainCreateInfo sci{XR_TYPE_SWAPCHAIN_CREATE_INFO};
     sci.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
     sci.format = pick;
     sci.sampleCount = 1;
-    sci.width = desc.BufferDesc.Width;
-    sci.height = desc.BufferDesc.Height;
+    sci.width = outputW;
+    sci.height = outputH;
     sci.faceCount = 1;
     sci.arraySize = 1;
     sci.mipCount = 1;
+
+    auto clearEyePair = [] {
+        for (int eye = 0; eye < 2; ++eye) {
+            if (g_swapchains[eye] != XR_NULL_HANDLE) {
+                xrDestroySwapchain(g_swapchains[eye]);
+                g_swapchains[eye] = XR_NULL_HANDLE;
+            }
+            g_images[eye].clear();
+        }
+    };
     uint32_t imageCount = 0;
-    for (int i = 0; i < 2; ++i) {
-        XrResult r = xrCreateSwapchain(g_session, &sci, &g_swapchains[i]);
-        if (XR_FAILED(r)) {
-            BVR_LOG("xr: xrCreateSwapchain failed: %s", res_str(r));
-            g_swapchains[i] = XR_NULL_HANDLE;
-            destroy_swapchains();
-            return false;
+    auto createEyePair = [&]() -> bool {
+        for (int eye = 0; eye < 2; ++eye) {
+            XrResult r = xrCreateSwapchain(g_session, &sci, &g_swapchains[eye]);
+            if (XR_FAILED(r)) {
+                BVR_LOG("xr: xrCreateSwapchain %ux%u failed: %s", sci.width, sci.height,
+                        res_str(r));
+                g_swapchains[eye] = XR_NULL_HANDLE;
+                clearEyePair();
+                return false;
+            }
+            uint32_t count = 0;
+            r = xrEnumerateSwapchainImages(g_swapchains[eye], 0, &count, nullptr);
+            if (XR_FAILED(r) || !count) {
+                BVR_LOG("xr: swapchain image count failed: %s", res_str(r));
+                clearEyePair();
+                return false;
+            }
+            g_images[eye].assign(count, {XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR});
+            r = xrEnumerateSwapchainImages(
+                g_swapchains[eye], count, &count,
+                reinterpret_cast<XrSwapchainImageBaseHeader*>(g_images[eye].data()));
+            if (XR_FAILED(r)) {
+                BVR_LOG("xr: xrEnumerateSwapchainImages failed: %s", res_str(r));
+                clearEyePair();
+                return false;
+            }
+            imageCount = count;
         }
-        xrEnumerateSwapchainImages(g_swapchains[i], 0, &imageCount, nullptr);
-        g_images[i].assign(imageCount, {XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR});
-        r = xrEnumerateSwapchainImages(
-            g_swapchains[i], imageCount, &imageCount,
-            reinterpret_cast<XrSwapchainImageBaseHeader*>(g_images[i].data()));
-        if (XR_FAILED(r)) {
-            BVR_LOG("xr: xrEnumerateSwapchainImages failed: %s", res_str(r));
-            destroy_swapchains();
-            return false;
+        return true;
+    };
+
+    if (!createEyePair()) {
+        // A runtime may advertise a large maximum yet still reject the chosen
+        // allocation. Recover in-place with the original render-sized pair.
+        if (outputW == renderW && outputH == renderH) return false;
+        if (g_dlss45Active) {
+            bvr::dlss45::release();
+            bvr::b1r::temporal_guides::shutdown();
+            g_dlss45Active = false;
+            g_dlss45SpatialFallback = false;
+            g_dlss45Faulted = true;
+            g_dlss45Status = "OpenXR rechazo la salida; reinicia para reintentar";
         }
+        bvr::spatial_upscaler::release();
+        sci.width = renderW;
+        sci.height = renderH;
+        BVR_LOG("[dlss45] OpenXR rejected %ux%u - retrying the native %ux%u",
+                outputW, outputH, renderW, renderH);
+        if (!createEyePair()) return false;
     }
 
-    g_swapW = desc.BufferDesc.Width;
-    g_swapH = desc.BufferDesc.Height;
+    g_renderW = renderW;
+    g_renderH = renderH;
+    g_swapW = sci.width;
+    g_swapH = sci.height;
     g_swapFormat = pick; // the HUD quad swapchain creates lazily with this
-    g_backbufferFmt = desc.BufferDesc.Format; // for the same-size resize guard
-    BVR_LOG("xr: swapchain pair %ux%u format %lld (%u images each)", g_swapW, g_swapH,
-            static_cast<long long>(pick), imageCount);
+    g_backbufferFmt = backbufferDesc.Format; // for the same-size resize guard
+    if (g_dlss45Active)
+        BVR_LOG("xr: swapchain pair render %ux%u -> output %ux%u format %lld "
+                "(%u images each, %s 4.5)",
+                g_renderW, g_renderH, g_swapW, g_swapH, static_cast<long long>(pick),
+                imageCount,
+                g_dlss45Mode == bvr::dlss45::Mode::Dlaa ? "DLAA" : "DLSS SR");
+    else
+        BVR_LOG("xr: swapchain pair %ux%u format %lld (%u images each)", g_swapW,
+                g_swapH, static_cast<long long>(pick), imageCount);
 
     create_laser(pick); // fail-soft: no laser just means no dots
     return true;
@@ -2354,6 +2635,85 @@ bool xr_root_dir(wchar_t* out /*MAX_PATH*/) {
         return false;
     swprintf_s(out, MAX_PATH, L"%s\\BioshockVR", local);
     return true;
+}
+
+bool dlss45_host_path(wchar_t* out /*MAX_PATH*/) {
+    if (!out) return false;
+    out[0] = L'\0';
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            reinterpret_cast<LPCWSTR>(&g_dlss45Requested), &module) ||
+        !module)
+        return false;
+    wchar_t path[MAX_PATH] = {};
+    if (!GetModuleFileNameW(module, path, MAX_PATH)) return false;
+    wchar_t* slash = wcsrchr(path, L'\\');
+    if (!slash) return false;
+    *slash = L'\0';
+    return swprintf_s(out, MAX_PATH, L"%s\\host64\\BioShockVR-DLSS45-Host64.exe",
+                      path) > 0;
+}
+
+// Launcher-owned phase-1 configuration:
+//   %LOCALAPPDATA%\BioshockVR\dlss.ini
+//   [dlss]
+//   mode=off|dlaa|sr
+//   runtime=310.7.0
+//   preset=auto                 (informational; host applies K/M/L mapping)
+//   quality=quality|...         (informational; ratio selects the NGX mode)
+//   outputWidth/outputHeight=N
+// Optional hand-edit: nearPlaneUu=10.0. Unknown or incomplete settings fail
+// closed; merely having the file never activates a helper process.
+Dlss45Config read_dlss45_config() {
+    Dlss45Config cfg;
+    wchar_t root[MAX_PATH];
+    if (!xr_root_dir(root)) return cfg;
+    wchar_t ini[MAX_PATH];
+    swprintf_s(ini, L"%s\\dlss.ini", root);
+    if (GetFileAttributesW(ini) == INVALID_FILE_ATTRIBUTES) return cfg;
+    cfg.filePresent = true;
+
+    wchar_t mode[32] = {};
+    GetPrivateProfileStringW(L"dlss", L"mode", L"off", mode,
+                             static_cast<DWORD>(_countof(mode)), ini);
+    if (_wcsicmp(mode, L"off") == 0)
+        cfg.mode = bvr::dlss45::Mode::Off;
+    else if (_wcsicmp(mode, L"dlaa") == 0)
+        cfg.mode = bvr::dlss45::Mode::Dlaa;
+    else if (_wcsicmp(mode, L"sr") == 0)
+        cfg.mode = bvr::dlss45::Mode::SuperResolution;
+    else
+        cfg.valid = false;
+
+    wchar_t runtime[32] = {};
+    GetPrivateProfileStringW(L"dlss", L"runtime", L"", runtime,
+                             static_cast<DWORD>(_countof(runtime)), ini);
+    if (cfg.mode != bvr::dlss45::Mode::Off && _wcsicmp(runtime, L"310.7.0") != 0)
+        cfg.valid = false;
+
+    const int outputWidth = GetPrivateProfileIntW(L"dlss", L"outputWidth", 0, ini);
+    const int outputHeight = GetPrivateProfileIntW(L"dlss", L"outputHeight", 0, ini);
+    if (outputWidth > 0) cfg.outputWidth = static_cast<uint32_t>(outputWidth);
+    if (outputHeight > 0) cfg.outputHeight = static_cast<uint32_t>(outputHeight);
+
+    wchar_t nearValue[32] = {};
+    GetPrivateProfileStringW(L"dlss", L"nearPlaneUu", L"10.0", nearValue,
+                             static_cast<DWORD>(_countof(nearValue)), ini);
+    for (wchar_t& c : nearValue)
+        if (c == L',') c = L'.';
+    wchar_t* end = nullptr;
+    const float parsedNear = std::wcstof(nearValue, &end);
+    if (end != nearValue && std::isfinite(parsedNear) && parsedNear >= 0.1f &&
+        parsedNear <= 1000.0f)
+        cfg.nearPlaneUu = parsedNear;
+    else
+        cfg.valid = false;
+
+    BVR_LOG("[dlss45] dlss.ini: mode=%ls runtime=%ls output=%ux%u near=%.3f uu valid=%d",
+            mode, runtime[0] ? runtime : L"(missing)", cfg.outputWidth, cfg.outputHeight,
+            cfg.nearPlaneUu, cfg.valid ? 1 : 0);
+    return cfg;
 }
 
 // Returns the mode string ("auto"/"native"/"steamvr"); logs only if the file
@@ -2752,6 +3112,13 @@ void on_present_begin(IDXGISwapChain* swapchain) {
         g_srPairOpen = false;
         g_srPairAborts.fetch_add(1, std::memory_order_relaxed);
         g_pmAbortExpired.fetch_add(1, std::memory_order_relaxed);
+        if (g_dlss45Active) {
+            bvr::b1r::temporal_guides::invalidate();
+            g_dlss45HaveLeft = false;
+            g_dlss45PairSpatial = false;
+            g_dlss45LeftBuildId = 0;
+            g_dlss45ForceNextPairSpatial = true;
+        }
     }
 
     // M8 (a): headset idle (session left FOCUSED after having held it) - skip
@@ -2997,14 +3364,16 @@ void on_present_begin(IDXGISwapChain* swapchain) {
     }
 
     // Circumscribed symmetric FOV for the game render, computed once per
-    // session (needs the backbuffer aspect from the quad swapchain).
-    if (g_viewsValid && g_hfovDeg.load(std::memory_order_relaxed) == 0.0f && g_swapW != 0) {
+    // session. It must use the game's backbuffer aspect, not a differently
+    // sized OpenXR output image.
+    if (g_viewsValid && g_hfovDeg.load(std::memory_order_relaxed) == 0.0f &&
+        g_renderW != 0) {
         float maxHalfH = 0.0f, maxHalfV = 0.0f;
         for (const XrView& v : g_views) {
             maxHalfH = fmaxf(maxHalfH, fmaxf(-v.fov.angleLeft, v.fov.angleRight));
             maxHalfV = fmaxf(maxHalfV, fmaxf(-v.fov.angleDown, v.fov.angleUp));
         }
-        float aspect = static_cast<float>(g_swapW) / static_cast<float>(g_swapH);
+        float aspect = static_cast<float>(g_renderW) / static_cast<float>(g_renderH);
         float halfH = fmaxf(maxHalfH, atanf(tanf(maxHalfV) * aspect));
         float deg = fminf(halfH * 2.0f * 57.29578f, 160.0f);
         g_hfovDeg.store(deg, std::memory_order_relaxed);
@@ -3400,19 +3769,179 @@ float xr_quat_yaw_deg(float qx, float qy, float qz, float qw) {
 // aspect. It is deleted rather than defaulted off: a content-destroying lever
 // with a disproven rationale is a hazard, not an option. The fix is not to
 // issue the draw - see hud_capture's DrawVerdict::Skip and `vrcine bars`.
-void capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer) {
+enum class CaptureResult {
+    Failed,
+    DirectOrSpatial,
+    Dlss,
+};
+
+CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
+                            int eye, bool temporalEyeFrame, uint64_t buildId,
+                            float tanHalfFovX, float tanHalfFovY) {
+    if (!g_context || !dst || !backbuffer) return CaptureResult::Failed;
+    const bool dlssOutputPath = g_dlss45Active || g_dlss45SpatialFallback;
+
+    if (g_dlss45Active) {
+        if (temporalEyeFrame && eye >= 0 && eye < 2) {
+            bvr::b1r::temporal_guides::EyeGuides guides{};
+            bvr::b1r::temporal_guides::Projection projection{};
+            projection.tanHalfFovX = tanHalfFovX;
+            projection.tanHalfFovY = tanHalfFovY;
+            projection.buildId = buildId;
+            // Keep the renderer-derived projection independent from the
+            // OpenXR/manual claim, and compare it with a second observation of
+            // the live WORLD constants at the exact capture seam. A stale
+            // observation remains telemetry but never rejects a good frame.
+            float observedTanH = 0.0f, observedTanV = 0.0f;
+            unsigned long long observedAge = 0;
+            if (bvr::hud::fov_watch(&observedTanH, &observedTanV,
+                                    &observedAge, 0)) {
+                projection.observedTanHalfFovX = observedTanH;
+                projection.observedTanHalfFovY = observedTanV;
+                projection.observedAgeMs = static_cast<uint32_t>(
+                    observedAge > 0xFFFFFFFFull ? 0xFFFFFFFFull : observedAge);
+                projection.observedValid = observedAge <= 500;
+            }
+            const bool haveGuides = bvr::b1r::temporal_guides::generate_eye(
+                g_context, eye, projection, &guides);
+            if (haveGuides && guides.cameraValid &&
+                bvr::dlss45::process_eye(
+                    g_context, eye, dst, backbuffer, guides.depthTexture,
+                    guides.motionTexture, guides.resetRequired,
+                    0.0f, 0.0f)) {
+                g_dlss45Status = "activo";
+                g_dlss45Frames.fetch_add(1, std::memory_order_relaxed);
+                return CaptureResult::Dlss;
+            }
+
+            // A missing principal DSV/camera is a per-frame condition, not a
+            // reason to poison the whole session. Reset only this eye and use
+            // the prepared spatial/direct path for the current image.
+            bvr::b1r::temporal_guides::invalidate_eye(eye);
+            if (!bvr::dlss45::ready()) {
+                const char* failure = bvr::dlss45::status();
+                g_dlss45Active = false;
+                g_dlss45Faulted = true;
+                BVR_LOG("[dlss45] runtime disabled after eye %d: %s; "
+                        "keeping the safe fallback path", eye, failure);
+                // Stop guide taps and boundedly reap both helpers after a
+                // permanent transport failure. The SR spatial renderer remains
+                // alive because its larger OpenXR swapchain still needs it.
+                bvr::b1r::temporal_guides::shutdown();
+                bvr::dlss45::release();
+                g_dlss45Status = "fallo del host; reinicia el juego para reintentar";
+            }
+        } else {
+            // Menus, loading boards and cinematic quad frames do not carry a
+            // valid stereo camera/eye tag. Never feed them into an old temporal
+            // history; SR uses the spatial fallback until gameplay resumes.
+            bvr::b1r::temporal_guides::invalidate();
+        }
+    }
+
+    if (g_dlss45SpatialFallback) {
+        if (bvr::spatial_upscaler::render(g_context, dst, backbuffer,
+                                          kDlss45FallbackSharpness)) {
+            if (dlssOutputPath)
+                g_dlss45FallbackFrames.fetch_add(1, std::memory_order_relaxed);
+            return CaptureResult::DirectOrSpatial;
+        }
+
+        // A live GPU-resource mismatch is not recoverable at this exact point:
+        // an XR frame may be open and the sibling eye may still be pending.
+        // Queue the existing safe rebuild and suppress incompatible copies in
+        // the meantime. The next pair is rebuilt at native size.
+        if (g_dlss45SpatialFallback) {
+            g_dlss45SpatialFallback = false;
+            g_dlss45Active = false;
+            g_dlss45Faulted = true;
+            g_dlss45Status = "fallo del respaldo espacial; reconstruccion pendiente";
+        }
+        g_resizePending.store(true, std::memory_order_release);
+        BVR_LOG("[dlss45] internal spatial fallback failed - queued native rebuild");
+        return CaptureResult::Failed;
+    }
+    if (g_swapW != g_renderW || g_swapH != g_renderH) return CaptureResult::Failed;
     g_context->CopyResource(dst, backbuffer);
+    if (dlssOutputPath)
+        g_dlss45FallbackFrames.fetch_add(1, std::memory_order_relaxed);
+    return CaptureResult::DirectOrSpatial;
+}
+
+const char* dlss45_depth_clear_hint(
+    const bvr::b1r::temporal_guides::EyeDiagnostics& eye) {
+    if (!eye.lastDepthClearSeen) return "unknown";
+    if (eye.lastDepthClearValue <= 0.001f) return "far=0/reversed-candidate";
+    if (eye.lastDepthClearValue >= 0.999f) return "far=1/normal-candidate";
+    return "noncanonical";
+}
+
+void dlss45_diag_heartbeat() {
+    if (!g_dlss45Active) return;
+    const uint64_t now = GetTickCount64();
+    if (now - g_dlss45DiagLogMs < 5000) return;
+    g_dlss45DiagLogMs = now;
+
+    bvr::b1r::temporal_guides::Diagnostics diagnostics{};
+    bvr::b1r::temporal_guides::get_diagnostics(&diagnostics);
+    BVR_LOG("[dlss45] totals processed=%u fallback=%u mixed=%u "
+            "tagMismatch=%u copies=%llu pairTags=%llu/%llu depthCfg=%s "
+            "near=%.3f far=%.3f(dynamic-selector-unobserved)",
+            g_dlss45Frames.load(std::memory_order_relaxed),
+            g_dlss45FallbackFrames.load(std::memory_order_relaxed),
+            g_dlss45MixedPairRecoveries.load(std::memory_order_relaxed),
+            g_dlss45TagMismatches.load(std::memory_order_relaxed),
+            static_cast<unsigned long long>(diagnostics.depthCopies),
+            static_cast<unsigned long long>(g_dlss45LastLeftBuildId),
+            static_cast<unsigned long long>(g_dlss45LastRightBuildId),
+            diagnostics.depthInverted ? "reversed" : "normal",
+            diagnostics.nearPlane, diagnostics.farPlane);
+    for (int eyeIndex = 0; eyeIndex < 2; ++eyeIndex) {
+        const auto& eye = diagnostics.eyes[eyeIndex];
+        BVR_LOG("[dlss45] eye=%c gen/rej/reset/gap=%llu/%llu/%llu/%llu "
+                "build/cam/cap=%llu/%llu/%llu coherent=%d hist=%d reject=%s "
+                "dsvTex=%p dsv=%p draws=%u clears=%u lastClear=%.6f(%s) "
+                "cam=(%.3f %.3f %.3f;%d %d %d) camAge=%ums pubs=%u "
+                "tan=%.6f/%.6f observed=%.6f/%.6f age=%ums valid=%d",
+                eyeIndex == 0 ? 'L' : 'R',
+                static_cast<unsigned long long>(eye.generated),
+                static_cast<unsigned long long>(eye.rejected),
+                static_cast<unsigned long long>(eye.resetFrames),
+                static_cast<unsigned long long>(eye.sequenceDiscontinuities),
+                static_cast<unsigned long long>(eye.lastBuildId),
+                static_cast<unsigned long long>(eye.lastCameraBuildId),
+                static_cast<unsigned long long>(eye.lastCaptureId),
+                eye.lastCoherent ? 1 : 0, eye.lastHistoryValid ? 1 : 0,
+                bvr::b1r::temporal_guides::reject_reason_name(eye.lastReject),
+                reinterpret_cast<void*>(eye.lastDepthTextureIdentity),
+                reinterpret_cast<void*>(eye.lastDepthViewIdentity),
+                eye.lastDepthDraws, eye.lastDepthClears, eye.lastDepthClearValue,
+                dlss45_depth_clear_hint(eye),
+                eye.lastCameraLocation[0], eye.lastCameraLocation[1],
+                eye.lastCameraLocation[2], eye.lastCameraRotation[0],
+                eye.lastCameraRotation[1], eye.lastCameraRotation[2],
+                eye.lastCameraAgeMs, eye.lastCameraPublications,
+                eye.lastTanX, eye.lastTanY, eye.lastObservedTanX,
+                eye.lastObservedTanY, eye.lastObservedAgeMs,
+                eye.lastObservedValid ? 1 : 0);
+    }
 }
 
 void on_present_end(IDXGISwapChain* swapchain) {
     PhaseScope psEnd(kPhPresentEnd); // records on every return path
     phase_heartbeat_maybe(GetTickCount64());
     if (!g_frameOpen) {
+        if (g_dlss45Active) {
+            bvr::b1r::temporal_guides::invalidate();
+            g_dlss45HaveLeft = false;
+            g_dlss45PairSpatial = false;
+            g_dlss45LeftBuildId = 0;
+        }
         // No XR frame this present (session gone, or the pace guard skipped
         // it). The game may still be presenting alternating stereo eyes -
         // keep draining the tag ring and keep the window pinned to one eye.
         int64_t tComp = phase_now();
-        mirror_present(swapchain, sr_pop_eye());
+        mirror_present(swapchain, sr_pop_eye().sign);
         composite_hud(swapchain); // the window keeps its HUD even with no session
         phase_record(kPhComposite, tComp);
         // SESSION 28: name the guard, on a heartbeat, while submission is idle.
@@ -3448,6 +3977,16 @@ void on_present_end(IDXGISwapChain* swapchain) {
     bool pairSecond = g_srPairOpen; // this present completes an open pair
     g_srPairOpen = false;
     g_frameOpen = false; // the pair-hold path below re-arms both
+    if (!g_frameState.shouldRender &&
+        (g_dlss45Active || g_dlss45SpatialFallback)) {
+        if (g_dlss45Active) {
+            bvr::b1r::temporal_guides::invalidate();
+            g_dlss45ForceNextPairSpatial = true;
+        }
+        g_dlss45HaveLeft = false;
+        g_dlss45PairSpatial = false;
+        g_dlss45LeftBuildId = 0;
+    }
 
     XrCompositionLayerQuad quad{XR_TYPE_COMPOSITION_LAYER_QUAD};
     XrCompositionLayerProjection proj{XR_TYPE_COMPOSITION_LAYER_PROJECTION};
@@ -3466,15 +4005,25 @@ void on_present_end(IDXGISwapChain* swapchain) {
     const XrCompositionLayerBaseHeader* layers[1 + kMaxLaserDots + 4] = {};
     uint32_t layerCount = 0;
 
-    // Claim the fov the game actually rendered with (adapter readback);
-    // fall back to the circumscribed target before the first readback lands.
-    // The manual calibration override beats both (see its declaration).
+    // Keep the renderer's real projection separate from the FOV merely claimed
+    // to OpenXR. The manual calibration slider changes only layer tagging; using
+    // it to reconstruct depth/MV would manufacture motion from a projection the
+    // game never rendered.
     int hfovSrc = 0; // fov audit: 0 readback, 1 fallback, 2 manual
-    float hfovDeg = g_renderedHfov.load(std::memory_order_relaxed);
-    if (hfovDeg <= 0.0f) {
-        hfovDeg = g_hfovDeg.load(std::memory_order_relaxed);
+    float renderHfovDeg = g_renderedHfov.load(std::memory_order_relaxed);
+    if (renderHfovDeg <= 0.0f) {
+        renderHfovDeg = g_hfovDeg.load(std::memory_order_relaxed);
         hfovSrc = 1;
     }
+    float guideTanH = 0.0f;
+    float guideTanV = 0.0f;
+    if (renderHfovDeg > 0.0f && g_renderW && g_renderH) {
+        guideTanH = tanf(renderHfovDeg * 0.5f / 57.29578f);
+        guideTanV = guideTanH * static_cast<float>(g_renderH) /
+                    static_cast<float>(g_renderW);
+    }
+
+    float hfovDeg = renderHfovDeg; // OpenXR layer claim; may be calibrated below
     if (g_claimFovManual.load(std::memory_order_relaxed)) {
         hfovDeg = g_claimFovDeg.load(std::memory_order_relaxed);
         hfovSrc = 2;
@@ -3540,11 +4089,18 @@ void on_present_end(IDXGISwapChain* swapchain) {
             // for: a genuine scripted-camera fov change (the bathysphere
             // descent renders 104 while the option reads 130). It is logged on
             // entry from now on - a substitution must never again be invisible.
-            float t = 0.0f;
+            float t = 0.0f, tv = 0.0f;
             unsigned long long age = 0;
-            if (bvr::hud::fov_watch(&t, nullptr, &age, 500) && t > 0.05f) {
+            if (bvr::hud::fov_watch(&t, &tv, &age, 500) && t > 0.05f) {
                 hfovDeg = 2.0f * atanf(t) * 57.29578f;
                 hfovSrc = 3; // "live"
+                // Unlike a manual claim, these are decoded directly from the
+                // WORLD projection constants. Preserve both axes instead of
+                // re-deriving V from a possibly letterboxed render target.
+                if (std::isfinite(t) && std::isfinite(tv) && tv > 0.05f) {
+                    guideTanH = t;
+                    guideTanV = tv;
+                }
                 if (!g_loggedLiveClaim.exchange(true))
                     BVR_LOG("xr: claim substituted from the live WORLD lens "
                             "(hfov %.2f deg, age %llums) - the fov-mismatch "
@@ -3566,7 +4122,8 @@ void on_present_end(IDXGISwapChain* swapchain) {
     // A tagged present carries a known eye (game thread pushed the sign at
     // this frame's engine submit); sign -1 = left = eye index 0, same
     // convention AER validated in-headset (depth not inverted).
-    int srSign = sr_pop_eye();
+    const SrEyeTag srTag = sr_pop_eye();
+    int srSign = srTag.sign;
     bool srFrame = projectionMode && srSign != 0;
     // HUD capture gate (session 19): the gameswf redirect runs only while
     // stereo gameplay frames flow (menus stop the eye tags -> gate drops).
@@ -3632,6 +4189,13 @@ void on_present_end(IDXGISwapChain* swapchain) {
                 g_pmAbortLeft.fetch_add(1, std::memory_order_relaxed);
             else
                 g_pmAbortUntag.fetch_add(1, std::memory_order_relaxed);
+            if (g_dlss45Active) {
+                bvr::b1r::temporal_guides::invalidate();
+                g_dlss45HaveLeft = false;
+                g_dlss45PairSpatial = false;
+                g_dlss45LeftBuildId = 0;
+                g_dlss45ForceNextPairSpatial = true;
+            }
         }
     }
     bool pairHold = srFrame && srSign < 0 && !pairSecond &&
@@ -3650,11 +4214,109 @@ void on_present_end(IDXGISwapChain* swapchain) {
     int eyeFlip = g_aerSwapEyes.load(std::memory_order_relaxed) ? -1 : 1;
     int currentEyeSign = (g_currentEye == 0 ? -1 : 1) * eyeFlip;
     bool eyeCaptured = false;
+    const int srEye = srSign < 0 ? 0 : 1;
+    if (!srFrame && (g_dlss45Active || g_dlss45SpatialFallback)) {
+        // Menus/cinematics or a missing eye tag break the logical DLSS pair
+        // even when XR pair pacing is switched off.
+        g_dlss45HaveLeft = false;
+        g_dlss45PairSpatial = false;
+        g_dlss45LeftBuildId = 0;
+        if (g_dlss45Active) g_dlss45ForceNextPairSpatial = true;
+    }
+    // A tag can still arrive on an OpenXR frame whose shouldRender bit is
+    // false (runtime pause/visibility transition).  Such a frame never enters
+    // the capture block below, so it must not open a logical DLSS eye pair.
+    const bool dlssPairPath = srFrame && g_frameState.shouldRender &&
+                              g_swapchains[0] != XR_NULL_HANDLE &&
+                              (g_dlss45Active || g_dlss45SpatialFallback);
+    if (dlssPairPath) {
+        if (srEye == 0) {
+            g_dlss45HaveLeft = true;
+            g_dlss45LeftBuildId = srTag.buildId;
+            g_dlss45LastLeftBuildId = srTag.buildId;
+            g_dlss45PairSpatial = g_dlss45ForceNextPairSpatial ||
+                                  bvr::overlay::visible() || !srTag.buildId;
+            if (!srTag.buildId)
+                g_dlss45TagMismatches.fetch_add(1, std::memory_order_relaxed);
+            g_dlss45ForceNextPairSpatial = false;
+        } else if (!g_dlss45HaveLeft) {
+            // A right eye without its left sibling cannot form a coherent
+            // temporal pair. Keep this image on the non-temporal path.
+            g_dlss45LastRightBuildId = srTag.buildId;
+            g_dlss45PairSpatial = true;
+            const uint32_t mismatches =
+                g_dlss45TagMismatches.fetch_add(1, std::memory_order_relaxed);
+            bvr::b1r::temporal_guides::invalidate();
+            if (mismatches == 0)
+                BVR_LOG("[dlss45] right tag build=%llu has no left sibling; "
+                        "temporal pair rejected (further cases are counted)",
+                        static_cast<unsigned long long>(srTag.buildId));
+        } else {
+            g_dlss45LastRightBuildId = srTag.buildId;
+            const bool coherentTags = srTag.buildId != 0 &&
+                                      g_dlss45LeftBuildId != 0 &&
+                                      srTag.buildId == g_dlss45LeftBuildId + 1;
+            if (!coherentTags) {
+                const bool leftWasTemporal = !g_dlss45PairSpatial;
+                g_dlss45PairSpatial = true;
+                const uint32_t mismatches =
+                    g_dlss45TagMismatches.fetch_add(1, std::memory_order_relaxed);
+                if (leftWasTemporal) {
+                    g_dlss45MixedPairRecoveries.fetch_add(1,
+                                                          std::memory_order_relaxed);
+                    g_dlss45ForceNextPairSpatial = true;
+                }
+                bvr::b1r::temporal_guides::invalidate();
+                if (mismatches == 0)
+                    BVR_LOG("[dlss45] pair tag mismatch left=%llu right=%llu; "
+                            "right temporal input rejected (further cases are counted)",
+                            static_cast<unsigned long long>(g_dlss45LeftBuildId),
+                            static_cast<unsigned long long>(srTag.buildId));
+            }
+        }
+    }
+    const bool temporalAllowed = dlssPairPath && g_dlss45Active &&
+                                 !g_dlss45PairSpatial &&
+                                 srTag.buildId != 0 &&
+                                 !bvr::overlay::visible();
+    auto noteDlssPairResult = [&](CaptureResult result) {
+        if (!dlssPairPath) return;
+        if (srEye == 0) {
+            if (result != CaptureResult::Dlss) g_dlss45PairSpatial = true;
+            if (result == CaptureResult::Failed) {
+                bvr::b1r::temporal_guides::invalidate();
+                g_dlss45HaveLeft = false;
+                g_dlss45LeftBuildId = 0;
+                g_dlss45ForceNextPairSpatial = true;
+            }
+            return;
+        }
+
+        // If LEFT already reached NGX but RIGHT had to fall back, that one pair
+        // cannot be undone. Reset both histories and force the following pair
+        // wholly spatial so temporal processing resumes from a clean boundary.
+        if (g_dlss45HaveLeft && !g_dlss45PairSpatial &&
+            result != CaptureResult::Dlss) {
+            const uint32_t recoveries =
+                g_dlss45MixedPairRecoveries.fetch_add(1, std::memory_order_relaxed);
+            g_dlss45ForceNextPairSpatial = true;
+            bvr::b1r::temporal_guides::invalidate();
+            if (recoveries == 0)
+                BVR_LOG("[dlss45] right eye fell back after a DLSS left eye; "
+                        "resetting both histories and forcing one coherent fallback pair "
+                        "(further occurrences counted but not logged)");
+        } else if (result == CaptureResult::Failed) {
+            g_dlss45ForceNextPairSpatial = true;
+            bvr::b1r::temporal_guides::invalidate();
+        }
+        g_dlss45HaveLeft = false;
+        g_dlss45PairSpatial = false;
+        g_dlss45LeftBuildId = 0;
+    };
 
     if (g_frameState.shouldRender && g_swapchains[0] != XR_NULL_HANDLE) {
         ID3D11Texture2D* backbuffer = nullptr;
         if (SUCCEEDED(swapchain->GetBuffer(0, IID_PPV_ARGS(&backbuffer)))) {
-            int srEye = srSign < 0 ? 0 : 1;
             int target = srFrame ? srEye
                          : (aerActive && imageSign == currentEyeSign) ? g_currentEye
                                                                       : 0;
@@ -3667,8 +4329,10 @@ void on_present_end(IDXGISwapChain* swapchain) {
             int64_t tAcq = phase_now();
             XrSwapchainImageAcquireInfo ai{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
             XrResult acqRes = xrAcquireSwapchainImage(g_swapchains[target], &ai, &index);
-            if (XR_FAILED(acqRes))
+            if (XR_FAILED(acqRes)) {
                 g_pmAcqFail.fetch_add(1, std::memory_order_relaxed);
+                noteDlssPairResult(CaptureResult::Failed);
+            }
             if (XR_SUCCEEDED(acqRes)) {
                 XrSwapchainImageWaitInfo wi{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
                 wi.timeout = XR_INFINITE_DURATION;
@@ -3684,228 +4348,247 @@ void on_present_end(IDXGISwapChain* swapchain) {
                     // released one - counted, because that is one of the
                     // stale-left candidate mechanisms.
                     g_pmWaitFail.fetch_add(1, std::memory_order_relaxed);
+                CaptureResult captureResult = CaptureResult::Failed;
                 if (imageReady) {
                     // Same size + same typeless family (guaranteed at creation),
                     // so a straight GPU copy carries the frame - overlay
                     // included. Under an engine letterbox the copy becomes an
                     // unsqueeze blit instead (session 22, capture_frame).
                     int64_t tCap = phase_now();
-                    capture_frame(g_images[target][index].texture, backbuffer);
+                    captureResult = capture_frame(
+                        g_images[target][index].texture, backbuffer, srEye,
+                        temporalAllowed, srTag.buildId, guideTanH, guideTanV);
                     phase_record(kPhCapture, tCap);
                 }
+                noteDlssPairResult(captureResult);
+                const bool frameCaptured = captureResult != CaptureResult::Failed;
                 XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
                 xrReleaseSwapchainImage(g_swapchains[target], &ri);
 
-                // Captured content is attributed to the locate generation it
-                // was RENDERED from (g_viewsContent), never the fresh one -
-                // the compositor reprojects from there to display time.
-                // s43b: the generation is selectable (g_poseLag doc at the
-                // state block). Default 1 == the historical g_viewsContent
-                // behavior; only the Infinite adapter ever changes it.
-                if (srFrame) {
-                    int lag = g_poseLag.load(std::memory_order_relaxed);
-                    // Pick the pose GENERATION as a pair - the s50 rendered
-                    // tag needs both eyes of the same locate to reconstruct
-                    // the parallel render camera.
-                    const XrView* gen;
-                    if (lag == 0 && g_viewsValid)
-                        gen = g_views;
-                    else if (lag == 2 && g_viewsPrev2Valid)
-                        gen = g_viewsPrev2;
-                    else
-                        gen = g_viewsContent;
-                    if (g_eyeTagRendered.load(std::memory_order_relaxed))
-                        g_eyePose[srEye] =
-                            parallel_eye_tag(gen[0].pose, gen[1].pose, srEye,
-                                             g_eyeTagIpdMm.load(std::memory_order_relaxed));
-                    else
-                        g_eyePose[srEye] = gen[srEye].pose;
-                    g_eyeValid[srEye] = true;
-                    g_pmCap[srEye].fetch_add(1, std::memory_order_relaxed);
-                    g_pmLastCapMs[srEye].store(GetTickCount64(),
-                                               std::memory_order_relaxed);
-                    if (!g_loggedFirstSr.exchange(true))
-                        BVR_LOG("xr: first SequentialReentry eye frame captured "
-                                "(eye %c)", srEye == 0 ? 'L' : 'R');
-                } else if (aerActive && target == g_currentEye &&
-                           imageSign == currentEyeSign) {
-                    if (g_eyeTagRendered.load(std::memory_order_relaxed))
-                        g_eyePose[g_currentEye] = parallel_eye_tag(
-                            g_viewsContent[0].pose, g_viewsContent[1].pose, g_currentEye,
-                            g_eyeTagIpdMm.load(std::memory_order_relaxed));
-                    else
-                        g_eyePose[g_currentEye] = g_viewsContent[g_currentEye].pose;
-                    g_eyeValid[g_currentEye] = true;
-                    eyeCaptured = true;
-                }
-
-                if (pairHold) {
-                    // Left eye captured; submission happens when the RIGHT
-                    // present completes this XR frame. Both eye poses come
-                    // from this frame's single locate (g_views is untouched
-                    // until the next waitFrame).
-                    g_srPairOpen = true;
-                    g_srPairOpenMs = GetTickCount64(); // aged; see kPairHoldMaxMs
-                    g_frameOpen = true;
-                    if (!g_loggedFirstPair.exchange(true))
-                        BVR_LOG("xr: pair pacing live (one waitFrame per eye "
-                                "pair)");
-                    backbuffer->Release();
-                    composite_hud(swapchain); // capture done - window gets HUD
-                    return;
-                }
-
-                XrSwapchainSubImage sub{};
-                sub.swapchain = g_swapchains[target];
-                sub.imageRect = {{0, 0},
-                                 {static_cast<int32_t>(g_swapW), static_cast<int32_t>(g_swapH)}};
-
-                if (projectionMode) {
-                    // fov = the symmetric fov the game rendered with (hfov
-                    // written by the adapter, vfov via aspect).
-                    float halfH = hfovDeg * 0.5f / 57.29578f;
-                    float halfV = atanf(tanf(halfH) * static_cast<float>(g_swapH) /
-                                        static_cast<float>(g_swapW));
-                    // FOV audit (session 21): the tangents this layer is
-                    // TAGGED with, logged on change. The flat gate compares
-                    // them against tangents recovered from dumpframe cb0.
-                    float tanClaimH = tanf(halfH), tanClaimV = tanf(halfV);
-                    if (tanClaimH != g_auditTanH.load(std::memory_order_relaxed) ||
-                        tanClaimV != g_auditTanV.load(std::memory_order_relaxed) ||
-                        hfovSrc != g_auditFovSrc.load(std::memory_order_relaxed)) {
-                        g_auditTanH.store(tanClaimH, std::memory_order_relaxed);
-                        g_auditTanV.store(tanClaimV, std::memory_order_relaxed);
-                        g_auditFovSrc.store(hfovSrc, std::memory_order_relaxed);
-                        BVR_LOG("xr: fovaudit submit tanH=%.6f tanV=%.6f (hfov %.2f deg, "
-                                "src=%s, swap %ux%u, symmetric both eyes)",
-                                tanClaimH, tanClaimV, hfovDeg, kFovSrcNames[hfovSrc],
-                                g_swapW, g_swapH);
+                if (frameCaptured) {
+                    // Captured content is attributed to the locate generation it
+                    // was RENDERED from (g_viewsContent), never the fresh one -
+                    // the compositor reprojects from there to display time.
+                    // s43b: the generation is selectable (g_poseLag doc at the
+                    // state block). Default 1 == the historical g_viewsContent
+                    // behavior; only the Infinite adapter ever changes it.
+                    if (srFrame) {
+                        int lag = g_poseLag.load(std::memory_order_relaxed);
+                        // Pick the pose GENERATION as a pair - the s50 rendered
+                        // tag needs both eyes of the same locate to reconstruct
+                        // the parallel render camera.
+                        const XrView *gen;
+                        if (lag == 0 && g_viewsValid)
+                            gen = g_views;
+                        else if (lag == 2 && g_viewsPrev2Valid)
+                            gen = g_viewsPrev2;
+                        else
+                            gen = g_viewsContent;
+                        if (g_eyeTagRendered.load(std::memory_order_relaxed))
+                            g_eyePose[srEye] =
+                                parallel_eye_tag(gen[0].pose, gen[1].pose, srEye,
+                                                 g_eyeTagIpdMm.load(std::memory_order_relaxed));
+                        else
+                            g_eyePose[srEye] = gen[srEye].pose;
+                        g_eyeValid[srEye] = true;
+                        g_pmCap[srEye].fetch_add(1, std::memory_order_relaxed);
+                        g_pmLastCapMs[srEye].store(GetTickCount64(), std::memory_order_relaxed);
+                        if (!g_loggedFirstSr.exchange(true))
+                            BVR_LOG("xr: first SequentialReentry eye frame captured "
+                                    "(eye %c)",
+                                    srEye == 0 ? 'L' : 'R');
+                    } else if (aerActive && target == g_currentEye && imageSign == currentEyeSign) {
+                        if (g_eyeTagRendered.load(std::memory_order_relaxed))
+                            g_eyePose[g_currentEye] = parallel_eye_tag(
+                                g_viewsContent[0].pose, g_viewsContent[1].pose, g_currentEye,
+                                g_eyeTagIpdMm.load(std::memory_order_relaxed));
+                        else
+                            g_eyePose[g_currentEye] = g_viewsContent[g_currentEye].pose;
+                        g_eyeValid[g_currentEye] = true;
+                        eyeCaptured = true;
                     }
-                    // AER: each eye shows its swapchain's most recently
-                    // released image with the pose stored at its capture (the
-                    // compositor reprojects the stale eye). Until both eyes
-                    // hold an offset image: M3 mono - fresh image to both eyes
-                    // with the per-eye located poses. Converges in 2 frames.
-                    bool stereo = (aerActive || srFrame) && g_eyeValid[0] &&
-                                  g_eyeValid[1];
-                    // [pair] probe: THE quantity for issue #31. A stereo
-                    // submit references each eye's most-recently-released
-                    // image; if the left one is old, the left eye shows a
-                    // stale frame with a stale pose - the double image.
-                    if (stereo) {
-                        g_pmStereoSubmits.fetch_add(1, std::memory_order_relaxed);
-                        const uint64_t nowMs = GetTickCount64();
-                        for (int e = 0; e < 2; ++e) {
-                            uint64_t last = g_pmLastCapMs[e].load(std::memory_order_relaxed);
-                            if (last == 0) continue; // AER fills these too; 0 = untracked
-                            uint32_t age = static_cast<uint32_t>(nowMs - last);
-                            if (age > kPmStaleAgeMs)
-                                (e == 0 ? g_pmStaleL : g_pmStaleR)
-                                    .fetch_add(1, std::memory_order_relaxed);
-                            uint32_t m = g_pmAgeMax[e].load(std::memory_order_relaxed);
-                            while (age > m && !g_pmAgeMax[e].compare_exchange_weak(
-                                                  m, age, std::memory_order_relaxed)) {}
+
+                    if (pairHold) {
+                        // Left eye captured; submission happens when the RIGHT
+                        // present completes this XR frame. Both eye poses come
+                        // from this frame's single locate (g_views is untouched
+                        // until the next waitFrame).
+                        g_srPairOpen = true;
+                        g_srPairOpenMs = GetTickCount64(); // aged; see kPairHoldMaxMs
+                        g_frameOpen = true;
+                        if (!g_loggedFirstPair.exchange(true))
+                            BVR_LOG("xr: pair pacing live (one waitFrame per eye "
+                                    "pair)");
+                        backbuffer->Release();
+                        composite_hud(swapchain); // capture done - window gets HUD
+                        return;
+                    }
+
+                    XrSwapchainSubImage sub{};
+                    sub.swapchain = g_swapchains[target];
+                    sub.imageRect = {
+                        {0, 0}, {static_cast<int32_t>(g_swapW), static_cast<int32_t>(g_swapH)}};
+
+                    if (projectionMode) {
+                        // fov = the symmetric fov the game rendered with (hfov
+                        // written by the adapter, vfov via aspect).
+                        float halfH = hfovDeg * 0.5f / 57.29578f;
+                        float halfV = atanf(tanf(halfH) * static_cast<float>(g_renderH) /
+                                            static_cast<float>(g_renderW));
+                        // FOV audit (session 21): the tangents this layer is
+                        // TAGGED with, logged on change. The flat gate compares
+                        // them against tangents recovered from dumpframe cb0.
+                        float tanClaimH = tanf(halfH), tanClaimV = tanf(halfV);
+                        if (tanClaimH != g_auditTanH.load(std::memory_order_relaxed) ||
+                            tanClaimV != g_auditTanV.load(std::memory_order_relaxed) ||
+                            hfovSrc != g_auditFovSrc.load(std::memory_order_relaxed)) {
+                            g_auditTanH.store(tanClaimH, std::memory_order_relaxed);
+                            g_auditTanV.store(tanClaimV, std::memory_order_relaxed);
+                            g_auditFovSrc.store(hfovSrc, std::memory_order_relaxed);
+                            BVR_LOG("xr: fovaudit submit tanH=%.6f tanV=%.6f (hfov "
+                                    "%.2f deg, "
+                                    "src=%s, render %ux%u -> XR %ux%u, symmetric "
+                                    "both eyes)",
+                                    tanClaimH, tanClaimV, hfovDeg, kFovSrcNames[hfovSrc], g_renderW,
+                                    g_renderH, g_swapW, g_swapH);
                         }
-                    }
-                    for (int eye = 0; eye < 2; ++eye) {
+                        // AER: each eye shows its swapchain's most recently
+                        // released image with the pose stored at its capture (the
+                        // compositor reprojects the stale eye). Until both eyes
+                        // hold an offset image: M3 mono - fresh image to both eyes
+                        // with the per-eye located poses. Converges in 2 frames.
+                        bool stereo = (aerActive || srFrame) && g_eyeValid[0] && g_eyeValid[1];
+                        // [pair] probe: THE quantity for issue #31. A stereo
+                        // submit references each eye's most-recently-released
+                        // image; if the left one is old, the left eye shows a
+                        // stale frame with a stale pose - the double image.
                         if (stereo) {
-                            projViews[eye].pose = g_eyePose[eye];
-                            projViews[eye].subImage = sub;
-                            projViews[eye].subImage.swapchain = g_swapchains[eye];
-                        } else {
-                            projViews[eye].pose = g_viewsContent[eye].pose;
-                            projViews[eye].subImage = sub;
+                            g_pmStereoSubmits.fetch_add(1, std::memory_order_relaxed);
+                            const uint64_t nowMs = GetTickCount64();
+                            for (int e = 0; e < 2; ++e) {
+                                uint64_t last = g_pmLastCapMs[e].load(std::memory_order_relaxed);
+                                if (last == 0)
+                                    continue; // AER fills these too; 0 = untracked
+                                uint32_t age = static_cast<uint32_t>(nowMs - last);
+                                if (age > kPmStaleAgeMs)
+                                    (e == 0 ? g_pmStaleL : g_pmStaleR)
+                                        .fetch_add(1, std::memory_order_relaxed);
+                                uint32_t m = g_pmAgeMax[e].load(std::memory_order_relaxed);
+                                while (age > m && !g_pmAgeMax[e].compare_exchange_weak(
+                                                      m, age, std::memory_order_relaxed)) {
+                                }
+                            }
                         }
-                        projViews[eye].fov = {-halfH, halfH, halfV, -halfV};
-                    }
-                    // s51: bank the edge-telemetry snapshot (armed only; the
-                    // game-thread sampler copies it out - see the header).
-                    if (g_edgeSnapOn.load(std::memory_order_relaxed)) {
-                        std::lock_guard<std::mutex> lk(g_edgeSnapMutex);
-                        g_edgeSnap.valid = g_viewsValid;
-                        g_edgeSnap.stampMs = GetTickCount64();
-                        for (int e = 0; e < 2; ++e) {
-                            g_edgeSnap.locPos[e][0] = g_views[e].pose.position.x;
-                            g_edgeSnap.locPos[e][1] = g_views[e].pose.position.y;
-                            g_edgeSnap.locPos[e][2] = g_views[e].pose.position.z;
-                            g_edgeSnap.locQuat[e][0] = g_views[e].pose.orientation.x;
-                            g_edgeSnap.locQuat[e][1] = g_views[e].pose.orientation.y;
-                            g_edgeSnap.locQuat[e][2] = g_views[e].pose.orientation.z;
-                            g_edgeSnap.locQuat[e][3] = g_views[e].pose.orientation.w;
-                            g_edgeSnap.locFov[e][0] = g_views[e].fov.angleLeft;
-                            g_edgeSnap.locFov[e][1] = g_views[e].fov.angleRight;
-                            g_edgeSnap.locFov[e][2] = g_views[e].fov.angleUp;
-                            g_edgeSnap.locFov[e][3] = g_views[e].fov.angleDown;
-                            g_edgeSnap.tagPos[e][0] = projViews[e].pose.position.x;
-                            g_edgeSnap.tagPos[e][1] = projViews[e].pose.position.y;
-                            g_edgeSnap.tagPos[e][2] = projViews[e].pose.position.z;
-                            g_edgeSnap.tagQuat[e][0] = projViews[e].pose.orientation.x;
-                            g_edgeSnap.tagQuat[e][1] = projViews[e].pose.orientation.y;
-                            g_edgeSnap.tagQuat[e][2] = projViews[e].pose.orientation.z;
-                            g_edgeSnap.tagQuat[e][3] = projViews[e].pose.orientation.w;
+                        for (int eye = 0; eye < 2; ++eye) {
+                            if (stereo) {
+                                projViews[eye].pose = g_eyePose[eye];
+                                projViews[eye].subImage = sub;
+                                projViews[eye].subImage.swapchain = g_swapchains[eye];
+                            } else {
+                                projViews[eye].pose = g_viewsContent[eye].pose;
+                                projViews[eye].subImage = sub;
+                            }
+                            projViews[eye].fov = {-halfH, halfH, halfV, -halfV};
                         }
-                        g_edgeSnap.claimTanH = tanf(halfH);
-                        g_edgeSnap.claimTanV = tanf(halfV);
-                    }
-                    // Pose-tag audit (session 21, armed by `fovaudit pose on`):
-                    // tagged-vs-consumed yaw, rate-limited. In-headset only.
-                    if (stereo && g_poseAudit.load(std::memory_order_relaxed)) {
-                        uint64_t now = GetTickCount64();
-                        if (now - g_lastPoseAuditLogMs >= 500) {
-                            g_lastPoseAuditLogMs = now;
-                            float yawTag = xr_quat_yaw_deg(
-                                projViews[0].pose.orientation.x, projViews[0].pose.orientation.y,
-                                projViews[0].pose.orientation.z, projViews[0].pose.orientation.w);
-                            float yawUse = xr_quat_yaw_deg(
-                                g_consumedHeadQuat[0].load(std::memory_order_relaxed),
-                                g_consumedHeadQuat[1].load(std::memory_order_relaxed),
-                                g_consumedHeadQuat[2].load(std::memory_order_relaxed),
-                                g_consumedHeadQuat[3].load(std::memory_order_relaxed));
-                            float d = yawTag - yawUse;
-                            while (d > 180.0f) d -= 360.0f;
-                            while (d < -180.0f) d += 360.0f;
-                            BVR_LOG("xr: poseaudit tagged yaw %.2f vs consumed %.2f "
-                                    "(delta %.2f deg, samples %u)",
-                                    yawTag, yawUse, d,
-                                    g_consumedHeadCount.load(std::memory_order_relaxed));
+                        // s51: bank the edge-telemetry snapshot (armed only; the
+                        // game-thread sampler copies it out - see the header).
+                        if (g_edgeSnapOn.load(std::memory_order_relaxed)) {
+                            std::lock_guard<std::mutex> lk(g_edgeSnapMutex);
+                            g_edgeSnap.valid = g_viewsValid;
+                            g_edgeSnap.stampMs = GetTickCount64();
+                            for (int e = 0; e < 2; ++e) {
+                                g_edgeSnap.locPos[e][0] = g_views[e].pose.position.x;
+                                g_edgeSnap.locPos[e][1] = g_views[e].pose.position.y;
+                                g_edgeSnap.locPos[e][2] = g_views[e].pose.position.z;
+                                g_edgeSnap.locQuat[e][0] = g_views[e].pose.orientation.x;
+                                g_edgeSnap.locQuat[e][1] = g_views[e].pose.orientation.y;
+                                g_edgeSnap.locQuat[e][2] = g_views[e].pose.orientation.z;
+                                g_edgeSnap.locQuat[e][3] = g_views[e].pose.orientation.w;
+                                g_edgeSnap.locFov[e][0] = g_views[e].fov.angleLeft;
+                                g_edgeSnap.locFov[e][1] = g_views[e].fov.angleRight;
+                                g_edgeSnap.locFov[e][2] = g_views[e].fov.angleUp;
+                                g_edgeSnap.locFov[e][3] = g_views[e].fov.angleDown;
+                                g_edgeSnap.tagPos[e][0] = projViews[e].pose.position.x;
+                                g_edgeSnap.tagPos[e][1] = projViews[e].pose.position.y;
+                                g_edgeSnap.tagPos[e][2] = projViews[e].pose.position.z;
+                                g_edgeSnap.tagQuat[e][0] = projViews[e].pose.orientation.x;
+                                g_edgeSnap.tagQuat[e][1] = projViews[e].pose.orientation.y;
+                                g_edgeSnap.tagQuat[e][2] = projViews[e].pose.orientation.z;
+                                g_edgeSnap.tagQuat[e][3] = projViews[e].pose.orientation.w;
+                            }
+                            g_edgeSnap.claimTanH = tanf(halfH);
+                            g_edgeSnap.claimTanV = tanf(halfV);
                         }
+                        // Pose-tag audit (session 21, armed by `fovaudit pose on`):
+                        // tagged-vs-consumed yaw, rate-limited. In-headset only.
+                        if (stereo && g_poseAudit.load(std::memory_order_relaxed)) {
+                            uint64_t now = GetTickCount64();
+                            if (now - g_lastPoseAuditLogMs >= 500) {
+                                g_lastPoseAuditLogMs = now;
+                                float yawTag = xr_quat_yaw_deg(projViews[0].pose.orientation.x,
+                                                               projViews[0].pose.orientation.y,
+                                                               projViews[0].pose.orientation.z,
+                                                               projViews[0].pose.orientation.w);
+                                float yawUse = xr_quat_yaw_deg(
+                                    g_consumedHeadQuat[0].load(std::memory_order_relaxed),
+                                    g_consumedHeadQuat[1].load(std::memory_order_relaxed),
+                                    g_consumedHeadQuat[2].load(std::memory_order_relaxed),
+                                    g_consumedHeadQuat[3].load(std::memory_order_relaxed));
+                                float d = yawTag - yawUse;
+                                while (d > 180.0f)
+                                    d -= 360.0f;
+                                while (d < -180.0f)
+                                    d += 360.0f;
+                                BVR_LOG("xr: poseaudit tagged yaw %.2f vs consumed %.2f "
+                                        "(delta %.2f deg, samples %u)",
+                                        yawTag, yawUse, d,
+                                        g_consumedHeadCount.load(std::memory_order_relaxed));
+                            }
+                        }
+                        proj.space = g_space;
+                        proj.viewCount = 2;
+                        proj.views = projViews;
+                        layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader *>(&proj);
+                        g_lastLayer = 2;
+                        if (!g_loggedFirstProjection.exchange(true))
+                            BVR_LOG("xr: first projection-layer frame (claimed hfov "
+                                    "%.1f deg)",
+                                    hfovDeg);
+                        if (stereo && !g_loggedFirstStereo.exchange(true))
+                            BVR_LOG("xr: alternate-eye stereo live (both eyes hold "
+                                    "offset images)");
+                    } else {
+                        float width = g_screenWidthM.load(std::memory_order_relaxed);
+                        // Session 22 (user feedback, first headset run):
+                        // SCREEN-ONLY intervals (hack minigame, loading screens -
+                        // world-less 2D boards) ride the HEAD-LOCKED view space,
+                        // exactly like the pause-menu panel, so the board is
+                        // centered on wherever the player is looking instead of the
+                        // recenter-origin facing. Cinematic scenes
+                        // (fov-mismatch/strict legs) and the plain camera-off
+                        // screen keep the world-locked space unchanged.
+                        bool headLock = g_cineActive.load(std::memory_order_relaxed) &&
+                                        bvr::hud::screen_only() && g_viewSpace != XR_NULL_HANDLE;
+                        quad.space = headLock ? g_viewSpace : g_space;
+                        quad.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+                        quad.subImage = sub;
+                        quad.pose.orientation.w = 1.0f;
+                        quad.pose.position = {0.0f, 0.0f,
+                                              -g_screenDistM.load(std::memory_order_relaxed)};
+                        // Physical screen aspect follows the game content. The XR
+                        // output is validated to match it, but render dimensions
+                        // remain the authoritative geometry.
+                        quad.size = {width, width * static_cast<float>(g_renderH) /
+                                                static_cast<float>(g_renderW)};
+                        layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader *>(&quad);
+                        g_lastLayer = 1;
                     }
-                    proj.space = g_space;
-                    proj.viewCount = 2;
-                    proj.views = projViews;
-                    layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&proj);
-                    g_lastLayer = 2;
-                    if (!g_loggedFirstProjection.exchange(true))
-                        BVR_LOG("xr: first projection-layer frame (claimed hfov %.1f deg)",
-                                hfovDeg);
-                    if (stereo && !g_loggedFirstStereo.exchange(true))
-                        BVR_LOG("xr: alternate-eye stereo live (both eyes hold offset images)");
-                } else {
-                    float width = g_screenWidthM.load(std::memory_order_relaxed);
-                    // Session 22 (user feedback, first headset run): SCREEN-ONLY
-                    // intervals (hack minigame, loading screens - world-less 2D
-                    // boards) ride the HEAD-LOCKED view space, exactly like the
-                    // pause-menu panel, so the board is centered on wherever the
-                    // player is looking instead of the recenter-origin facing.
-                    // Cinematic scenes (fov-mismatch/strict legs) and the plain
-                    // camera-off screen keep the world-locked space unchanged.
-                    bool headLock = g_cineActive.load(std::memory_order_relaxed) &&
-                                    bvr::hud::screen_only() &&
-                                    g_viewSpace != XR_NULL_HANDLE;
-                    quad.space = headLock ? g_viewSpace : g_space;
-                    quad.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                    quad.subImage = sub;
-                    quad.pose.orientation.w = 1.0f;
-                    quad.pose.position = {0.0f, 0.0f,
-                                          -g_screenDistM.load(std::memory_order_relaxed)};
-                    quad.size = {width, width * static_cast<float>(g_swapH) /
-                                            static_cast<float>(g_swapW)};
-                    layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&quad);
-                    g_lastLayer = 1;
+                    layerCount = 1;
                 }
-                layerCount = 1;
             }
             backbuffer->Release();
+        } else {
+            noteDlssPairResult(CaptureResult::Failed);
         }
     }
 
@@ -4029,6 +4712,7 @@ void on_present_end(IDXGISwapChain* swapchain) {
     }
     if (layerCount && ++g_framesSubmitted == 1)
         BVR_LOG("xr: first frame submitted to the headset (%ux%u quad)", g_swapW, g_swapH);
+    dlss45_diag_heartbeat();
 
     // Session 54: bank the feed snapshot - the layer set the pace thread will
     // re-submit while the session is parked not-FOCUSED. Projection (g_lastLayer
@@ -4079,11 +4763,18 @@ void on_resize(unsigned width, unsigned height, unsigned format) {
     // the geometry they were built for is unchanged. Width/height/format of 0
     // mean "unchanged" in DXGI's own convention; anything unknown falls through
     // to the old destroy-and-recreate path.
-    const bool sameSize = g_swapchains[0] != XR_NULL_HANDLE && g_swapW && g_swapH &&
-                          (width == 0 || width == g_swapW) &&
-                          (height == 0 || height == g_swapH) &&
+    const bool sameSize = g_swapchains[0] != XR_NULL_HANDLE && g_renderW && g_renderH &&
+                          (width == 0 || width == g_renderW) &&
+                          (height == 0 || height == g_renderH) &&
                           (format == 0 /*DXGI_FORMAT_UNKNOWN*/ || format == g_backbufferFmt);
     if (sameSize) {
+        if (g_dlss45Active) {
+            bvr::b1r::temporal_guides::invalidate();
+            g_dlss45HaveLeft = false;
+            g_dlss45PairSpatial = false;
+            g_dlss45LeftBuildId = 0;
+            g_dlss45ForceNextPairSpatial = true;
+        }
         BVR_LOG("xr: same-size ResizeBuffers (%ux%u fmt %u) - XR swapchains kept",
                 width, height, format);
         return;
@@ -4100,6 +4791,13 @@ void on_resize(unsigned width, unsigned height, unsigned format) {
     // So only QUEUE it. The frame loop performs the destroy at a point where it
     // can prove no XR frame is open, and the existing null-swapchain branch in
     // on_present_begin then rebuilds at the new size.
+    if (g_dlss45Active) {
+        bvr::b1r::temporal_guides::invalidate();
+        g_dlss45HaveLeft = false;
+        g_dlss45PairSpatial = false;
+        g_dlss45LeftBuildId = 0;
+        g_dlss45ForceNextPairSpatial = true;
+    }
     g_resizePending.store(true, std::memory_order_release);
     BVR_LOG("xr: real ResizeBuffers (%ux%u fmt %u) - XR swapchain rebuild QUEUED for a safe "
             "point in the frame loop",
@@ -4116,6 +4814,30 @@ void draw_debug_ui() {
     } else {
         ImGui::Text("VR: '%s' session %s, %u frames", g_runtimeName, state_str(g_state),
                     g_framesSubmitted);
+    }
+
+    if (ImGui::CollapsingHeader("DLSS 4.5 / DLAA")) {
+        if (g_dlss45Active) {
+            ImGui::TextColored(ImVec4(0.35f, 1.0f, 0.45f, 1.0f),
+                               "ACTIVO: %s  %ux%u -> %ux%u",
+                               g_dlss45Mode == bvr::dlss45::Mode::Dlaa
+                                   ? "DLAA 4.5"
+                                   : "DLSS 4.5 SR",
+                               g_renderW, g_renderH, g_swapW, g_swapH);
+        } else {
+            const ImVec4 color = g_dlss45Requested
+                                     ? ImVec4(1.0f, 0.65f, 0.25f, 1.0f)
+                                     : ImVec4(0.75f, 0.75f, 0.75f, 1.0f);
+            ImGui::TextColored(color, "Estado: %s", g_dlss45Status);
+        }
+        ImGui::Text("Ojos DLSS: %u  respaldo: %u  resincronizaciones: %u",
+                    g_dlss45Frames.load(std::memory_order_relaxed),
+                    g_dlss45FallbackFrames.load(std::memory_order_relaxed),
+                    g_dlss45MixedPairRecoveries.load(std::memory_order_relaxed));
+        ImGui::TextWrapped(
+            "Runtime NVIDIA 310.7 (modelo K/M/L), con un host x64 y un historial "
+            "por ojo. Fase 1: movimiento de camara, sin vectores propios de manos/objetos "
+            "y sin jitter de proyeccion. No incluye DLSS 5.");
     }
 
     // ---- VR PACING: the session-34 fix, judged in the headset ---------------
@@ -4798,8 +5520,10 @@ void fov_audit(float* tanH, float* tanV, int* src, unsigned* swapW, unsigned* sw
     if (tanH) *tanH = g_auditTanH.load(std::memory_order_relaxed);
     if (tanV) *tanV = g_auditTanV.load(std::memory_order_relaxed);
     if (src) *src = g_auditFovSrc.load(std::memory_order_relaxed);
-    if (swapW) *swapW = g_swapW;
-    if (swapH) *swapH = g_swapH;
+    // Callers use this geometry to audit the game's projection matrix, so it
+    // remains the render resolution even when the submitted XR image is larger.
+    if (swapW) *swapW = g_renderW;
+    if (swapH) *swapH = g_renderH;
 }
 
 void set_pose_audit(bool on) {
@@ -5083,18 +5807,21 @@ void set_hud_texture_provider(HudTextureProviderFn fn) {
     g_hudTexProvider.store(fn, std::memory_order_relaxed);
 }
 
-void sr_push_eye(int eyeSign) {
+uint64_t sr_push_eye(int eyeSign) {
     uint32_t head = g_srHead.load(std::memory_order_relaxed);
     uint32_t tail = g_srTail.load(std::memory_order_acquire);
     if (head - tail >= kSrRingSize) {
         // No consumer (no XR session) or consumer stalled: drop, count it.
         g_srDropped.fetch_add(1, std::memory_order_relaxed);
-        return;
+        return 0;
     }
-    g_srRing[head & (kSrRingSize - 1)].store(static_cast<int8_t>(eyeSign),
-                                             std::memory_order_relaxed);
+    const uint64_t buildId = g_srNextBuildId.fetch_add(1, std::memory_order_relaxed) + 1;
+    const uint32_t slot = head & (kSrRingSize - 1);
+    g_srRing[slot].store(static_cast<int8_t>(eyeSign), std::memory_order_relaxed);
+    g_srRingBuildId[slot].store(buildId, std::memory_order_relaxed);
     g_srHead.store(head + 1, std::memory_order_release);
     g_srPushed.fetch_add(1, std::memory_order_relaxed);
+    return buildId;
 }
 
 void pair_probe(PairProbe* out) {
@@ -5199,7 +5926,7 @@ void set_cine_drive(CineDrive) {}
 const char* cine_drive_name(CineDrive) { return "authored"; }
 float rendered_hfov_deg() { return 0.0f; }
 int current_eye_sign() { return 0; }
-void sr_push_eye(int) {}
+uint64_t sr_push_eye(int) { return 0; }
 void set_laser(const LaserConfig&) {}
 void set_aim_dot(const AimDotConfig&) {}
 void set_hud_quad(float, float, float) {}
