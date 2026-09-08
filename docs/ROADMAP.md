@@ -24,6 +24,15 @@ Cambios autorizados e implementados para la candidata 0.2.3. La validación exte
       para comprobar SmartScreen/antivirus, disponibilidad de .NET/Windows Script Host,
       compatibilidad del `BioshockHD.exe` y apertura del acceso directo.
 
+## Lanzador - próxima versión
+
+- [ ] Forzar y verificar de forma transaccional el arranque en modo ventana antes de
+      **Guardar e iniciar**, escribiendo `[WinDrv.WindowsClient] StartupFullscreen=False`
+      en `Bioshock.ini`. La 0.2.3 solo recomienda ese valor, sincroniza las resoluciones
+      de ventana/pantalla completa y no pasa `-windowed`; por tanto, actualmente conserva
+      un posible `StartupFullscreen=True`. Mantener copia de seguridad, no iniciar si la
+      escritura/verificación falla y añadir una prueba específica para Steam y vía directa.
+
 ## M0 - Skeleton: inject, log, overlay (~2 sessions)
 
 Goal: our code runs inside BioshockHD.exe with logging and an in-game overlay; repo on GitHub.
