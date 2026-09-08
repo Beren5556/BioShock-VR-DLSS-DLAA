@@ -11,7 +11,7 @@ Fork comunitario y experimental de [BioShock VR v0.8.2](https://github.com/VR-St
 La distribución recomendada es el instalador autónomo de la [Release v0.2.3-beta](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.3-beta). No hace falta instalar antes el mod original.
 
 1. Antes de instalar el mod, abre BioShock Remastered una vez desde Steam, llega al menú principal y ciérralo. Esto crea `Bioshock.ini`.
-2. Ejecuta **Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe**.
+2. Ejecuta **Instalador-BioShock-VR-DLSS-DLAA-Beta-0.2.3.exe**.
 3. Selecciona la carpeta del juego que contiene BioshockHD.exe; normalmente termina en BioShock Remastered\Build\Final.
 4. Instala y abre el acceso directo **BioShock VR DLSS-DLAA Beta**.
 5. Elige NORMAL, DLAA o DLSS y pulsa **Guardar e iniciar**. El lanzador se cerrará cuando detecte que BioShock se ha abierto; si Steam no responde en 30 segundos, ofrecerá el arranque directo y permanecerá abierto si tampoco funciona.
@@ -33,7 +33,7 @@ El instalador coloca `nvngx_dlss.dll` **310.7.0.0**, la única versión probada 
 
 | Archivo | SHA-256 |
 |---|---|
-| Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe | 2722C00F1C354781428213CA7CE5C28FDE56D86EA13CB8A8FAF59D36FE616EE0 |
+| Instalador-BioShock-VR-DLSS-DLAA-Beta-0.2.3.exe | 2722C00F1C354781428213CA7CE5C28FDE56D86EA13CB8A8FAF59D36FE616EE0 |
 
 La lista verificable también está en [release/SHA256SUMS-v0.2.3-beta.txt](release/SHA256SUMS-v0.2.3-beta.txt).
 

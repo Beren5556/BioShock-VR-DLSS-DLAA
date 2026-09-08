@@ -58,6 +58,7 @@ try {
     Assert-True (@($manifest.payload).Count -eq 8) 'The payload manifest must contain 8 binary inputs.'
     Assert-True ($manifest.expectedGame.sha256 -match '^[0-9A-F]{64}$') 'Invalid expected game hash.'
     Assert-True ($manifest.installer.sha256 -match '^[0-9A-F]{64}$') 'Invalid installer hash.'
+    Assert-True ($manifest.installer.releaseAsset -match '^[A-Za-z0-9._-]+\.exe$') 'Invalid release asset name.'
     foreach ($entry in $manifest.payload) {
         Assert-True ([string]$entry.sourcePath -ne '') 'Payload entry without sourcePath.'
         Assert-True ([string]$entry.destinationPath -ne '') 'Payload entry without destinationPath.'
@@ -65,7 +66,7 @@ try {
     }
 
     $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.3-beta.txt').Trim()
-    $expectedSum = "$($manifest.installer.sha256) *$($manifest.installer.file)"
+    $expectedSum = "$($manifest.installer.sha256) *$($manifest.installer.releaseAsset)"
     Assert-True ($sumLine -eq $expectedSum) 'Release checksum does not match the payload manifest.'
 
     $cmake = Read-Utf8 'CMakeLists.txt'

@@ -8,6 +8,7 @@
   },
   "installer": {
     "file": "Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe",
+    "releaseAsset": "Instalador-BioShock-VR-DLSS-DLAA-Beta-0.2.3.exe",
     "sha256": "2722C00F1C354781428213CA7CE5C28FDE56D86EA13CB8A8FAF59D36FE616EE0"
   },
   "payload": [
