@@ -5,10 +5,10 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $projectRoot '..\..'))
 $sourcePath = Join-Path $projectRoot 'src\BioshockVrLauncher.cs'
 $iconPath = Join-Path $projectRoot 'assets\BioshockVrLauncher.ico'
 $buildDirectory = Join-Path $repoRoot 'artifacts\launcher'
-$finalExe = Join-Path $buildDirectory 'Lanzador BioShock VR DLSS 4.5.exe'
+$finalExe = Join-Path $buildDirectory 'Lanzador BioShock VR DLSS-DLAA.exe'
 $temporaryDirectory = Join-Path $buildDirectory ('.launcher-build-' + [Guid]::NewGuid().ToString('N'))
 $compilerSource = Join-Path $temporaryDirectory 'BioshockVrLauncher.utf8.cs'
-$temporaryExe = Join-Path $temporaryDirectory 'Lanzador BioShock VR DLSS 4.5.exe'
+$temporaryExe = Join-Path $temporaryDirectory 'Lanzador BioShock VR DLSS-DLAA.exe'
 
 New-Item -ItemType Directory -Path $buildDirectory -Force | Out-Null
 New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null

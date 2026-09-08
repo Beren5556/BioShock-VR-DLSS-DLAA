@@ -8,25 +8,25 @@ $payloadRoot = Join-Path $sourceRoot 'Payload'
 $releaseDocsRoot = Join-Path $repoRoot 'docs\release'
 $modSourceRoot = $repoRoot
 $hostSourceRoot = Join-Path $repoRoot 'components\dlss-host'
-$outputPath = Join-Path $repoRoot 'artifacts\release\Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe'
+$outputPath = Join-Path $repoRoot 'artifacts\release\Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe'
 $temporaryDirectory = Join-Path $sourceRoot ('.installer-build-' + [Guid]::NewGuid().ToString('N'))
-$temporaryPath = Join-Path $temporaryDirectory 'Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe'
+$temporaryPath = Join-Path $temporaryDirectory 'Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe'
 $sourcePath = Join-Path $sourceRoot 'src\BioshockVrDlss45StandaloneInstaller.cs'
 $iconPath = Join-Path $repoRoot 'apps\launcher\assets\BioshockVrLauncher.ico'
 
 $resources = @(
     [pscustomobject]@{ Path = (Join-Path $payloadRoot 'xinput1_3.dll'); Name = 'xinput1_3.dll'; Hash = '441BF1728BB38A2EC2BA57605CF840D786122E862D47A6DFA642BFF484F8E191' },
-    [pscustomobject]@{ Path = (Join-Path $payloadRoot 'bioshockvr.dll'); Name = 'bioshockvr.dll'; Hash = '44B0FB0946330AB7F471D230A3E27D686CDFD400B2CF251B70BE6A9364986E7F' },
+    [pscustomobject]@{ Path = (Join-Path $payloadRoot 'bioshockvr.dll'); Name = 'bioshockvr.dll'; Hash = '7107B2CEBE567913888CD2FE6F58F304F435438466C81FF5E002627F0B192C78' },
     [pscustomobject]@{ Path = (Join-Path $payloadRoot 'bvr_steamvr32.dll'); Name = 'bvr_steamvr32.dll'; Hash = '56537A2EA8F88FCE6A2928EAECDE11EEEEED9C4D04F36B39E466B4D03330B972' },
     [pscustomobject]@{ Path = (Join-Path $payloadRoot 'openvr_api.dll'); Name = 'openvr_api.dll'; Hash = 'AB696E4F218A95B3E396BC310F9FE6485DF48C99C0969762083212B1E1F025A6' },
     [pscustomobject]@{ Path = (Join-Path $payloadRoot 'host64\BioShockVR-DLSS45-Host64.exe'); Name = 'BioShockVR-DLSS45-Host64.exe'; Hash = '480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453' },
     [pscustomobject]@{ Path = (Join-Path $payloadRoot 'host64\nvngx_dlss.dll'); Name = 'nvngx_dlss.dll'; Hash = 'BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E' },
     [pscustomobject]@{ Path = (Join-Path $payloadRoot 'host64\dlss-capabilities.ini'); Name = 'dlss-capabilities.ini'; Hash = '7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77' },
-    [pscustomobject]@{ Path = (Join-Path $payloadRoot 'Lanzador BioShock VR DLSS-DLAA.exe'); Name = 'Lanzador BioShock VR DLSS-DLAA.exe'; Hash = '298E4E7E744DBD5EC11FF7A32083B1CA5EB787C7BD8A7F23C504E3062B57D0D4' },
-    [pscustomobject]@{ Path = (Join-Path $releaseDocsRoot 'LEEME-DLSS45.md'); Name = 'LEEME-DLSS45.md'; Hash = '8AEE2FCA8E2B2AA053FC483417402C81EAD38BFBA6FA9A0CE0A3C00E00E2EB5F' },
+    [pscustomobject]@{ Path = (Join-Path $payloadRoot 'Lanzador BioShock VR DLSS-DLAA.exe'); Name = 'Lanzador BioShock VR DLSS-DLAA.exe'; Hash = '403B43DA8980622C4B85FAFDC4574F0D369C8B707489955F0C1C414E8123740A' },
+    [pscustomobject]@{ Path = (Join-Path $releaseDocsRoot 'LEEME-DLSS45.md'); Name = 'LEEME-DLSS45.md'; Hash = '4B3D306C19BA1108C51E3304602DE09D295E978BACD4931A50D6F2AA9B7AE115' },
     [pscustomobject]@{ Path = (Join-Path $repoRoot 'docs\licenses\NVIDIA-DLSS-LICENSE.txt'); Name = 'NVIDIA-DLSS-LICENSE.txt'; Hash = 'A3E28883672AB1B48187A0CC004EA468C76F6BEA15F33F0F38A970B7F7E04C64' },
-    [pscustomobject]@{ Path = (Join-Path $releaseDocsRoot 'INFORMACION-DEL-PAQUETE.txt'); Name = 'INFORMACION-DEL-PAQUETE.txt'; Hash = 'C7D9799CC7D1E8CC4E4673B0BB913F8EC3A962BB6B6A030FB079602CC13AF449' },
-    [pscustomobject]@{ Path = (Join-Path $releaseDocsRoot 'dlss.ini.example'); Name = 'dlss.ini.example'; Hash = '0C8D1260BC3A5782106D95E6D374CE87D03CA0F36D3C198527F3C3359B601329' },
+    [pscustomobject]@{ Path = (Join-Path $releaseDocsRoot 'INFORMACION-DEL-PAQUETE.txt'); Name = 'INFORMACION-DEL-PAQUETE.txt'; Hash = '8437CDAD3722489821787ADD90881DDBDC549E5490F81F4D2B0ADC32EEDEB9A6' },
+    [pscustomobject]@{ Path = (Join-Path $releaseDocsRoot 'dlss.ini.example'); Name = 'dlss.ini.example'; Hash = '2632EED19448D7D1C25A56DE33D3E5F69481140B8AD36BE2DD0891195D549CDE' },
     [pscustomobject]@{ Path = (Join-Path $modSourceRoot 'LICENSE'); Name = 'BioShockVR-MIT-LICENSE.txt'; Hash = '199384980B6925AA5DA072314C0C265BB097F41C7849A7AB0E6DE9294D3D8114' },
     [pscustomobject]@{ Path = (Join-Path $hostSourceRoot 'LICENSE'); Name = 'DLSS-Host-MIT-LICENSE.txt'; Hash = '1CE240E402901FB81EB82A60A6BAFD2FB913CD5746860B0A4EC52A5ACB49CED7' },
     [pscustomobject]@{ Path = (Join-Path $modSourceRoot 'THIRD_PARTY_NOTICES.md'); Name = 'THIRD_PARTY_NOTICES.md'; Hash = '56EB4D3AEF9087E47113609CE507856A0270A62B8C6E1734CDF0EE5A2B670C13' },

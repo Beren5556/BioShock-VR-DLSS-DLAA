@@ -1,6 +1,8 @@
 ; DLSS 4.5 experimental para BioShock Remastered VR.
 ; La lanzadera administra este archivo en %LOCALAPPDATA%\BioshockVR\dlss.ini.
 ; "off" conserva DLSS desactivado. No activa el reescalado espacial.
+; runtime identifica la base probada; el instalador coloca nvngx_dlss.dll 310.7.0.0.
+; Una DLL x64 distinta se permite con aviso, bajo responsabilidad del usuario.
 [dlss]
 mode=off
 runtime=310.7.0

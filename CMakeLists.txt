@@ -5,8 +5,8 @@ cmake_minimum_required(VERSION 3.21)
 # identity so logs/screenshots never imply that this is an upstream release.
 project(BioshockVR VERSION 0.8.2 LANGUAGES C CXX)
 set(BVR_DISTRIBUTION_NAME "BioShock VR DLSS/DLAA Beta")
-set(BVR_DISTRIBUTION_VERSION "0.2.1-beta")
-set(BVR_DISTRIBUTION_BUILD_ID "beren5556-v0.2.1-beta")
+set(BVR_DISTRIBUTION_VERSION "0.2.3-beta")
+set(BVR_DISTRIBUTION_BUILD_ID "beren5556-v0.2.3-beta")
 
 # BioshockHD.exe is 32-bit x86. Everything we inject must be too.
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)

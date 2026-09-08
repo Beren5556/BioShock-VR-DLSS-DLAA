@@ -10,7 +10,7 @@ Jean-Laurent ROUZIES, e incorpora partes procedentes de
 [NIGos/dlss5-bridge](https://github.com/NIGos/dlss5-bridge), también bajo
 licencia MIT. El nombre histórico
 dlss5-feed-host64.cpp se mantiene por trazabilidad, pero esta versión se
-compila con BVR_DLSS45_ONLY=1 y la Release Beta 0.2.1 solo ofrece DLSS 4.5
+compila con BVR_DLSS45_ONLY=1 y la Release Beta 0.2.3 solo ofrece DLSS 4.5
 Super Resolution y DLAA. No incorpora DLSS 5 Neural Rendering.
 
 ## Compilación
@@ -32,5 +32,5 @@ Los encabezados y librerías del SDK no se almacenan en Git. Su uso y
 distribución se rigen por la licencia de NVIDIA incluida en
 docs/licenses/NVIDIA-DLSS-LICENSE.txt.
 
-El ejecutable congelado en la Release Beta 0.2.1 tiene SHA-256
+El ejecutable congelado en la Release Beta 0.2.3 tiene SHA-256
 480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453.

@@ -1,4 +1,4 @@
-# DLSS 4.5 experimental 0.2.1 (diagnostica)
+# DLSS 4.5 experimental 0.2.3 (diagnostica)
 
 Esta version corrige dos errores confirmados de la 0.1 que podian degradar la
 imagen y producir movimiento temporal incorrecto:
@@ -42,16 +42,43 @@ host64\dlss-capabilities.ini
 ```
 
 El manifiesto declara `phase=DLSS45`, `eyeHosts=2`, `runtime=310.7.0` y
-`protocol=8`. El runtime incluido es el oficial NVIDIA DLSS 310.7.0.0
-(DLSS 4.5). No contiene DLSS 5, Neural Rendering, RenoDX ni ReShade.
+`protocol=8`. El instalador siempre coloca el runtime oficial NVIDIA DLSS
+310.7.0.0 (DLSS 4.5), que es la unica version probada con esta integracion.
+No contiene DLSS 5, Neural Rendering, RenoDX ni ReShade.
+
+Un usuario avanzado puede sustituir manualmente `host64\nvngx_dlss.dll` por
+otra version x64. El lanzador la detecta y muestra una advertencia, pero no la
+bloquea. El funcionamiento, la estabilidad y la calidad con otras versiones
+no estan garantizados y la sustitucion corre por cuenta del usuario. Los
+perfiles K/M/L siguen siendo aplicados por el host. Reinstalar la 0.2.3 restaura
+la DLL 310.7.0.0 probada.
 
 La lanzadera escribe `%LOCALAPPDATA%\BioshockVR\dlss.ini` de forma
 transaccional y conserva copia antes de reemplazarlo. DLSS/DLAA y el filtro
-espacial del mod son rutas distintas y no se habilitan simultaneamente.
+espacial del mod son rutas distintas y no se habilitan simultaneamente. Al usar
+**Guardar e iniciar**, el lanzador espera hasta 30 segundos a detectar
+`BioshockHD.exe`. Solo se cierra tras confirmar el proceso del juego o iniciar
+correctamente la via directa; si ambas fallan, permanece abierto.
+
+## Primera instalacion
+
+Antes de instalar el mod, abre BioShock Remastered una vez desde Steam, espera
+a llegar al menu principal y cierra el juego. Asi Windows crea
+`%APPDATA%\BioshockHD\Bioshock\Bioshock.ini`, necesario para que el lanzador
+pueda leer y cambiar la resolucion desde el primer uso. El instalador 0.2.3 lo
+comprueba y no habilita la instalacion mientras falte ese archivo.
+
+Si los archivos se instalan pero Windows no consigue abrir automaticamente el
+lanzador, la instalacion sigue siendo valida. El instalador muestra la ruta exacta
+y recuerda que tambien puede abrirse desde el acceso directo del Escritorio.
+
+**Restaurar situacion anterior** repone los archivos previos y retira las carpetas
+del paquete que queden vacias. Los ajustes personales de `%LOCALAPPDATA%` y una
+copia de recuperacion se conservan por seguridad.
 
 ## Limites conocidos de esta version
 
-Esta 0.2.1 es diagnostica: corrige errores objetivos, pero la mejora visual debe
+Esta 0.2.3 es diagnostica: corrige errores objetivos, pero la mejora visual debe
 confirmarse dentro del visor.
 
 - El juego elige dinamicamente un plano lejano de 1024 o 65536 uu. La ruta de

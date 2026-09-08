@@ -44,7 +44,8 @@ try {
         'SECURITY.md',
         'LICENSE',
         'installer/payload-manifest.json',
-        'release/SHA256SUMS-v0.2.1-beta.txt',
+        'release/SHA256SUMS-v0.2.3-beta.txt',
+        'docs/releases/v0.2.3-beta.md',
         'apps/launcher/src/BioshockVrLauncher.cs',
         'installer/src/BioshockVrDlss45StandaloneInstaller.cs'
     )
@@ -53,7 +54,7 @@ try {
     $manifestText = Read-Utf8 'installer/payload-manifest.json'
     $manifest = $manifestText | ConvertFrom-Json
     Assert-True ($manifest.schemaVersion -eq 1) 'Unexpected payload manifest schema.'
-    Assert-True ($manifest.release -eq 'v0.2.1-beta') 'Unexpected payload manifest release.'
+    Assert-True ($manifest.release -eq 'v0.2.3-beta') 'Unexpected payload manifest release.'
     Assert-True (@($manifest.payload).Count -eq 8) 'The payload manifest must contain 8 binary inputs.'
     Assert-True ($manifest.expectedGame.sha256 -match '^[0-9A-F]{64}$') 'Invalid expected game hash.'
     Assert-True ($manifest.installer.sha256 -match '^[0-9A-F]{64}$') 'Invalid installer hash.'
@@ -63,20 +64,32 @@ try {
         Assert-True ([string]$entry.sha256 -match '^[0-9A-F]{64}$') "Invalid payload hash: $($entry.sourcePath)"
     }
 
-    $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.1-beta.txt').Trim()
+    $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.3-beta.txt').Trim()
     $expectedSum = "$($manifest.installer.sha256) *$($manifest.installer.file)"
     Assert-True ($sumLine -eq $expectedSum) 'Release checksum does not match the payload manifest.'
 
     $cmake = Read-Utf8 'CMakeLists.txt'
-    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.1-beta")')) 'CMake distribution version is not v0.2.1-beta.'
+    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.3-beta")')) 'CMake distribution version is not v0.2.3-beta.'
     Assert-True ($cmake.Contains('project(BioshockVR VERSION 0.8.2')) 'The upstream base must remain v0.8.2.'
 
     $launcher = Read-Utf8 'apps/launcher/src/BioshockVrLauncher.cs'
+    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.3.0")]')) 'Launcher version is not 0.2.3.0.'
     Assert-True ($launcher.Contains('private const bool FinalDlssEdition = true;')) 'Final launcher policy is not enabled.'
     Assert-True ($launcher.Contains('InitializeHiddenIniEditor();')) 'Hidden INI infrastructure is missing.'
     Assert-True ($launcher.Contains('fxaaGroup.Visible = !FinalDlssEdition;')) 'FXAA visibility guard is missing.'
     Assert-True ($launcher.Contains('upscalerGroup.Visible = !FinalDlssEdition;')) 'Spatial upscaler visibility guard is missing.'
     Assert-True ($launcher.Contains('FormatIniSwitch(fxaa.OriginalValue, false)')) 'FXAA disable policy is missing.'
+    Assert-True ($launcher.Contains('WarnAboutUntestedRuntime()')) 'Untested DLSS runtime warning is missing.'
+    Assert-True ($launcher.Contains('status.RuntimeFound && status.RuntimeIs64Bit')) 'x64 alternate runtime acceptance is missing.'
+    Assert-True ($launcher.Contains('string.Equals(status.RuntimeVersion, DlssConfigDocument.TestedRuntimeDisplay')) 'The tested runtime comparison must include all four version fields.'
+    Assert-True ($launcher.Contains('BeginSteamLaunchWatch();')) 'Steam launch confirmation is missing.'
+    Assert-True ($launcher.Contains('DateTime.UtcNow.AddSeconds(30)')) 'Steam launch timeout is not 30 seconds.'
+    Assert-True ($launcher.Contains('Steam ha aceptado la orden, pero BioShock no se ha abierto en 30 segundos.')) 'Steam timeout guidance is missing.'
+    Assert-True ($launcher.Contains('TryStartGameDirectly();')) 'Direct launch fallback is missing.'
+    Assert-True ($launcher.Contains('SetStatus("BioShock VR se ha iniciado mediante Steam.", Success);')) 'Confirmed Steam startup status is missing.'
+    Assert-True ($launcher.Contains('SetStatus("BioShock VR se está iniciando directamente.", Success);')) 'Direct startup status is missing.'
+    Assert-True ($launcher -match 'Process\.Start\(steam\);\s+BeginSteamLaunchWatch\(\);') 'The launcher closes or skips confirmation immediately after sending the Steam URI.'
+    Assert-True ([regex]::Matches($launcher, '^[ \t]*Close\(\);', [Text.RegularExpressions.RegexOptions]::Multiline).Count -ge 3) 'The launcher does not close after confirmed successful launch paths.'
     $hiddenStart = $launcher.IndexOf('private void InitializeHiddenIniEditor()', [StringComparison]::Ordinal)
     $hiddenEnd = $launcher.IndexOf('private Label MakeToolbarLabel', $hiddenStart, [StringComparison]::Ordinal)
     Assert-True ($hiddenStart -ge 0 -and $hiddenEnd -gt $hiddenStart) 'Could not inspect hidden INI editor method.'
@@ -85,7 +98,15 @@ try {
 
     $installer = Read-Utf8 'installer/src/BioshockVrDlss45StandaloneInstaller.cs'
     Assert-True ([regex]::Matches($installer, 'new Payload\(').Count -eq 20) 'Installer source must embed 20 resources.'
-    Assert-True ($installer.Contains('[assembly: AssemblyVersion("0.2.1.0")]')) 'Installer version is not 0.2.1.0.'
+    Assert-True ($installer.Contains('[assembly: AssemblyVersion("0.2.3.0")]')) 'Installer version is not 0.2.3.0.'
+    Assert-True ($installer.Contains('HasInitializedGameConfiguration()')) 'First-run Bioshock.ini check is missing.'
+    Assert-True ($installer.Contains('El mod se ha instalado correctamente, pero Windows no ha podido abrir el lanzador.')) 'Successful install / launcher-open separation is missing.'
+    Assert-True ($installer.Contains('RemoveEmptyPayloadDirectories(manifest.GameDirectory, log);')) 'Empty payload directory cleanup is missing.'
+    Assert-True ($installer.Contains('manifest.Version != "0.2.2" && manifest.Version != "0.2.3"')) 'Safe 0.2.2 to 0.2.3 migration is missing.'
+
+    foreach ($releaseFile in @('README.md', 'PROVENANCE.md', 'docs/releases/v0.2.3-beta.md')) {
+        Assert-True (-not (Read-Utf8 $releaseFile).Contains('PENDIENTE_DE_COMPILACION_FINAL')) "Pending release hash in $releaseFile."
+    }
 
     & git grep -n -I -E 'C:\\Users\\Beren|E:\\SteamLibrary|gho_[A-Za-z0-9_]{20,}' -- .
     $grepExit = $LASTEXITCODE
@@ -95,7 +116,7 @@ try {
     if ($BuildLauncher) {
         & (Join-Path $repoRoot 'apps\launcher\Build-Launcher.ps1') | Out-Host
         Assert-True ($LASTEXITCODE -eq 0) 'Launcher build failed.'
-        $launcherExe = Join-Path $repoRoot 'artifacts\launcher\Lanzador BioShock VR DLSS 4.5.exe'
+        $launcherExe = Join-Path $repoRoot 'artifacts\launcher\Lanzador BioShock VR DLSS-DLAA.exe'
         Assert-True (Test-Path -LiteralPath $launcherExe -PathType Leaf) 'Launcher build output is missing.'
         $process = Start-Process -FilePath $launcherExe -ArgumentList '--self-test' -Wait -PassThru
         try {

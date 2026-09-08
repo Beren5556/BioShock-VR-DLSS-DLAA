@@ -28,7 +28,7 @@ No utilices una configuración x64 para bioshockvr.dll ni xinput1_3.dll.
 ## Lanzador
 
     .\apps\launcher\Build-Launcher.ps1
-    .\artifacts\launcher\Lanzador BioShock VR DLSS 4.5.exe --self-test
+    .\artifacts\launcher\Lanzador BioShock VR DLSS-DLAA.exe --self-test
 
 El ejecutable se genera en artifacts/launcher, directorio excluido de Git.
 
@@ -57,4 +57,4 @@ El instalador depende de ocho binarios congelados y verificados en installer/pay
 
 El resultado aparece en artifacts/release. El script rechaza cualquier payload cuyo hash no coincida con la versión.
 
-El artefacto oficial de v0.2.0-beta es el adjunto a la Release, no una compilación local no firmada ni verificada. Consulta docs/TESTING.md antes de distribuir una reconstrucción.
+El artefacto de distribución es el adjunto a la Release correspondiente, no una compilación local no firmada ni verificada. Consulta docs/TESTING.md antes de distribuir una reconstrucción.

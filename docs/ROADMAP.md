@@ -4,6 +4,26 @@ Milestones ordered so something new is visible in the headset as early and often
 Each has a "done when" acceptance test. Effort in sessions (one focused working session each).
 Tick boxes as work lands; move surprises into STATUS.md.
 
+## Instalador 0.2.3
+
+Cambios autorizados e implementados para la candidata 0.2.3. La validación externa sigue siendo requisito antes de promoverla como versión estable.
+
+- [x] Separar el resultado de la instalación del intento de abrir el lanzador. Si los
+      archivos ya se instalaron correctamente pero Windows impide abrir el lanzador,
+      informar «instalación completada; no se pudo abrir el lanzador» y mostrar cómo
+      abrirlo manualmente, sin presentar la instalación como fallida.
+- [x] Confirmar el arranque real solicitado desde «Guardar e iniciar». Mantener el
+      lanzador abierto si Steam acepta el URI pero `BioshockHD.exe` no aparece dentro
+      de un plazo razonable; cerrarlo únicamente al confirmar el proceso del juego o
+      al iniciar correctamente la vía directa.
+- [x] Completar y explicar mejor la restauración: retirar directorios instalados que
+      hayan quedado vacíos y comunicar claramente qué configuración y copias de
+      seguridad se conservan. Cualquier opción de limpieza total deberá requerir una
+      confirmación expresa y no borrar ajustes por defecto.
+- [ ] Antes de promover esta beta como versión estable, repetir el recorrido básico completo en otro PC
+      para comprobar SmartScreen/antivirus, disponibilidad de .NET/Windows Script Host,
+      compatibilidad del `BioshockHD.exe` y apertura del acceso directo.
+
 ## M0 - Skeleton: inject, log, overlay (~2 sessions)
 
 Goal: our code runs inside BioshockHD.exe with logging and an in-game overlay; repo on GitHub.

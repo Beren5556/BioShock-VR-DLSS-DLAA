@@ -19,4 +19,8 @@ No adjuntes BioshockHD.exe, archivos del juego, tokens, credenciales ni el SDK d
 
 ## Modelo de confianza del instalador
 
-El instalador v0.2.1-beta valida un ejecutable de juego conocido, verifica por SHA-256 todos sus recursos, escribe mediante reemplazos transaccionales y conserva copias de recuperación. El ejecutable beta no está firmado digitalmente; verifica su hash con release/SHA256SUMS-v0.2.1-beta.txt antes de ejecutarlo.
+El instalador v0.2.3-beta valida un ejecutable de juego conocido, verifica por SHA-256 todos sus recursos, escribe mediante reemplazos transaccionales y conserva copias de recuperación. El ejecutable beta no está firmado digitalmente; verifica su hash con release/SHA256SUMS-v0.2.3-beta.txt antes de ejecutarlo.
+
+Si SmartScreen o un antivirus bloquean el instalador, no desactives la protección ni añadas una exclusión. Conserva el archivo en cuarentena y comunica el producto, el nombre exacto de la detección, la hora y el SHA-256 para investigarlo.
+
+El paquete instala NVIDIA DLSS 310.7.0.0. El proyecto permite que un usuario avanzado sustituya manualmente esa DLL por otra versión x64, pero solo 310.7.0.0 forma parte del artefacto verificado. Cualquier DLL distinta queda fuera de la garantía de integridad y compatibilidad de esta versión.

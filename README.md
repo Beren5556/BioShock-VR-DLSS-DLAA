@@ -2,21 +2,21 @@
 
 Fork comunitario y experimental de [BioShock VR v0.8.2](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2) para BioShock Remastered. Añade una ruta temporal independiente por ojo y un lanzador nativo de Windows con tres modos claros: NORMAL, DLAA y DLSS 4.5.
 
-> Versión actual: **v0.2.1-beta**. Es una beta pública, comunitaria y no oficial.
+> Versión actual: **v0.2.3-beta**. Es una beta comunitaria y no oficial.
 
 > **Agradecimiento principal:** este proyecto existe gracias a **[Mohamad Balouza](https://github.com/mohamad-balouza)**, creador de BioShock VR. Él realizó el trabajo fundamental y más difícil: llevar BioShock Remastered a VR con renderizado estereoscópico, seguimiento 6DOF y controladores de movimiento. Este fork construye sobre esa enorme base; no pretende sustituirla ni atribuirse su autoría. Visita y apoya el [proyecto original de VR-Stereo-Hub](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr).
 
 ## Descargar e instalar
 
-La distribución recomendada es el instalador autónomo de la [Release v0.2.1-beta](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.1-beta). No hace falta instalar antes el mod original.
+La distribución recomendada es el instalador autónomo de la [Release v0.2.3-beta](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.3-beta). No hace falta instalar antes el mod original.
 
-1. Cierra BioShock Remastered y sus componentes VR.
-2. Ejecuta **Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe**.
+1. Antes de instalar el mod, abre BioShock Remastered una vez desde Steam, llega al menú principal y ciérralo. Esto crea `Bioshock.ini`.
+2. Ejecuta **Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe**.
 3. Selecciona la carpeta del juego que contiene BioshockHD.exe; normalmente termina en BioShock Remastered\Build\Final.
 4. Instala y abre el acceso directo **BioShock VR DLSS-DLAA Beta**.
-5. Elige NORMAL, DLAA o DLSS y lanza el juego.
+5. Elige NORMAL, DLAA o DLSS y pulsa **Guardar e iniciar**. El lanzador se cerrará cuando detecte que BioShock se ha abierto; si Steam no responde en 30 segundos, ofrecerá el arranque directo y permanecerá abierto si tampoco funciona.
 
-El instalador no propone una ruta, comprueba que la copia del juego sea compatible, verifica cada recurso por SHA-256 y conserva una copia recuperable de cualquier archivo sustituido. La opción **Restaurar situación anterior** devuelve los archivos previos byte a byte.
+El instalador no propone una ruta, comprueba que la copia del juego sea compatible, verifica cada recurso por SHA-256 y conserva una copia recuperable de cualquier archivo sustituido. Si solo falla la apertura automática del lanzador, informa de que la instalación sí terminó y muestra cómo abrirlo manualmente. La opción **Restaurar situación anterior** devuelve los archivos previos byte a byte, retira las carpetas del paquete que queden vacías y conserva los ajustes personales y una copia de recuperación.
 
 ### Compatibilidad conocida
 
@@ -27,13 +27,15 @@ El instalador no propone una ruta, comprueba que la copia del juego sea compatib
 
 Esta beta no contiene DLSS 5 Neural Rendering. Tampoco expone FXAA ni el antiguo reescalado espacial en el lanzador: la experiencia publicada se limita intencionadamente a NORMAL, DLAA y DLSS 4.5. La pestaña general de Bioshock.ini no forma parte de esta edición.
 
+El instalador coloca `nvngx_dlss.dll` **310.7.0.0**, la única versión probada y recomendada. Se permite sustituirla manualmente por otra DLL x64: el lanzador advertirá, pero no bloqueará el uso. Con otras versiones no se garantizan el funcionamiento, la estabilidad ni la calidad de imagen y el cambio corre por cuenta del usuario. Reinstalar restaura la 310.7.0.0.
+
 ## Integridad de la versión
 
 | Archivo | SHA-256 |
 |---|---|
-| Instalador BioShock VR DLSS-DLAA Beta 0.2.1.exe | 7B79BF92BDFEFFF1F857E783F8D9EDA11A62010BBA9C915C1F167BFBA07A6A69 |
+| Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe | 2722C00F1C354781428213CA7CE5C28FDE56D86EA13CB8A8FAF59D36FE616EE0 |
 
-La lista verificable también está en [release/SHA256SUMS-v0.2.1-beta.txt](release/SHA256SUMS-v0.2.1-beta.txt).
+La lista verificable también está en [release/SHA256SUMS-v0.2.3-beta.txt](release/SHA256SUMS-v0.2.3-beta.txt).
 
 ## Qué contiene el repositorio
 
@@ -73,4 +75,4 @@ Proyecto no oficial, sin afiliación ni respaldo de 2K Games, Take-Two Interacti
 
 ## Estado beta
 
-La integración se ha validado funcionalmente con el binario de juego indicado, pero sigue siendo experimental. Antes de compartir diagnósticos, conserva los registros de %LOCALAPPDATA%\BioshockVR y consulta las [notas de la versión](docs/releases/v0.2.1-beta.md).
+La integración se ha validado funcionalmente con el binario de juego indicado, pero sigue siendo experimental. Antes de compartir diagnósticos, conserva los registros de %LOCALAPPDATA%\BioshockVR y consulta las [notas de la versión](docs/releases/v0.2.3-beta.md).

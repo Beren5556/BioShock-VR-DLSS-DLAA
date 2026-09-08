@@ -491,13 +491,15 @@ bool stage_runtime(const std::wstring& hostSource) {
     DWORD versionMajor = 0, versionMinor = 0, versionBuild = 0, versionRevision = 0;
     if (!is_dlss_310_7_0(dlssSource, &versionMajor, &versionMinor,
                          &versionBuild, &versionRevision)) {
-        BVR_LOG("[dlss45] rejected nvngx_dlss.dll FileVersion %lu.%lu.%lu.%lu "
-                "(required 310.7.0.0)",
+        BVR_LOG("[dlss45] WARNING: untested nvngx_dlss.dll FileVersion "
+                "%lu.%lu.%lu.%lu; continuing at the user's risk "
+                "(tested runtime 310.7.0.0)",
                 static_cast<unsigned long>(versionMajor),
                 static_cast<unsigned long>(versionMinor),
                 static_cast<unsigned long>(versionBuild),
                 static_cast<unsigned long>(versionRevision));
-        return prepare_failure("nvngx_dlss.dll no tiene FileVersion 310.7.0.0");
+    } else {
+        BVR_LOG("[dlss45] nvngx_dlss.dll FileVersion 310.7.0.0 matches the tested runtime");
     }
     if (!capabilities_are_dlss45(capabilitiesSource))
         return prepare_failure("dlss-capabilities.ini no declara DLSS45, dos hosts, runtime 310.7.0 e IPC v8");

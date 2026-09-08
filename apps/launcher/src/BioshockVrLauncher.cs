@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Complemento DLSS 4.5 para BioShock VR - Beren5556")]
 [assembly: AssemblyDescription("Lanzador y editor seguro con modos Normal, DLAA y DLSS 4.5")]
 [assembly: AssemblyProduct("Complemento DLSS 4.5 para BioShock VR")]
-[assembly: AssemblyVersion("0.2.1.0")]
-[assembly: AssemblyFileVersion("0.2.1.0")]
+[assembly: AssemblyVersion("0.2.3.0")]
+[assembly: AssemblyFileVersion("0.2.3.0")]
 
 namespace BioshockVrLauncher
 {
@@ -497,6 +497,7 @@ namespace BioshockVrLauncher
     internal static class DlssConfigDocument
     {
         public const string RequiredRuntime = "310.7.0";
+        public const string TestedRuntimeDisplay = "310.7.0.0";
 
         private static readonly string[] Keys = new string[] {
             "mode", "runtime", "preset", "quality", "outputWidth", "outputHeight",
@@ -1024,6 +1025,7 @@ namespace BioshockVrLauncher
         public int EyeHosts;
         public bool HostFound;
         public bool RuntimeFound;
+        public bool RuntimeIs64Bit;
         public bool RuntimeMatches;
         public bool CapabilityFound;
         public string RuntimeVersion;
@@ -1553,6 +1555,9 @@ namespace BioshockVrLauncher
         private bool _syncingFxaa;
         private bool _syncingUpscaler;
         private bool _syncingDlss;
+        private bool _launchPending;
+        private DateTime _launchDeadlineUtc;
+        private Timer _launchWatchTimer;
         private string _gameExePath;
 
         private Label _configStateLabel;
@@ -1582,6 +1587,7 @@ namespace BioshockVrLauncher
         private NumericUpDown _dlssNearPlane;
         private Label _dlssBackendStateLabel;
         private Label _dlssSettingsStateLabel;
+        private bool _runtimeWarningShown;
         private DataGridView _iniGrid;
         private ComboBox _iniSectionFilter;
         private ComboBox _iniImpactFilter;
@@ -1612,7 +1618,7 @@ namespace BioshockVrLauncher
             _toolTip.InitialDelay = 350;
             _toolTip.ReshowDelay = 100;
 
-            Text = "BioShock VR · DLSS/DLAA Beta 0.2.1";
+            Text = "BioShock VR · DLSS/DLAA Beta 0.2.3";
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -1633,6 +1639,7 @@ namespace BioshockVrLauncher
                 : FindGameExecutable();
             UpdatePathStatus();
             LoadConfiguration(false);
+            Shown += delegate { WarnAboutUntestedRuntime(); };
         }
 
         private static List<ParamDef> BuildDefinitions()
@@ -1931,6 +1938,7 @@ namespace BioshockVrLauncher
             KeyPreview = true;
             KeyDown += MainForm_KeyDown;
             FormClosing += MainForm_FormClosing;
+            FormClosed += delegate { StopLaunchWatch(); };
         }
 
         private Button MakeButton(string text, Color backColor, Color foreColor, int width)
@@ -2244,12 +2252,12 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(runtimeLabel);
 
             _dlssRuntime = new TextBox();
-            _dlssRuntime.Text = "310.7.0 · fijo";
+            _dlssRuntime.Text = "310.7.0 · probada";
             _dlssRuntime.ReadOnly = true;
             _dlssRuntime.TabStop = false;
             _dlssRuntime.BackColor = Color.White;
             _dlssRuntime.ForeColor = TextDark;
-            _dlssRuntime.Width = 118;
+            _dlssRuntime.Width = 140;
             _dlssRuntime.Location = new Point(390, 49);
             dlssGroup.Controls.Add(_dlssRuntime);
 
@@ -3561,7 +3569,8 @@ namespace BioshockVrLauncher
             if (_dlssBackendStatus == null)
                 _dlssBackendStatus = DetectDlssBackend();
             _dlssBackendStateLabel.Text = _dlssBackendStatus.Summary;
-            _dlssBackendStateLabel.ForeColor = _dlssBackendStatus.Ready ? Success : Warning;
+            _dlssBackendStateLabel.ForeColor =
+                _dlssBackendStatus.Ready && _dlssBackendStatus.RuntimeMatches ? Success : Warning;
 
             if (!string.IsNullOrEmpty(_dlssLoadWarning))
             {
@@ -3625,7 +3634,7 @@ namespace BioshockVrLauncher
                 (string.IsNullOrEmpty(_dlssNormalizationNote) ? string.Empty :
                     " · NOTA: " + _dlssNormalizationNote);
             _dlssSettingsStateLabel.ForeColor = _dlssDirty ? Warning :
-                (_dlssBackendStatus.Ready ? Success : Blue);
+                (_dlssBackendStatus.Ready && _dlssBackendStatus.RuntimeMatches ? Success : Blue);
         }
 
         private bool ValidateDlssBeforeSave()
@@ -3767,9 +3776,11 @@ namespace BioshockVrLauncher
                     FileVersionInfo version = FileVersionInfo.GetVersionInfo(runtimePath);
                     status.RuntimeVersion = version.FileMajorPart.ToString(CultureInfo.InvariantCulture) + "." +
                         version.FileMinorPart.ToString(CultureInfo.InvariantCulture) + "." +
-                        version.FileBuildPart.ToString(CultureInfo.InvariantCulture);
-                    status.RuntimeMatches = Is64BitPe(runtimePath) &&
-                        string.Equals(status.RuntimeVersion, DlssConfigDocument.RequiredRuntime,
+                        version.FileBuildPart.ToString(CultureInfo.InvariantCulture) + "." +
+                        version.FilePrivatePart.ToString(CultureInfo.InvariantCulture);
+                    status.RuntimeIs64Bit = Is64BitPe(runtimePath);
+                    status.RuntimeMatches = status.RuntimeIs64Bit &&
+                        string.Equals(status.RuntimeVersion, DlssConfigDocument.TestedRuntimeDisplay,
                                       StringComparison.OrdinalIgnoreCase);
                 }
 
@@ -3798,7 +3809,7 @@ namespace BioshockVrLauncher
                 bool reusableHost = sharedHost != null && Is64BitPe(sharedHost);
                 status.EyeHosts = splitHosts ? 2 : (reusableHost ? declaredEyes : 0);
                 status.Ready = status.HostFound && (splitHosts || reusableHost) &&
-                    status.EyeHosts >= 2 && status.RuntimeFound && status.RuntimeMatches &&
+                    status.EyeHosts >= 2 && status.RuntimeFound && status.RuntimeIs64Bit &&
                     status.CapabilityFound && capabilityValid;
 
                 if (!status.HostFound)
@@ -3807,16 +3818,19 @@ namespace BioshockVrLauncher
                     status.Summary = "BACKEND INVÁLIDO · el host encontrado no es un ejecutable x64.";
                 else if (!status.RuntimeFound)
                     status.Summary = "BACKEND INCOMPLETO · falta host64\\nvngx_dlss.dll 310.7.0.";
-                else if (!status.RuntimeMatches)
-                    status.Summary = "BACKEND INCOMPATIBLE · el runtime debe ser x64 310.7.0" +
-                        (string.IsNullOrEmpty(status.RuntimeVersion) ? "." :
-                            "; detectado " + status.RuntimeVersion + ".");
+                else if (!status.RuntimeIs64Bit)
+                    status.Summary = "BACKEND INCOMPATIBLE · nvngx_dlss.dll debe ser x64.";
                 else if (!status.CapabilityFound)
                     status.Summary = "BACKEND INCOMPLETO · falta dlss-capabilities.ini; no se confirma la integración estéreo.";
                 else if (!capabilityValid || status.EyeHosts < 2)
                     status.Summary = "BACKEND INVÁLIDO · el manifiesto debe declarar phase=DLSS45, eyeHosts=2 y runtime=310.7.0.";
+                else if (!status.RuntimeMatches)
+                    status.Summary = "BACKEND PREPARADO CON AVISO · nvngx_dlss.dll x64 " +
+                        (string.IsNullOrEmpty(status.RuntimeVersion) ? "de versión no identificada" :
+                            status.RuntimeVersion) +
+                        "; solo 310.7.0.0 está probada.";
                 else
-                    status.Summary = "BACKEND PREPARADO · host x64 · 2 ojos · nvngx_dlss.dll 310.7.0.";
+                    status.Summary = "BACKEND PREPARADO · host x64 · 2 ojos · nvngx_dlss.dll 310.7.0.0 probada.";
             }
             catch (Exception ex)
             {
@@ -3824,6 +3838,24 @@ namespace BioshockVrLauncher
                 status.Summary = "BACKEND SIN CONFIRMAR · " + ex.Message;
             }
             return status;
+        }
+
+        private void WarnAboutUntestedRuntime()
+        {
+            if (_runtimeWarningShown || _dlssBackendStatus == null ||
+                !_dlssBackendStatus.Ready || _dlssBackendStatus.RuntimeMatches)
+                return;
+            _runtimeWarningShown = true;
+            MessageBox.Show(this,
+                "Se ha detectado una versión distinta de nvngx_dlss.dll: " +
+                (string.IsNullOrEmpty(_dlssBackendStatus.RuntimeVersion)
+                    ? "no identificada" : _dlssBackendStatus.RuntimeVersion) + ".\r\n\r\n" +
+                "El instalador coloca y esta integración ha sido probada con NVIDIA DLSS " +
+                DlssConfigDocument.TestedRuntimeDisplay + ". Se permitirá continuar, pero con otras " +
+                "versiones no se garantizan el funcionamiento, la estabilidad ni la calidad de imagen. " +
+                "La sustitución corre por cuenta del usuario.\r\n\r\n" +
+                "Reinstalar esta versión restaura la DLL probada.",
+                "DLL de NVIDIA no probada", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void PopulateIniFilters()
@@ -4054,12 +4086,12 @@ namespace BioshockVrLauncher
             if (!string.IsNullOrEmpty(_gameExePath) && File.Exists(_gameExePath))
             {
                 _gameStateLabel.Text = "JUEGO ENCONTRADO  ·  " + _gameExePath;
-                _launchButton.Enabled = true;
+                _launchButton.Enabled = !_launchPending;
             }
             else
             {
                 _gameStateLabel.Text = "JUEGO NO ENCONTRADO  ·  podrás localizar BioshockHD.exe al iniciar";
-                _launchButton.Enabled = true;
+                _launchButton.Enabled = !_launchPending;
             }
             _dlssBackendStatus = DetectDlssBackend();
             UpdateDlssSummary();
@@ -4875,6 +4907,8 @@ namespace BioshockVrLauncher
 
         private void SaveAndLaunch()
         {
+            if (_launchPending)
+                return;
             if (!SaveConfiguration(false))
                 return;
             if (IsGameRunning())
@@ -4901,35 +4935,111 @@ namespace BioshockVrLauncher
                 ProcessStartInfo steam = new ProcessStartInfo("steam://rungameid/409710");
                 steam.UseShellExecute = true;
                 Process.Start(steam);
-                SetStatus("BioShock VR se está iniciando mediante Steam.", Success);
+                BeginSteamLaunchWatch();
             }
             catch
             {
-                try
-                {
-                    ProcessStartInfo direct = new ProcessStartInfo(_gameExePath);
-                    direct.WorkingDirectory = Path.GetDirectoryName(_gameExePath);
-                    direct.UseShellExecute = true;
-                    Process.Start(direct);
-                    SetStatus("BioShock VR se está iniciando directamente.", Success);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(this,
-                        "No se ha podido iniciar BioShock:\n\n" + ex.Message,
-                        "Error al iniciar", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    SetStatus("No se ha podido iniciar el juego.", Color.Firebrick);
-                }
+                TryStartGameDirectly();
+            }
+        }
+
+        private void BeginSteamLaunchWatch()
+        {
+            StopLaunchWatch();
+            _launchPending = true;
+            _launchDeadlineUtc = DateTime.UtcNow.AddSeconds(30);
+            _launchButton.Enabled = false;
+            SetStatus("Orden enviada a Steam · esperando a que BioShock se abra…", Blue);
+            _launchWatchTimer = new Timer();
+            _launchWatchTimer.Interval = 500;
+            _launchWatchTimer.Tick += SteamLaunchWatchTick;
+            _launchWatchTimer.Start();
+        }
+
+        private void SteamLaunchWatchTick(object sender, EventArgs e)
+        {
+            if (IsGameRunning())
+            {
+                StopLaunchWatch();
+                SetStatus("BioShock VR se ha iniciado mediante Steam.", Success);
+                Close();
+                return;
+            }
+            if (DateTime.UtcNow < _launchDeadlineUtc)
+                return;
+
+            StopLaunchWatch();
+            _launchButton.Enabled = true;
+            SetStatus("Steam no ha iniciado BioShock; el lanzador sigue abierto.", Warning);
+            DialogResult answer = MessageBox.Show(this,
+                "Steam ha aceptado la orden, pero BioShock no se ha abierto en 30 segundos.\r\n\r\n" +
+                "El lanzador permanecerá abierto. ¿Quieres intentar iniciar BioshockHD.exe directamente?",
+                "BioShock no se ha iniciado", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (answer != DialogResult.Yes)
+                return;
+
+            // Steam podría terminar de arrancar mientras se muestra el aviso.
+            if (IsGameRunning())
+            {
+                SetStatus("BioShock VR se ha iniciado mediante Steam.", Success);
+                Close();
+                return;
+            }
+            TryStartGameDirectly();
+        }
+
+        private void StopLaunchWatch()
+        {
+            _launchPending = false;
+            if (_launchWatchTimer == null)
+                return;
+            _launchWatchTimer.Stop();
+            _launchWatchTimer.Tick -= SteamLaunchWatchTick;
+            _launchWatchTimer.Dispose();
+            _launchWatchTimer = null;
+        }
+
+        private void TryStartGameDirectly()
+        {
+            try
+            {
+                ProcessStartInfo direct = new ProcessStartInfo(_gameExePath);
+                direct.WorkingDirectory = Path.GetDirectoryName(_gameExePath);
+                direct.UseShellExecute = true;
+                Process process = Process.Start(direct);
+                if (process == null)
+                    throw new InvalidOperationException("Windows no devolvió un proceso del juego.");
+                process.Dispose();
+                SetStatus("BioShock VR se está iniciando directamente.", Success);
+                Close();
+            }
+            catch (Exception ex)
+            {
+                _launchButton.Enabled = true;
+                MessageBox.Show(this,
+                    "No se ha podido iniciar BioShock:\n\n" + ex.Message,
+                    "Error al iniciar", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("No se ha podido iniciar el juego; el lanzador sigue abierto.", Color.Firebrick);
             }
         }
 
         private static bool IsGameRunning()
         {
-            Process[] processes = Process.GetProcessesByName("BioshockHD");
-            bool running = processes.Length > 0;
-            foreach (Process process in processes)
-                process.Dispose();
-            return running;
+            Process[] processes = new Process[0];
+            try
+            {
+                processes = Process.GetProcessesByName("BioshockHD");
+                return processes.Length > 0;
+            }
+            catch
+            {
+                return false;
+            }
+            finally
+            {
+                foreach (Process process in processes)
+                    process.Dispose();
+            }
         }
 
         private static string FindGameExecutable()
@@ -5025,7 +5135,7 @@ namespace BioshockVrLauncher
         private void ShowCreditsAndLicenses()
         {
             MessageBox.Show(this,
-                "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.1\n" +
+                "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.3\n" +
                 "Integración DLSS/DLAA y lanzador: Beren5556\n\n" +
                 "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\n" +
                 "Creador de BioShock VR y de la implementación VR fundamental " +

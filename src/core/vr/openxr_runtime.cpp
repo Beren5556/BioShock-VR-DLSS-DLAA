@@ -4835,9 +4835,11 @@ void draw_debug_ui() {
                     g_dlss45FallbackFrames.load(std::memory_order_relaxed),
                     g_dlss45MixedPairRecoveries.load(std::memory_order_relaxed));
         ImGui::TextWrapped(
-            "Runtime NVIDIA 310.7 (modelo K/M/L), con un host x64 y un historial "
-            "por ojo. Fase 1: movimiento de camara, sin vectores propios de manos/objetos "
-            "y sin jitter de proyeccion. No incluye DLSS 5.");
+            "Probado con runtime NVIDIA 310.7.0.0 (modelo K/M/L), con un host x64 y "
+            "un historial por ojo. Otras DLL x64 se permiten bajo responsabilidad del "
+            "usuario, sin garantia de funcionamiento o calidad. Fase 1: movimiento de "
+            "camara, sin vectores propios de manos/objetos y sin jitter de proyeccion. "
+            "No incluye DLSS 5.");
     }
 
     // ---- VR PACING: the session-34 fix, judged in the headset ---------------
