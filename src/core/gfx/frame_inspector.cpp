@@ -204,6 +204,14 @@ CopySubResFn g_origCopySubRes = nullptr;
 CopyResFn g_origCopyRes = nullptr;
 UpdateSubResFn g_origUpdateSubRes = nullptr;
 ExecCmdListFn g_origExecCmdList = nullptr;
+#ifdef BVR_DEPTH_COPY_REUSE
+using DepthStateFn = void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*, ID3D11DepthStencilState*, UINT);
+using ClearStateFn = void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*);
+using DrawIndirectFn = void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*, ID3D11Buffer*, UINT);
+DepthStateFn g_origDepthState = nullptr;
+ClearStateFn g_origClearState = nullptr;
+DrawIndirectFn g_origDrawIndexedIndirect = nullptr, g_origDrawIndirect = nullptr;
+#endif
 
 // ---- cb watch (session 13) --------------------------------------------------
 // The engine uploads per-draw constants through Map(WRITE_DISCARD)/memcpy/
@@ -663,6 +671,9 @@ void STDMETHODCALLTYPE DrawDetour(ID3D11DeviceContext* ctx, UINT vertexCount, UI
             --t_suppress;
         }
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+#endif
     g_origDraw(ctx, vertexCount, startVertex);
 }
 
@@ -679,6 +690,9 @@ void STDMETHODCALLTYPE DrawIndexedInstancedDetour(ID3D11DeviceContext* ctx, UINT
         capture_draw_state(ctx, ev);
         --t_suppress;
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+#endif
     g_origDrawIndexedInstanced(ctx, indexCount, instances, startIndex, baseVertex, startInstance);
 }
 
@@ -694,6 +708,9 @@ void STDMETHODCALLTYPE DrawInstancedDetour(ID3D11DeviceContext* ctx, UINT vertex
         capture_draw_state(ctx, ev);
         --t_suppress;
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+#endif
     g_origDrawInstanced(ctx, vertexCount, instances, startVertex, startInstance);
 }
 
@@ -759,6 +776,9 @@ void STDMETHODCALLTYPE DrawAutoDetour(ID3D11DeviceContext* ctx) {
         capture_draw_state(ctx, ev);
         --t_suppress;
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+#endif
     g_origDrawAuto(ctx);
 }
 
@@ -789,6 +809,9 @@ void STDMETHODCALLTYPE CopySubResDetour(ID3D11DeviceContext* ctx, ID3D11Resource
         ev.b = dstY;
         --t_suppress;
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    bvr::b1r::temporal_guides::on_resource_write(ctx, dst);
+#endif
     g_origCopySubRes(ctx, dst, dstSub, dstX, dstY, dstZ, src, srcSub, box);
 }
 
@@ -802,6 +825,9 @@ void STDMETHODCALLTYPE CopyResDetour(ID3D11DeviceContext* ctx, ID3D11Resource* d
         ev.srv0 = register_resource_raw(src);
         --t_suppress;
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    bvr::b1r::temporal_guides::on_resource_write(ctx, dst);
+#endif
     g_origCopyRes(ctx, dst, src);
 }
 
@@ -859,6 +885,9 @@ void STDMETHODCALLTYPE UpdateSubResDetour(ID3D11DeviceContext* ctx, ID3D11Resour
         }
         --t_suppress;
     }
+#ifdef BVR_DEPTH_COPY_REUSE
+    bvr::b1r::temporal_guides::on_resource_write(ctx, dst);
+#endif
     g_origUpdateSubRes(ctx, dst, dstSub, box, data, rowPitch, depthPitch);
 }
 
@@ -873,7 +902,34 @@ void STDMETHODCALLTYPE ExecCmdListDetour(ID3D11DeviceContext* ctx, ID3D11Command
         --t_suppress;
     }
     g_origExecCmdList(ctx, list, restore);
+#ifdef BVR_DEPTH_COPY_REUSE
+    bvr::b1r::temporal_guides::on_context_reset(ctx);
+#endif
 }
+
+#ifdef BVR_DEPTH_COPY_REUSE
+void STDMETHODCALLTYPE DepthStateDetour(ID3D11DeviceContext* ctx,
+                                       ID3D11DepthStencilState* state, UINT stencil) {
+    g_origDepthState(ctx, state, stencil);
+    // Observe even internally suppressed state changes: the cache must describe
+    // actual D3D11 state after HUD/overlay substitutions and their restoration.
+    bvr::b1r::temporal_guides::on_depth_state(ctx, state);
+}
+void STDMETHODCALLTYPE ClearStateDetour(ID3D11DeviceContext* ctx) {
+    g_origClearState(ctx);
+    bvr::b1r::temporal_guides::on_context_reset(ctx);
+}
+void STDMETHODCALLTYPE DrawIndexedIndirectDetour(ID3D11DeviceContext* ctx,
+                                                 ID3D11Buffer* args, UINT offset) {
+    bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    g_origDrawIndexedIndirect(ctx, args, offset);
+}
+void STDMETHODCALLTYPE DrawIndirectDetour(ID3D11DeviceContext* ctx,
+                                          ID3D11Buffer* args, UINT offset) {
+    bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    g_origDrawIndirect(ctx, args, offset);
+}
+#endif
 
 // ---- dump writer --------------------------------------------------------
 
@@ -1107,6 +1163,16 @@ bool install(void** ctxVtable) {
          reinterpret_cast<void**>(&g_origUpdateSubRes), "UpdateSubresource"},
         {58, reinterpret_cast<void*>(&ExecCmdListDetour),
          reinterpret_cast<void**>(&g_origExecCmdList), "ExecuteCommandList"},
+#ifdef BVR_DEPTH_COPY_REUSE
+        {36, reinterpret_cast<void*>(&DepthStateDetour),
+         reinterpret_cast<void**>(&g_origDepthState), "OMSetDepthStencilState"},
+        {110, reinterpret_cast<void*>(&ClearStateDetour),
+         reinterpret_cast<void**>(&g_origClearState), "ClearState"},
+        {39, reinterpret_cast<void*>(&DrawIndexedIndirectDetour),
+         reinterpret_cast<void**>(&g_origDrawIndexedIndirect), "DrawIndexedInstancedIndirect"},
+        {40, reinterpret_cast<void*>(&DrawIndirectDetour),
+         reinterpret_cast<void**>(&g_origDrawIndirect), "DrawInstancedIndirect"},
+#endif
     };
 
     int hooked = 0;
@@ -1119,8 +1185,12 @@ bool install(void** ctxVtable) {
             BVR_LOG("[gfx] inspector hook %s FAILED: %s", s.name, MH_StatusToString(status));
         }
     }
-    BVR_LOG("[gfx] frame inspector: %d/15 context slots hooked", hooked);
-    return hooked == 15;
+    const bool complete = hooked == static_cast<int>(_countof(slots));
+#ifdef BVR_DEPTH_COPY_REUSE
+    bvr::b1r::temporal_guides::set_copy_tracking_available(complete);
+#endif
+    BVR_LOG("[gfx] frame inspector: %d/%u context slots hooked", hooked, unsigned(_countof(slots)));
+    return complete;
 }
 
 void set_cb_watch(const float* pattern, uint32_t patFirst, uint32_t patCount,

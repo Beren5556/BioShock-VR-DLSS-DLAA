@@ -43,6 +43,7 @@
 #include "../src/feed_ngx.h"  // NGX result names and DLL identity, shared with the add-on
 #include "../src/feed_crash.h" // naming a C++ throw and the modules it came through, likewise
 #include "../src/feed_ipc.h"
+#include "../src/latency_probe_protocol.h"
 #include "../src/feed_fmt.h"
 #include "../src/feed_dfc.h"   // Deep Fried Chicken interop ABI 1 (producer side, HostMode=1 here)
 
@@ -68,6 +69,16 @@ static const char kNgxEngineVersion[] = "0.14.0";
 // and independent logs/NGX data for the two temporal histories.
 static bool g_bvr_dlss45_mode = false;
 static int  g_bvr_eye = -1;
+#ifdef BVR_LATENCY_PROBE
+// Independent counters: the old 1800-frame log may never fire in a short trial.
+static double g_latency_gpu_sum = 0.0;
+static unsigned long long g_latency_gpu_count = 0;
+static double LatencyCpuMs() {
+    LARGE_INTEGER now{}, frequency{};
+    QueryPerformanceCounter(&now); QueryPerformanceFrequency(&frequency);
+    return 1000.0 * double(now.QuadPart) / double(frequency.QuadPart);
+}
+#endif
 // --behind: the window is shown (DWM needs a shown, non-minimized source to render the
 // live thumbnail the 32-bit add-on casts into the game window, dlss5-feed32's "cast")
 // but as a tool window -- no taskbar button, never activated -- parked at the bottom of
@@ -827,6 +838,10 @@ static void TimingCollect(int slot)
     {
         h.ts_sum_ms += 1000.0 * double(t[base + 1] - t[base]) / double(h.ts_freq);
         ++h.ts_n;
+#ifdef BVR_LATENCY_PROBE
+        g_latency_gpu_sum += 1000.0 * double(t[base + 1] - t[base]) / double(h.ts_freq);
+        ++g_latency_gpu_count;
+#endif
     }
     const D3D12_RANGE wrote = { 0, 0 };
     h.ts_read->Unmap(0, &wrote);
@@ -2568,6 +2583,11 @@ static int Serve(DWORD game_pid, int eye)
 
     int flags_active = 0;
     bool transport_only = false;
+    bool diagnosticTransport = false;
+#ifdef BVR_LATENCY_PROBE
+    UINT64 latencyStart = 0, latencyLast = 0, latencyFrames = 0;
+    double latencyCpuSum = 0.0, latencyCpuMax = 0.0;
+#endif
     float mvsx = 1.0f, mvsy = 1.0f;
     // The DLSS 5 add-on arms its NGX hooks ~150 ms after NGX init; the first create must
     // not race that (a 15 ms miss latched STANDBY in Blacklist), so hold it briefly.
@@ -2646,6 +2666,16 @@ static int Serve(DWORD game_pid, int eye)
             if (h.out_scratch != nullptr) { h.out_scratch->Release(); h.out_scratch = nullptr; }
 
             bool ok = true;
+#ifdef BVR_LATENCY_PROBE
+            diagnosticTransport = g_bvr_dlss45_mode &&
+                b.transport == bvr_latency_probe::kFullImageTransport;
+            if (diagnosticTransport && !bvr_latency_probe::valid_copy(
+                    b.width, b.height, b.target_width ? b.target_width : b.width,
+                    b.target_height ? b.target_height : b.height, b.color_fmt, b.output_fmt)) {
+                Log("[latency-host] rejecting non-native/mismatched full-image transport");
+                ok = false;
+            }
+#endif
             uint64_t game_tex[FEED_SLOTS] = {}, tex_size[FEED_SLOTS] = {}, game_panel = 0;
             // A D3D11 client whose device refused the shared set asks for the GL/Vulkan
             // route per build (v5, issue #33); one that cannot bind UAVs at all gets an
@@ -2848,7 +2878,7 @@ static int Serve(DWORD game_pid, int eye)
                 if (b.hdr)            flags_active |= NVSDK_NGX_DLSS_Feature_Flags_IsHDR;
                 if (b.flags_override >= 0) flags_active = b.flags_override;
 
-                if (transport_only)
+                if (transport_only && !diagnosticTransport)
                 {
                     rf = static_cast<NVSDK_NGX_Result>(1);   // no NGX in the loop at all
                     Log("[host] transport-only mode: Color will be copied to Output, no evaluate");
@@ -2879,6 +2909,14 @@ static int Serve(DWORD game_pid, int eye)
             FeedBuildAck back = {};
             back.ok         = ok ? 1 : 0;
             back.ngx_result = static_cast<uint32_t>(rf);
+#ifdef BVR_LATENCY_PROBE
+            if (ok && diagnosticTransport) back.flags |= bvr_latency_probe::kFullImageAck;
+            latencyStart = latencyLast = GetTickCount64();
+            latencyFrames = 0; latencyCpuSum = latencyCpuMax = 0.0;
+            g_latency_gpu_sum = 0.0; g_latency_gpu_count = 0;
+            Log("[latency-host] mode=%s eye=%d featureResident=%d; full-current-image, no prior-frame output; GPU times are queue elapsed, not exclusive busy time",
+                diagnosticTransport ? "BRIDGE" : "DLAA_OR_DLSS", g_bvr_eye, h.feature ? 1 : 0);
+#endif
             if (sr_unavailable)   back.flags |= FEED_ACK_SR_UNAVAILABLE;
             else if (ok && want_sr) { back.flags |= FEED_ACK_SR_ACTIVE; back.sr_quality = static_cast<uint32_t>(h.sr_quality); }
             back.fence_in   = reinterpret_cast<uint64_t>(game_in);
@@ -2937,6 +2975,9 @@ static int Serve(DWORD game_pid, int eye)
             h.queue->Wait(h.fence_in, fm.n);
 
             bool done = false;
+#ifdef BVR_LATENCY_PROBE
+            const double latencyCpuStart = LatencyCpuMs();
+#endif
             if (transport_only)
             {
                 if (BeginCommands())
@@ -2948,7 +2989,9 @@ static int Serve(DWORD game_pid, int eye)
                     src.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
                     dst.pResource = h.tex[FEED_OUTPUT];
                     dst.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-                    D3D12_BOX box = { 0, 0, 0, h.width / 2, h.height, 1 };
+                    // The opt-in VR latency probe MUST copy the full image.
+                    // Keep the legacy feeder's half-image proof unchanged.
+                    D3D12_BOX box = { 0, 0, 0, diagnosticTransport ? h.width : h.width / 2, h.height, 1 };
                     h.list->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
                     EndCommands();
                     done = true;
@@ -2958,6 +3001,12 @@ static int Serve(DWORD game_pid, int eye)
                 done = Evaluate(h.tex[FEED_COLOR], h.out_scratch != nullptr ? h.out_scratch : h.tex[FEED_OUTPUT],
                                 h.tex[FEED_DEPTH], h.tex[FEED_MV],
                                 h.width, h.height, fm.reset ? 1 : 0, mvsx, mvsy, fm.jitter_x, fm.jitter_y);
+
+#ifdef BVR_LATENCY_PROBE
+            const double latencyCpu = LatencyCpuMs() - latencyCpuStart;
+            ++latencyFrames; latencyCpuSum += latencyCpu;
+            if (latencyCpu > latencyCpuMax) latencyCpuMax = latencyCpu;
+#endif
 
             if (done)
             {
@@ -3016,6 +3065,18 @@ static int Serve(DWORD game_pid, int eye)
                     (unsigned long long)fm.n, (unsigned long long)g_present_skipped,
                     (unsigned long long)g_present_owed, gpu_part);
             }
+#ifdef BVR_LATENCY_PROBE
+            const auto latencyNow = GetTickCount64();
+            if (latencyNow - latencyLast >= 2000) {
+                Log("[latency-host] mode=%s eye=%d ageMs=%llu frames=%llu lastFrame=%llu cpuEnqueueAvgMs=%.3f cpuEnqueueMaxMs=%.3f gpuQueueSamples=%llu gpuQueueElapsedAvgMs=%.3f notExclusiveGpuTime=1",
+                    diagnosticTransport ? "BRIDGE" : "DLAA_OR_DLSS", g_bvr_eye,
+                    (unsigned long long)(latencyNow-latencyStart), (unsigned long long)latencyFrames,
+                    (unsigned long long)fm.n, latencyCpuSum / double(latencyFrames), latencyCpuMax,
+                    g_latency_gpu_count, g_latency_gpu_count ? g_latency_gpu_sum / double(g_latency_gpu_count) : 0.0);
+                latencyLast = latencyNow; latencyFrames = 0; latencyCpuSum = latencyCpuMax = 0.0;
+                g_latency_gpu_sum = 0.0; g_latency_gpu_count = 0;
+            }
+#endif
             // Pay off what earlier evaluates could not present BEFORE taking this one's own
             // present. The idle branch of the tag wait above is the other repayment point,
             // but it only runs when MsgWaitForMultipleObjects times out after 100 ms -- so

@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Complemento DLSS 4.5 para BioShock VR - Beren5556")]
 [assembly: AssemblyDescription("Lanzador y editor seguro con modos Normal, DLAA y DLSS 4.5")]
 [assembly: AssemblyProduct("Complemento DLSS 4.5 para BioShock VR")]
-[assembly: AssemblyVersion("0.2.3.0")]
-[assembly: AssemblyFileVersion("0.2.3.0")]
+[assembly: AssemblyVersion("0.2.11.0")]
+[assembly: AssemblyFileVersion("0.2.11.0")]
 
 namespace BioshockVrLauncher
 {
@@ -476,10 +476,15 @@ namespace BioshockVrLauncher
 
     internal enum DlssQuality
     {
-        Quality,
-        Balanced,
-        Performance,
         UltraPerformance,
+        Percent40,
+        Performance,
+        Balanced,
+        Percent60,
+        Quality,
+        Percent70,
+        Percent80,
+        Percent90,
         Custom
     }
 
@@ -492,6 +497,9 @@ namespace BioshockVrLauncher
         public int OutputWidth;
         public int OutputHeight;
         public decimal NearPlaneUu;
+        public int SrScaleNumerator;
+        public int SrScaleDenominator;
+        public int SharpnessPercent;
     }
 
     internal static class DlssConfigDocument
@@ -501,7 +509,7 @@ namespace BioshockVrLauncher
 
         private static readonly string[] Keys = new string[] {
             "mode", "runtime", "preset", "quality", "outputWidth", "outputHeight",
-            "nearPlaneUu"
+            "nearPlaneUu", "srScaleNumerator", "srScaleDenominator", "sharpnessPercent"
         };
 
         public static DlssSettings Defaults(int renderWidth, int renderHeight)
@@ -514,6 +522,8 @@ namespace BioshockVrLauncher
             settings.OutputWidth = ClampDimension(renderWidth);
             settings.OutputHeight = ClampDimension(renderHeight);
             settings.NearPlaneUu = 10.0m;
+            settings.SrScaleNumerator = 2;
+            settings.SrScaleDenominator = 3;
             return settings;
         }
 
@@ -724,6 +734,50 @@ namespace BioshockVrLauncher
                     settings.NearPlaneUu = nearPlane;
             }
 
+            if (values.TryGetValue("sharpnessPercent", out raw))
+            {
+                if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
+                    number < 0 || number > 100)
+                    problems.Add("sharpnessPercent debe estar entre 0 y 100.");
+                else settings.SharpnessPercent = number;
+            }
+
+            // Los archivos anteriores no recordaban la preferencia al pasar por DLAA.
+            // Se migra del ratio real sin cambiar el archivo al cargarlo.
+            if (settings.Mode == DlssMode.SuperResolution &&
+                renderWidth < settings.OutputWidth && renderHeight < settings.OutputHeight &&
+                UpscalerConfigDocument.HasExactAspect(renderWidth, renderHeight,
+                                                      settings.OutputWidth, settings.OutputHeight))
+            {
+                DlssQuality inferred;
+                if (!DlssQualityPolicy.TryMatchCanonical(renderWidth, renderHeight,
+                        settings.OutputWidth, settings.OutputHeight, out inferred) ||
+                    !DlssQualityPolicy.TryGetFraction(inferred,
+                        out settings.SrScaleNumerator, out settings.SrScaleDenominator))
+                {
+                    settings.SrScaleNumerator = renderWidth;
+                    settings.SrScaleDenominator = settings.OutputWidth;
+                }
+            }
+            bool hasNumerator = values.ContainsKey("srScaleNumerator");
+            bool hasDenominator = values.ContainsKey("srScaleDenominator");
+            if (hasNumerator || hasDenominator)
+            {
+                int numerator, denominator;
+                if (!hasNumerator || !hasDenominator ||
+                    !int.TryParse(values["srScaleNumerator"], NumberStyles.Integer,
+                                  CultureInfo.InvariantCulture, out numerator) ||
+                    !int.TryParse(values["srScaleDenominator"], NumberStyles.Integer,
+                                  CultureInfo.InvariantCulture, out denominator) ||
+                    numerator <= 0 || denominator <= numerator || denominator > 8192)
+                    problems.Add("La preferencia de escala SR debe ser una fracción válida entre 0 y 1.");
+                else
+                {
+                    settings.SrScaleNumerator = numerator;
+                    settings.SrScaleDenominator = denominator;
+                }
+            }
+
             warning = string.Join(" ", problems.ToArray());
             return problems.Count == 0;
         }
@@ -745,6 +799,9 @@ namespace BioshockVrLauncher
             replacements["outputWidth"] = settings.OutputWidth.ToString(CultureInfo.InvariantCulture);
             replacements["outputHeight"] = settings.OutputHeight.ToString(CultureInfo.InvariantCulture);
             replacements["nearPlaneUu"] = settings.NearPlaneUu.ToString("0.0##", CultureInfo.InvariantCulture);
+            replacements["srScaleNumerator"] = settings.SrScaleNumerator.ToString(CultureInfo.InvariantCulture);
+            replacements["srScaleDenominator"] = settings.SrScaleDenominator.ToString(CultureInfo.InvariantCulture);
+            replacements["sharpnessPercent"] = settings.SharpnessPercent.ToString(CultureInfo.InvariantCulture);
 
             bool inDlss = false;
             bool foundDlss = false;
@@ -812,6 +869,9 @@ namespace BioshockVrLauncher
             input.OutputWidth = 4504;
             input.OutputHeight = 4504;
             input.NearPlaneUu = 12.5m;
+            input.SrScaleNumerator = 1;
+            input.SrScaleDenominator = 2;
+            input.SharpnessPercent = 35;
             string original = "; conservar\r\n[dlss]\r\nmode=off\r\nruntime=310.7.0\r\n" +
                               "preset=auto\r\nquality=quality\r\nunknown=ok\r\n" +
                               "outputWidth=2048\r\noutputHeight=2048\r\n";
@@ -837,18 +897,36 @@ namespace BioshockVrLauncher
             bool invalidNearAccepted = TryParse(invalidNear, 4056, 4056,
                                                 out invalidNearSettings,
                                                 out invalidNearWarning);
+            input.Mode = DlssMode.Dlaa;
+            DlssSettings remembered;
+            string rememberedWarning;
+            bool remembersSrInDlaa = TryParse(Render(rendered, input), 4504, 4504,
+                out remembered, out rememberedWarning) && remembered.SrScaleNumerator == 1 &&
+                remembered.SrScaleDenominator == 2;
+            input.Mode = DlssMode.Off;
+            bool remembersSrInNormal = TryParse(Render(rendered, input), 4504, 4504,
+                out remembered, out rememberedWarning) && remembered.SrScaleNumerator == 1 &&
+                remembered.SrScaleDenominator == 2;
+            string legacyWithoutScale = original.Replace("mode=off", "mode=sr")
+                .Replace("outputWidth=2048", "outputWidth=4096")
+                .Replace("outputHeight=2048", "outputHeight=4096");
+            bool migratesLegacy = TryParse(legacyWithoutScale, 2730, 2730,
+                out remembered, out rememberedWarning) && remembered.SrScaleNumerator == 2 &&
+                remembered.SrScaleDenominator == 3;
             return valid && string.IsNullOrEmpty(warning) &&
                    parsed.Mode == DlssMode.SuperResolution &&
                    parsed.Runtime == RequiredRuntime && parsed.Preset == "M" &&
                    parsed.Quality == DlssQuality.Custom &&
                    parsed.OutputWidth == 4504 && parsed.OutputHeight == 4504 &&
-                   parsed.NearPlaneUu == 12.5m &&
+                   parsed.NearPlaneUu == 12.5m && parsed.SharpnessPercent == 35 &&
+                   parsed.SrScaleNumerator == 1 && parsed.SrScaleDenominator == 2 &&
                    rendered.Contains("unknown=ok") && rendered.Contains("; conservar") &&
                    repairedValid && string.IsNullOrEmpty(repairedWarning) &&
                    repaired.Contains("; duplicado desactivado por el lanzador: preset=L") &&
                    legacyValid && string.IsNullOrEmpty(legacyWarning) &&
                    legacySettings.NearPlaneUu == 10.0m && !invalidNearAccepted &&
-                   invalidNearWarning.Contains("nearPlaneUu");
+                   invalidNearWarning.Contains("nearPlaneUu") && remembersSrInDlaa &&
+                   remembersSrInNormal && migratesLegacy;
         }
     }
 
@@ -867,7 +945,7 @@ namespace BioshockVrLauncher
             return Math.Max(1, first);
         }
 
-        private static bool TryGetFraction(DlssQuality quality,
+        public static bool TryGetFraction(DlssQuality quality,
                                            out int numerator, out int denominator)
         {
             numerator = 0;
@@ -896,6 +974,17 @@ namespace BioshockVrLauncher
                 denominator = 3;
                 return true;
             }
+            if (quality == DlssQuality.Percent40 || quality == DlssQuality.Percent60 ||
+                quality == DlssQuality.Percent70 || quality == DlssQuality.Percent80 ||
+                quality == DlssQuality.Percent90)
+            {
+                numerator = quality == DlssQuality.Percent40 ? 4 :
+                    quality == DlssQuality.Percent60 ? 6 :
+                    quality == DlssQuality.Percent70 ? 7 :
+                    quality == DlssQuality.Percent80 ? 8 : 9;
+                denominator = 10;
+                return true;
+            }
             return false;
         }
 
@@ -903,10 +992,24 @@ namespace BioshockVrLauncher
                                               DlssQuality quality,
                                               out int renderWidth, out int renderHeight)
         {
+            int numerator, denominator;
+            if (!TryGetFraction(quality, out numerator, out denominator))
+            {
+                renderWidth = 0;
+                renderHeight = 0;
+                return false;
+            }
+            return TryCalculateRender(outputWidth, outputHeight, numerator, denominator,
+                                      out renderWidth, out renderHeight);
+        }
+
+        public static bool TryCalculateRender(int outputWidth, int outputHeight,
+                                              int numerator, int denominator,
+                                              out int renderWidth, out int renderHeight)
+        {
             renderWidth = 0;
             renderHeight = 0;
-            int numerator, denominator;
-            if (!TryGetFraction(quality, out numerator, out denominator) ||
+            if (numerator <= 0 || denominator <= numerator || denominator > 8192 ||
                 outputWidth < 1024 || outputWidth > 8192 ||
                 outputHeight < 1024 || outputHeight > 8192 ||
                 (outputWidth & 1) != 0 || (outputHeight & 1) != 0)
@@ -960,7 +1063,12 @@ namespace BioshockVrLauncher
                 DlssQuality.Quality,
                 DlssQuality.Balanced,
                 DlssQuality.Performance,
-                DlssQuality.UltraPerformance
+                DlssQuality.UltraPerformance,
+                DlssQuality.Percent40,
+                DlssQuality.Percent60,
+                DlssQuality.Percent70,
+                DlssQuality.Percent80,
+                DlssQuality.Percent90
             };
             foreach (DlssQuality candidate in canonical)
             {
@@ -999,6 +1107,21 @@ namespace BioshockVrLauncher
             bool personalized = !TryMatchCanonical(2360, 2360, 4056, 4056,
                                                    out matched) &&
                                 matched == DlssQuality.Custom;
+            bool intermediateSteps = true;
+            DlssQuality[] intermediate = new DlssQuality[] {
+                DlssQuality.Percent40, DlssQuality.Percent60, DlssQuality.Percent70,
+                DlssQuality.Percent80, DlssQuality.Percent90
+            };
+            int[] expected = new int[] { 1638, 2458, 2868, 3276, 3686 };
+            for (int i = 0; i < intermediate.Length; i++)
+                intermediateSteps &= TryCalculateRender(4096, 4096, intermediate[i],
+                    out width, out height) && width == expected[i] && height == expected[i] &&
+                    TryMatchCanonical(width, height, 4096, 4096, out matched) &&
+                    matched == intermediate[i];
+            bool minimumIsRespected = !TryCalculateRender(1024, 1024, DlssQuality.Quality,
+                out width, out height);
+            bool tiesRoundDown = TryCalculateRender(4096, 4096, 2049, 4096,
+                out width, out height) && width == 2048 && height == 2048;
 
             DlssSettings custom = DlssConfigDocument.Defaults(2360, 2360);
             custom.Mode = DlssMode.SuperResolution;
@@ -1011,7 +1134,8 @@ namespace BioshockVrLauncher
             bool roundTripValid = DlssConfigDocument.TryParse(rendered, 2360, 2360,
                                                                out roundTrip, out warning);
             return quality && balanced && performance && ultra &&
-                   recognizesBalanced && personalized && roundTripValid &&
+                   recognizesBalanced && personalized && intermediateSteps &&
+                   minimumIsRespected && tiesRoundDown && roundTripValid &&
                    string.IsNullOrEmpty(warning) &&
                    roundTrip.Quality == DlssQuality.Custom &&
                    rendered.Contains("quality=auto") &&
@@ -1515,9 +1639,16 @@ namespace BioshockVrLauncher
         }
     }
 
-    internal sealed class MainForm : Form
+    internal sealed partial class MainForm : Form
     {
         private const bool FinalDlssEdition = true;
+        // Mismo catálogo de salida cuadrada que F1/F2/F3 en el mod.
+        private static readonly int[] SquareResolutionSteps = new int[] {
+            1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816,
+            3072, 3328, 3584, 3840, 4096, 4352, 4608, 4864,
+            5120, 5376, 5632, 5888, 6144, 6400, 6656, 6912,
+            7168, 7424, 7680, 7936, 8192
+        };
         private static readonly Color Navy = SystemColors.ControlText;
         private static readonly Color Blue = SystemColors.HotTrack;
         private static readonly Color PaleBlue = SystemColors.Control;
@@ -1555,6 +1686,11 @@ namespace BioshockVrLauncher
         private bool _syncingFxaa;
         private bool _syncingUpscaler;
         private bool _syncingDlss;
+        private int _srScaleNumerator = 2;
+        private int _srScaleDenominator = 3;
+        private int _previousDlssModeIndex;
+        private int _previousDlssOutputWidth = 2048;
+        private int _previousDlssOutputHeight = 2048;
         private bool _launchPending;
         private DateTime _launchDeadlineUtc;
         private Timer _launchWatchTimer;
@@ -1584,7 +1720,9 @@ namespace BioshockVrLauncher
         private ComboBox _dlssQuality;
         private NumericUpDown _dlssOutputWidth;
         private NumericUpDown _dlssOutputHeight;
+        private ComboBox _dlssOutputPreset;
         private NumericUpDown _dlssNearPlane;
+        private NumericUpDown _dlssSharpness;
         private Label _dlssBackendStateLabel;
         private Label _dlssSettingsStateLabel;
         private bool _runtimeWarningShown;
@@ -1596,19 +1734,25 @@ namespace BioshockVrLauncher
         private Label _iniCountLabel;
         private CheckBox _allowRiskyEdits;
 
-        public MainForm()
+        public MainForm() : this(false)
         {
+        }
+
+        private MainForm(bool selfTest)
+        {
+            string isolated = selfTest ? Path.Combine(Path.GetTempPath(),
+                "BioShockLauncherSelfTest-" + Guid.NewGuid().ToString("N")) : null;
             _configPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "BioshockVR", "vrpreset.ini");
             _upscalerConfigPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "BioshockVR", "upscaler.ini");
             _dlssConfigPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "BioshockVR", "dlss.ini");
             _gameIniPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "BioshockHD", "Bioshock", "Bioshock.ini");
             _definitions = BuildDefinitions();
             _editors = new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase);
@@ -1618,21 +1762,27 @@ namespace BioshockVrLauncher
             _toolTip.InitialDelay = 350;
             _toolTip.ReshowDelay = 100;
 
-            Text = "BioShock VR · DLSS/DLAA Beta 0.2.3";
+            Text = "BioShock VR · DLSS/DLAA 0.2.11";
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             }
             catch { }
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(900, 540);
-            ClientSize = new Size(960, 620);
+            MinimumSize = new Size(696, 479);
+            ClientSize = new Size(680, 440);
             BackColor = SystemColors.Control;
             Font = new Font("Segoe UI", 9f, FontStyle.Regular, GraphicsUnit.Point);
             AutoScaleMode = AutoScaleMode.Dpi;
 
             _loading = true;
             BuildInterface();
+            if (selfTest)
+            {
+                _dlssBackendStatus = new DlssBackendStatus();
+                _dlssBackendStatus.Summary = "Autoprueba sin archivos de usuario";
+                return;
+            }
             _gameExePath = !string.IsNullOrEmpty(Program.InitialGamePath) &&
                            File.Exists(Program.InitialGamePath)
                 ? Path.GetFullPath(Program.InitialGamePath)
@@ -1640,6 +1790,65 @@ namespace BioshockVrLauncher
             UpdatePathStatus();
             LoadConfiguration(false);
             Shown += delegate { WarnAboutUntestedRuntime(); };
+        }
+
+        internal static bool ImageControlsSelfTest()
+        {
+            using (MainForm form = new MainForm(true))
+            {
+                form._gameIniEntries = GameIniDocument.Parse(
+                    "[WinDrv.WindowsClient]\r\nWindowedViewportX=2730\r\n" +
+                    "WindowedViewportY=2730\r\nFullscreenViewportX=2730\r\n" +
+                    "FullscreenViewportY=2730\r\n");
+                form._dlssMode.SelectedIndex = 2;
+                form._previousDlssModeIndex = 2;
+                form._dlssPreset.SelectedIndex = 0;
+                form._dlssOutputWidth.Value = form._dlssOutputHeight.Value = 4096;
+                form._previousDlssOutputWidth = form._previousDlssOutputHeight = 4096;
+                form._dlssQuality.SelectedIndex = (int)DlssQuality.Quality;
+                form.LoadResolutionControls();
+                form._loading = false;
+
+                form._dlssMode.SelectedIndex = 1;
+                if (form._resolutionWidth.Value != 4096 || form._srScaleNumerator != 2 ||
+                    form._srScaleDenominator != 3) return false;
+                form._dlssMode.SelectedIndex = 0;
+                if (form._resolutionWidth.Value != 4096 || form._dlssOutputWidth.Value != 4096)
+                    return false;
+                form._dlssMode.SelectedIndex = 2;
+                if (form._resolutionWidth.Value != 2730 ||
+                    form._dlssQuality.SelectedIndex != (int)DlssQuality.Quality) return false;
+
+                form._dlssQuality.SelectedIndex = (int)DlssQuality.Percent70;
+                if (form._resolutionWidth.Value != 2868 || form._srScaleNumerator != 7 ||
+                    form._srScaleDenominator != 10) return false;
+                form._dlssOutputPreset.SelectedIndex = Array.IndexOf(SquareResolutionSteps, 3840) + 1;
+                if (form._resolutionWidth.Value != 2688 || form._resolutionHeight.Value != 2688 ||
+                    form._dlssOutputWidth.Value != 3840) return false;
+                form._dlssMode.SelectedIndex = 1;
+                if (form._resolutionWidth.Value != 3840 ||
+                    form._dlssQuality.SelectedIndex != (int)DlssQuality.Percent70) return false;
+                form._dlssMode.SelectedIndex = 2;
+                if (form._resolutionWidth.Value != 2688) return false;
+
+                form._resolutionWidth.Value = 2800;
+                if (form._dlssQuality.SelectedIndex != (int)DlssQuality.Custom ||
+                    form._srScaleNumerator != 2800 || form._srScaleDenominator != 3840) return false;
+                form._dlssSharpness.Value = 35;
+                if (form._resolutionWidth.Value != 2800 || form._dlssOutputWidth.Value != 3840 ||
+                    form._srScaleNumerator != 2800 || form._srScaleDenominator != 3840 ||
+                    form.CollectDlssSettings().SharpnessPercent != 35 || !form._dlssSharpness.Enabled)
+                    return false;
+                form._dlssMode.SelectedIndex = 0;
+                if (form._dlssSharpness.Enabled || form._dlssSharpness.Value != 35) return false;
+                form._dlssMode.SelectedIndex = 1;
+                if (form._dlssSharpness.Enabled || form._dlssSharpness.Value != 35) return false;
+                form._dlssMode.SelectedIndex = 2;
+                string problem;
+                return form._resolutionWidth.Value == 2800 && form._resolutionHeight.Value == 2800 &&
+                    form.TryValidateDlssSettings(form.CollectDlssSettings(), out problem) &&
+                    form.FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportX").Value == "2800";
+            }
         }
 
         private static List<ParamDef> BuildDefinitions()
@@ -1797,25 +2006,25 @@ namespace BioshockVrLauncher
         {
             Panel header = new Panel();
             header.Dock = DockStyle.Top;
-            header.Height = 82;
+            header.Height = 42;
             header.BackColor = SystemColors.Control;
-            header.Padding = new Padding(12, 8, 12, 6);
+            header.Padding = new Padding(8, 3, 8, 3);
             Controls.Add(header);
 
             Label title = new Label();
             title.Text = "BioShock VR · DLSS/DLAA";
             title.ForeColor = SystemColors.ControlText;
-            title.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
+            title.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
             title.AutoSize = true;
-            title.Location = new Point(14, 8);
+            title.Location = new Point(8, 2);
             header.Controls.Add(title);
 
             Label subtitle = new Label();
             subtitle.Text = "Mod original de Mohamad Balouza · Fork DLSS/DLAA de Beren5556";
             subtitle.ForeColor = SystemColors.GrayText;
-            subtitle.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+            subtitle.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
             subtitle.AutoSize = true;
-            subtitle.Location = new Point(16, 38);
+            subtitle.Location = new Point(9, 23);
             header.Controls.Add(subtitle);
 
             _configStateLabel = new Label();
@@ -1825,6 +2034,7 @@ namespace BioshockVrLauncher
             _configStateLabel.SetBounds(440, 8, 505, 21);
             _configStateLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             header.Controls.Add(_configStateLabel);
+            _configStateLabel.Visible = false;
 
             _gameStateLabel = new Label();
             _gameStateLabel.ForeColor = SystemColors.GrayText;
@@ -1833,39 +2043,36 @@ namespace BioshockVrLauncher
             _gameStateLabel.SetBounds(440, 29, 505, 21);
             _gameStateLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             header.Controls.Add(_gameStateLabel);
-
-            Label note = new Label();
-            note.Text = "Los cambios se aplican al siguiente inicio. Abrir el lanzador nunca modifica archivos.";
-            note.ForeColor = SystemColors.GrayText;
-            note.AutoSize = true;
-            note.Location = new Point(443, 52);
-            header.Controls.Add(note);
+            _gameStateLabel.Visible = false;
+            header.MouseEnter += delegate {
+                _toolTip.SetToolTip(header, _gameStateLabel.Text + Environment.NewLine + _configStateLabel.Text);
+            };
 
             Panel footer = new Panel();
             footer.Dock = DockStyle.Bottom;
-            footer.Height = 62;
+            footer.Height = 55;
             footer.BackColor = SystemColors.Control;
             footer.BorderStyle = BorderStyle.FixedSingle;
-            footer.Padding = new Padding(12, 6, 12, 6);
+            footer.Padding = new Padding(7, 3, 7, 4);
             Controls.Add(footer);
 
             FlowLayoutPanel buttons = new FlowLayoutPanel();
-            buttons.Dock = DockStyle.Right;
-            buttons.Width = 425;
+            buttons.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            buttons.SetBounds(375, 23, 295, 27);
             buttons.FlowDirection = FlowDirection.RightToLeft;
             buttons.WrapContents = false;
-            buttons.Padding = new Padding(0, 3, 0, 0);
+            buttons.Padding = new Padding(0);
             footer.Controls.Add(buttons);
 
-            _launchButton = MakeButton("Guardar e iniciar", Blue, Color.White, 160);
+            _launchButton = MakeButton("Guardar e iniciar", Blue, Color.White, 130);
             _launchButton.Click += delegate { SaveAndLaunch(); };
             buttons.Controls.Add(_launchButton);
 
-            _saveButton = MakeButton("Guardar", SystemColors.Control, SystemColors.ControlText, 96);
+            _saveButton = MakeButton("Guardar", SystemColors.Control, SystemColors.ControlText, 72);
             _saveButton.Click += delegate { SaveConfiguration(true); };
             buttons.Controls.Add(_saveButton);
 
-            Button reload = MakeButton("Recargar", SystemColors.Control, SystemColors.ControlText, 88);
+            Button reload = MakeButton("Recargar", SystemColors.Control, SystemColors.ControlText, 75);
             reload.Click += delegate { LoadConfiguration(true); };
             buttons.Controls.Add(reload);
 
@@ -1873,51 +2080,24 @@ namespace BioshockVrLauncher
             _statusLabel.Text = "Preparando configuración…";
             _statusLabel.ForeColor = Muted;
             _statusLabel.AutoEllipsis = true;
-            _statusLabel.SetBounds(12, 5, 420, 20);
+            _statusLabel.SetBounds(8, 2, 655, 18);
+            _statusLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             footer.Controls.Add(_statusLabel);
-
-            LinkLabel openConfig = new LinkLabel();
-            openConfig.Text = "Abrir vrpreset.ini";
-            openConfig.LinkColor = SystemColors.HotTrack;
-            openConfig.AutoSize = true;
-            openConfig.Location = new Point(12, 33);
-            openConfig.LinkClicked += delegate { OpenConfigurationFile(); };
-            footer.Controls.Add(openConfig);
-
-            LinkLabel openGameIni = new LinkLabel();
-            openGameIni.Text = "Abrir Bioshock.ini";
-            openGameIni.LinkColor = SystemColors.HotTrack;
-            openGameIni.AutoSize = true;
-            openGameIni.Location = new Point(126, 33);
-            openGameIni.LinkClicked += delegate { OpenGameIniFile(); };
-            footer.Controls.Add(openGameIni);
-
-            LinkLabel backups = new LinkLabel();
-            backups.Text = "Ver copias de seguridad";
-            backups.LinkColor = SystemColors.HotTrack;
-            backups.AutoSize = true;
-            backups.Location = new Point(256, 33);
-            backups.LinkClicked += delegate { OpenBackupFolder(); };
-            footer.Controls.Add(backups);
-
-            LinkLabel about = new LinkLabel();
-            about.Text = "Créditos y licencias";
-            about.LinkColor = SystemColors.HotTrack;
-            about.AutoSize = true;
-            about.Location = new Point(410, 33);
-            about.LinkClicked += delegate { ShowCreditsAndLicenses(); };
-            footer.Controls.Add(about);
-
+            ContextMenuStrip fileMenu = new ContextMenuStrip();
+            fileMenu.Items.Add("Abrir vrpreset.ini", null, delegate { OpenConfigurationFile(); });
+            fileMenu.Items.Add("Abrir Bioshock.ini", null, delegate { OpenGameIniFile(); });
+            fileMenu.Items.Add("Ver copias de seguridad", null, delegate { OpenBackupFolder(); });
+            fileMenu.Items.Add(new ToolStripSeparator());
+            fileMenu.Items.Add("Créditos y licencias", null, delegate { ShowCreditsAndLicenses(); });
             if (!FinalDlssEdition)
-            {
-                LinkLabel openUpscaler = new LinkLabel();
-                openUpscaler.Text = "Abrir upscaler.ini";
-                openUpscaler.LinkColor = Blue;
-                openUpscaler.AutoSize = true;
-                openUpscaler.Location = new Point(530, 33);
-                openUpscaler.LinkClicked += delegate { OpenUpscalerConfigurationFile(); };
-                footer.Controls.Add(openUpscaler);
-            }
+                fileMenu.Items.Add("Abrir upscaler.ini", null, delegate { OpenUpscalerConfigurationFile(); });
+            Button files = MakeButton("Archivos y ayuda ▾", SystemColors.Control, SystemColors.ControlText, 135);
+            files.SetBounds(8, 23, 135, 26);
+            files.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            files.ContextMenuStrip = fileMenu;
+            files.Click += delegate { fileMenu.Show(files, new Point(0, files.Height)); };
+            footer.Controls.Add(files);
+            Disposed += delegate { fileMenu.Dispose(); };
 
             _tabs = new TabControl();
             _tabs.Dock = DockStyle.Fill;
@@ -1946,7 +2126,7 @@ namespace BioshockVrLauncher
             Button button = new Button();
             button.Text = text;
             button.Width = width;
-            button.Height = 32;
+            button.Height = 26;
             button.FlatStyle = FlatStyle.System;
             button.UseVisualStyleBackColor = true;
             button.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
@@ -1998,7 +2178,9 @@ namespace BioshockVrLauncher
             return category;
         }
 
-        private void AddResolutionTab()
+        // Retain the tested configuration controls/handlers as backing state.
+        // ImageTab.cs supplies the simplified public view; other tabs are unchanged.
+        private void InitializeImageBackingControls()
         {
             TabPage page = new TabPage("Imagen");
             page.Name = "Imagen y resolución";
@@ -2015,7 +2197,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(title);
 
             Label explanation = new Label();
-            explanation.Text = "La resolución de arriba es la entrada renderizada por el juego. Se escriben juntas las cuatro claves PC de [WinDrv.WindowsClient]; las copias de consola y MenuViewport no se tocan.";
+            explanation.Text = "Arriba se muestra el render del juego. El perfil de salida VR y la calidad DLSS de abajo ofrecen los mismos tramos que los controles dentro del juego. Normal y DLAA trabajan al 100 %.";
             explanation.ForeColor = Muted;
             explanation.AutoSize = true;
             explanation.MaximumSize = new Size(820, 0);
@@ -2037,14 +2219,10 @@ namespace BioshockVrLauncher
             _resolutionPreset = new ComboBox();
             _resolutionPreset.DropDownStyle = ComboBoxStyle.DropDownList;
             _resolutionPreset.Width = 245;
-            _resolutionPreset.Items.AddRange(new object[] {
-                "Personalizada / actual",
-                "1920 × 1080 · juego plano",
-                "2048 × 2048 · equilibrada",
-                "2560 × 2560 · más nítida",
-                "3072 × 3072 · GPU potente",
-                "4096 × 4096 · muy exigente"
-            });
+            _resolutionPreset.Items.Add("Personalizada / actual");
+            _resolutionPreset.Items.Add("1920 × 1080 · juego plano");
+            foreach (int size in SquareResolutionSteps)
+                _resolutionPreset.Items.Add(size + " × " + size);
             _resolutionPreset.SelectedIndexChanged += ResolutionPresetChanged;
             layout.SetColumnSpan(_resolutionPreset, 3);
             layout.Controls.Add(_resolutionPreset, 1, 0);
@@ -2299,14 +2477,33 @@ namespace BioshockVrLauncher
             _dlssQuality.Width = 245;
             _dlssQuality.Location = new Point(404, 113);
             _dlssQuality.Items.AddRange(new object[] {
-                "Calidad · 2/3 (≈ 67 %)",
-                "Equilibrado · 0,58",
-                "Rendimiento · 0,50",
                 "Ultra rendimiento · 1/3 (≈ 33 %)",
+                "40 %",
+                "Rendimiento · 50 %",
+                "Equilibrado · 58 %",
+                "60 %",
+                "Calidad · 2/3 (≈ 67 %)",
+                "70 %",
+                "80 %",
+                "90 %",
                 "Personalizado / AUTO"
             });
             _dlssQuality.SelectedIndexChanged += DlssChanged;
             dlssGroup.Controls.Add(_dlssQuality);
+
+            Label dlssSharpnessLabel = MakeCompactLabel("Nitidez DLSS (%)");
+            dlssSharpnessLabel.Location = new Point(667, 112);
+            dlssGroup.Controls.Add(dlssSharpnessLabel);
+            _dlssSharpness = new NumericUpDown();
+            _dlssSharpness.Minimum = 0;
+            _dlssSharpness.Maximum = 100;
+            _dlssSharpness.Increment = 5;
+            _dlssSharpness.Width = 95;
+            _dlssSharpness.Location = new Point(671, 149);
+            _dlssSharpness.ValueChanged += DlssChanged;
+            dlssGroup.Controls.Add(_dlssSharpness);
+            _toolTip.SetToolTip(_dlssSharpness,
+                "Nitidez opcional después de DLSS, igual que F1/F2/F3. 0 % conserva la imagen anterior. No cambia resolución ni calidad. Solo actúa en DLSS.");
 
             Label dlssOutputLabel = MakeCompactLabel("Salida VR");
             dlssOutputLabel.Location = new Point(14, 148);
@@ -2328,13 +2525,17 @@ namespace BioshockVrLauncher
             _dlssOutputHeight.ValueChanged += DlssChanged;
             dlssGroup.Controls.Add(_dlssOutputHeight);
 
-            Label dlssInputHint = new Label();
-            dlssInputHint.Text = "Elige un tramo: conserva esta salida y recalcula el render de arriba. Si retocas el render, pasa a Personalizado / AUTO. DLAA es 1:1.";
-            dlssInputHint.ForeColor = Muted;
-            dlssInputHint.AutoSize = true;
-            dlssInputHint.MaximumSize = new Size(455, 0);
-            dlssInputHint.Location = new Point(340, 147);
-            dlssGroup.Controls.Add(dlssInputHint);
+            _dlssOutputPreset = new ComboBox();
+            _dlssOutputPreset.DropDownStyle = ComboBoxStyle.DropDownList;
+            _dlssOutputPreset.Width = 309;
+            _dlssOutputPreset.Location = new Point(340, 149);
+            _dlssOutputPreset.Items.Add("Perfil de salida VR · personalizado");
+            foreach (int size in SquareResolutionSteps)
+                _dlssOutputPreset.Items.Add(size + " × " + size + " · por ojo");
+            _dlssOutputPreset.SelectedIndexChanged += DlssOutputPresetChanged;
+            dlssGroup.Controls.Add(_dlssOutputPreset);
+            _toolTip.SetToolTip(_dlssOutputPreset,
+                "Mismos tramos que F1/F2/F3. Conserva la calidad DLSS y recalcula el render. En Normal y DLAA, render y salida son iguales.");
 
             Label nearPlaneLabel = MakeCompactLabel("Avanzado · Plano cercano");
             nearPlaneLabel.Location = new Point(14, 182);
@@ -2636,13 +2837,13 @@ namespace BioshockVrLauncher
         {
             if (_loading || _syncingResolution || _resolutionPreset.SelectedIndex <= 0)
                 return;
-            int[] widths = new int[] { 0, 1920, 2048, 2560, 3072, 4096 };
-            int[] heights = new int[] { 0, 1080, 2048, 2560, 3072, 4096 };
             int index = _resolutionPreset.SelectedIndex;
+            int width = index == 1 ? 1920 : SquareResolutionSteps[index - 2];
+            int height = index == 1 ? 1080 : width;
             _syncingResolution = true;
-            _resolutionWidth.Value = widths[index];
-            _resolutionHeight.Value = heights[index];
-            _squareResolution.Checked = widths[index] == heights[index];
+            _resolutionWidth.Value = width;
+            _resolutionHeight.Value = height;
+            _squareResolution.Checked = width == height;
             _syncingResolution = false;
             ApplyResolutionControlsToEntries();
         }
@@ -2680,10 +2881,9 @@ namespace BioshockVrLauncher
         private static int ResolutionPresetIndex(int width, int height)
         {
             if (width == 1920 && height == 1080) return 1;
-            if (width == 2048 && height == 2048) return 2;
-            if (width == 2560 && height == 2560) return 3;
-            if (width == 3072 && height == 3072) return 4;
-            if (width == 4096 && height == 4096) return 5;
+            if (width == height)
+                for (int i = 0; i < SquareResolutionSteps.Length; i++)
+                    if (SquareResolutionSteps[i] == width) return i + 2;
             return 0;
         }
 
@@ -2852,7 +3052,8 @@ namespace BioshockVrLauncher
                 !int.TryParse(heightEntry.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out height) ||
                 !int.TryParse(fullWidth.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out fw) ||
                 !int.TryParse(fullHeight.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out fh) ||
-                width < 1024 || width > 8192 || height < 1024 || height > 8192)
+                width < (FinalDlssEdition ? 1 : 1024) || width > 8192 ||
+                height < (FinalDlssEdition ? 1 : 1024) || height > 8192)
             {
                 _resolutionWidth.Enabled = false;
                 _resolutionHeight.Enabled = false;
@@ -2866,8 +3067,8 @@ namespace BioshockVrLauncher
             _resolutionWidth.Enabled = true;
             _resolutionHeight.Enabled = true;
             _resolutionPreset.Enabled = true;
-            _resolutionWidth.Value = width;
-            _resolutionHeight.Value = height;
+            _resolutionWidth.Value = Math.Max(1024, width);
+            _resolutionHeight.Value = Math.Max(1024, height);
             _squareResolution.Checked = width == height;
             _resolutionPreset.SelectedIndex = ResolutionPresetIndex(width, height);
             _syncingResolution = false;
@@ -2909,7 +3110,24 @@ namespace BioshockVrLauncher
                               "  ·  AVISO: los dos modos no coinciden");
             _resolutionLoadLabel.ForeColor = pairsMatch ? Blue : Warning;
             UpdateUpscalerSummary();
+            if (_syncingDlss) return;
             SynchronizeDlssOutputForDlaa(true);
+            if (!_loading && _dlssMode != null && _dlssMode.SelectedIndex == 2 &&
+                width < (int)_dlssOutputWidth.Value && height < (int)_dlssOutputHeight.Value &&
+                UpscalerConfigDocument.HasExactAspect(width, height,
+                    (int)_dlssOutputWidth.Value, (int)_dlssOutputHeight.Value))
+            {
+                DlssQuality matched;
+                if (!DlssQualityPolicy.TryMatchCanonical(width, height,
+                        (int)_dlssOutputWidth.Value, (int)_dlssOutputHeight.Value, out matched) ||
+                    !DlssQualityPolicy.TryGetFraction(matched,
+                        out _srScaleNumerator, out _srScaleDenominator))
+                {
+                    _srScaleNumerator = width;
+                    _srScaleDenominator = (int)_dlssOutputWidth.Value;
+                }
+                _dlssDirty = true;
+            }
             SynchronizeDlssQualityFromResolution();
             UpdateDlssSummary();
         }
@@ -3215,12 +3433,22 @@ namespace BioshockVrLauncher
             settings.OutputWidth = (int)_dlssOutputWidth.Value;
             settings.OutputHeight = (int)_dlssOutputHeight.Value;
             settings.NearPlaneUu = _dlssNearPlane.Value;
+            settings.SrScaleNumerator = _srScaleNumerator;
+            settings.SrScaleDenominator = _srScaleDenominator;
+            settings.SharpnessPercent = (int)_dlssSharpness.Value;
             return settings;
         }
 
         private bool TryValidateDlssSettings(DlssSettings settings, out string problem)
         {
             problem = null;
+            if (settings.SrScaleNumerator <= 0 ||
+                settings.SrScaleDenominator <= settings.SrScaleNumerator ||
+                settings.SrScaleDenominator > 8192)
+            {
+                problem = "La preferencia de calidad DLSS no es válida. Selecciona de nuevo un tramo.";
+                return false;
+            }
             if (settings.Runtime != DlssConfigDocument.RequiredRuntime)
             {
                 problem = "Esta edición exige exactamente el runtime DLSS 310.7.0.";
@@ -3301,9 +3529,13 @@ namespace BioshockVrLauncher
             if (settings.Mode == DlssMode.Dlaa) return "K";
             if (settings.Quality == DlssQuality.Custom) return "AUTO según ratio/NGX";
             if (settings.Quality == DlssQuality.Quality ||
-                settings.Quality == DlssQuality.Balanced) return "K";
+                settings.Quality == DlssQuality.Balanced ||
+                settings.Quality == DlssQuality.Percent60 ||
+                settings.Quality == DlssQuality.Percent70 ||
+                settings.Quality == DlssQuality.Percent80 ||
+                settings.Quality == DlssQuality.Percent90) return "K";
             if (settings.Quality == DlssQuality.Performance) return "M";
-            return "L";
+            return settings.Quality == DlssQuality.UltraPerformance ? "L" : "AUTO según ratio/NGX";
         }
 
         private static string DlssQualityName(DlssQuality quality)
@@ -3312,6 +3544,11 @@ namespace BioshockVrLauncher
             if (quality == DlssQuality.Performance) return "Rendimiento";
             if (quality == DlssQuality.UltraPerformance) return "Ultra rendimiento";
             if (quality == DlssQuality.Custom) return "Personalizado / AUTO";
+            if (quality == DlssQuality.Percent40) return "40 %";
+            if (quality == DlssQuality.Percent60) return "60 %";
+            if (quality == DlssQuality.Percent70) return "70 %";
+            if (quality == DlssQuality.Percent80) return "80 %";
+            if (quality == DlssQuality.Percent90) return "90 %";
             return "Calidad";
         }
 
@@ -3350,6 +3587,13 @@ namespace BioshockVrLauncher
                 _dlssOutputWidth.Value = settings.OutputWidth;
                 _dlssOutputHeight.Value = settings.OutputHeight;
                 _dlssNearPlane.Value = settings.NearPlaneUu;
+                _dlssSharpness.Value = settings.SharpnessPercent;
+                _srScaleNumerator = settings.SrScaleNumerator;
+                _srScaleDenominator = settings.SrScaleDenominator;
+                _previousDlssModeIndex = _dlssMode.SelectedIndex;
+                _previousDlssOutputWidth = settings.OutputWidth;
+                _previousDlssOutputHeight = settings.OutputHeight;
+                SynchronizeOutputPreset();
                 _dlssDirty = false;
                 List<string> ignoredStoredValues = new List<string>();
                 if (!string.Equals(settings.Preset, "auto", StringComparison.OrdinalIgnoreCase))
@@ -3372,6 +3616,7 @@ namespace BioshockVrLauncher
                 _dlssOutputWidth.Enabled = false;
                 _dlssOutputHeight.Enabled = false;
                 _dlssNearPlane.Enabled = false;
+                _dlssSharpness.Enabled = false;
             }
             finally
             {
@@ -3399,9 +3644,31 @@ namespace BioshockVrLauncher
             _dlssNormalizationNote = null;
             bool modeSelection = object.ReferenceEquals(sender, _dlssMode);
             bool qualitySelection = object.ReferenceEquals(sender, _dlssQuality);
+            bool outputSelection = object.ReferenceEquals(sender, _dlssOutputWidth) ||
+                object.ReferenceEquals(sender, _dlssOutputHeight) ||
+                object.ReferenceEquals(sender, _dlssOutputPreset);
             if (!FinalDlssEdition && modeSelection && _dlssMode.SelectedIndex > 0)
                 DeactivateSpatialForDlss();
-            SynchronizeDlssOutputForDlaa(false);
+
+            if (FinalDlssEdition && (outputSelection || modeSelection))
+            {
+                _syncingDlss = true;
+                _syncingResolution = true;
+                _dlssOutputHeight.Value = _dlssOutputWidth.Value;
+                _squareResolution.Checked = true;
+                _syncingResolution = false;
+                _syncingDlss = false;
+            }
+            if (outputSelection && _squareResolution.Checked &&
+                !object.ReferenceEquals(sender, _dlssOutputPreset))
+            {
+                _syncingDlss = true;
+                if (object.ReferenceEquals(sender, _dlssOutputHeight))
+                    _dlssOutputWidth.Value = _dlssOutputHeight.Value;
+                else
+                    _dlssOutputHeight.Value = _dlssOutputWidth.Value;
+                _syncingDlss = false;
+            }
 
             string qualityStatus = null;
             if (qualitySelection && _dlssMode.SelectedIndex == 2)
@@ -3429,17 +3696,32 @@ namespace BioshockVrLauncher
                         SynchronizeDlssQualityFromResolution();
                 }
             }
-            else
+            else if (modeSelection || outputSelection)
+            {
+                int renderWidth, renderHeight;
+                if (!TryApplyOutputAndScaleToRender(_srScaleNumerator, _srScaleDenominator,
+                        out renderWidth, out renderHeight))
+                {
+                    _syncingDlss = true;
+                    if (modeSelection) _dlssMode.SelectedIndex = _previousDlssModeIndex;
+                    _dlssOutputWidth.Value = _previousDlssOutputWidth;
+                    _dlssOutputHeight.Value = _previousDlssOutputHeight;
+                    _syncingDlss = false;
+                }
+                _previousDlssModeIndex = _dlssMode.SelectedIndex;
+                SynchronizeDlssQualityFromResolution();
+            }
+            else if (!object.ReferenceEquals(sender, _dlssSharpness))
             {
                 SynchronizeDlssQualityFromResolution();
             }
 
-            // El tramo SR no es un ajuste consumido por el host: siempre se
-            // serializa quality=auto y la calidad efectiva deriva del ratio
-            // render->salida. Por eso elegirlo ensucia Bioshock.ini en memoria,
-            // pero no crea un falso cambio pendiente en dlss.ini.
-            if (!qualitySelection)
-                _dlssDirty = true;
+            // quality=auto sigue siendo del host; la fracción recuerda aparte
+            // la preferencia SR, también cuando se guarda Normal o DLAA.
+            _dlssDirty = true;
+            _previousDlssOutputWidth = (int)_dlssOutputWidth.Value;
+            _previousDlssOutputHeight = (int)_dlssOutputHeight.Value;
+            SynchronizeOutputPreset();
             UpdateDlssControlState();
             UpdateDlssSummary();
             UpdateDirtyState();
@@ -3450,6 +3732,24 @@ namespace BioshockVrLauncher
         private bool TryApplyDlssQualityToRender(DlssQuality quality,
                                                  out int renderWidth,
                                                  out int renderHeight)
+        {
+            int numerator, denominator;
+            if (!DlssQualityPolicy.TryGetFraction(quality, out numerator, out denominator))
+            {
+                renderWidth = renderHeight = 0;
+                return false;
+            }
+            if (!TryApplyOutputAndScaleToRender(numerator, denominator,
+                                               out renderWidth, out renderHeight))
+                return false;
+            _srScaleNumerator = numerator;
+            _srScaleDenominator = denominator;
+            return true;
+        }
+
+        private bool TryApplyOutputAndScaleToRender(int numerator, int denominator,
+                                                     out int renderWidth,
+                                                     out int renderHeight)
         {
             renderWidth = 0;
             renderHeight = 0;
@@ -3468,8 +3768,11 @@ namespace BioshockVrLauncher
 
             int outputWidth = (int)_dlssOutputWidth.Value;
             int outputHeight = (int)_dlssOutputHeight.Value;
-            if (!DlssQualityPolicy.TryCalculateRender(outputWidth, outputHeight, quality,
-                                                       out renderWidth, out renderHeight))
+            renderWidth = outputWidth;
+            renderHeight = outputHeight;
+            if (_dlssMode.SelectedIndex == 2 &&
+                !DlssQualityPolicy.TryCalculateRender(outputWidth, outputHeight,
+                    numerator, denominator, out renderWidth, out renderHeight))
             {
                 MessageBox.Show(this,
                     "No se puede obtener una resolución interna par, entre 1024 y 8192 píxeles, " +
@@ -3482,26 +3785,51 @@ namespace BioshockVrLauncher
             }
 
             _syncingResolution = true;
+            _syncingDlss = true;
             try
             {
                 _resolutionWidth.Value = renderWidth;
                 _resolutionHeight.Value = renderHeight;
                 _squareResolution.Checked = renderWidth == renderHeight;
                 _resolutionPreset.SelectedIndex = ResolutionPresetIndex(renderWidth, renderHeight);
+                // Solo edita memoria; Guardar conserva el respaldo y la comprobación externa.
+                ApplyResolutionControlsToEntries();
             }
             finally
             {
                 _syncingResolution = false;
+                _syncingDlss = false;
             }
-            // Solo actualiza el modelo en memoria. SaveGameIniCore es el único punto
-            // que escribe Bioshock.ini y se ejecuta al pulsar Guardar.
-            ApplyResolutionControlsToEntries();
             return true;
+        }
+
+        private void DlssOutputPresetChanged(object sender, EventArgs e)
+        {
+            if (_loading || _syncingDlss || _dlssOutputPreset.SelectedIndex <= 0) return;
+            int size = SquareResolutionSteps[_dlssOutputPreset.SelectedIndex - 1];
+            _syncingDlss = true;
+            _dlssOutputWidth.Value = size;
+            _dlssOutputHeight.Value = size;
+            _syncingDlss = false;
+            DlssChanged(_dlssOutputPreset, EventArgs.Empty);
+        }
+
+        private void SynchronizeOutputPreset()
+        {
+            if (_dlssOutputPreset == null) return;
+            bool previous = _syncingDlss;
+            _syncingDlss = true;
+            int selected = 0;
+            if (_dlssOutputWidth.Value == _dlssOutputHeight.Value)
+                for (int i = 0; i < SquareResolutionSteps.Length; i++)
+                    if (SquareResolutionSteps[i] == (int)_dlssOutputWidth.Value) selected = i + 1;
+            _dlssOutputPreset.SelectedIndex = selected;
+            _syncingDlss = previous;
         }
 
         private void SynchronizeDlssOutputForDlaa(bool markDirty)
         {
-            if (_dlssMode == null || _dlssMode.SelectedIndex != 1) return;
+            if (_dlssMode == null || _dlssMode.SelectedIndex == 2) return;
             int renderWidth, renderHeight;
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight)) return;
             if ((int)_dlssOutputWidth.Value == renderWidth &&
@@ -3519,6 +3847,9 @@ namespace BioshockVrLauncher
             }
             if (markDirty && !_loading)
                 _dlssDirty = true;
+            _previousDlssOutputWidth = renderWidth;
+            _previousDlssOutputHeight = renderHeight;
+            SynchronizeOutputPreset();
         }
 
         private void SynchronizeDlssQualityFromResolution()
@@ -3535,6 +3866,16 @@ namespace BioshockVrLauncher
                     (int)_dlssOutputWidth.Value, (int)_dlssOutputHeight.Value,
                     out matched))
                 desiredQuality = matched;
+            else if (_dlssMode.SelectedIndex != 2)
+            {
+                foreach (DlssQuality candidate in Enum.GetValues(typeof(DlssQuality)))
+                {
+                    int numerator, denominator;
+                    if (DlssQualityPolicy.TryGetFraction(candidate, out numerator, out denominator) &&
+                        (long)numerator * _srScaleDenominator == (long)denominator * _srScaleNumerator)
+                        desiredQuality = candidate;
+                }
+            }
             _syncingDlss = true;
             try
             {
@@ -3555,13 +3896,16 @@ namespace BioshockVrLauncher
             // El preset sigue automático; la calidad SR sí aplica ratios de render.
             _dlssPreset.Enabled = false;
             _dlssQuality.Enabled = superResolution;
-            _dlssOutputWidth.Enabled = superResolution;
-            _dlssOutputHeight.Enabled = superResolution;
+            _dlssSharpness.Enabled = superResolution;
+            _dlssOutputWidth.Enabled = true;
+            _dlssOutputHeight.Enabled = true;
+            _dlssOutputPreset.Enabled = true;
             _dlssNearPlane.Enabled = active;
         }
 
         private void UpdateDlssSummary()
         {
+            RefreshSimpleImage();
             if (_dlssSettingsStateLabel == null || _dlssBackendStateLabel == null ||
                 _dlssMode == null || _dlssNearPlane == null ||
                 _dlssMode.SelectedIndex < 0) return;
@@ -4158,6 +4502,7 @@ namespace BioshockVrLauncher
                 }
                 LoadUpscalerConfiguration();
                 LoadDlssConfiguration();
+                LoadGraphicsOptions();
                 bool finalPolicyAdjusted = EnforceFinalImagePolicy();
                 _dirty = _vrDirty || _upscalerDirty ||
                          _dlssDirty || _gameIniDirty;
@@ -4187,6 +4532,8 @@ namespace BioshockVrLauncher
             {
                 _loading = false;
             }
+            if (FinalDlssEdition && PrepareSquareImage())
+                SetStatus("La resolución cuadrada del visor está preparada. Pulsa Guardar para aplicarla.", Warning);
         }
 
         private void PopulateEditors(Dictionary<string, string> values)
@@ -4583,6 +4930,9 @@ namespace BioshockVrLauncher
                                    StringComparison.OrdinalIgnoreCase) ||
                     verification.OutputWidth != values.OutputWidth ||
                     verification.OutputHeight != values.OutputHeight ||
+                    verification.SrScaleNumerator != values.SrScaleNumerator ||
+                    verification.SrScaleDenominator != values.SrScaleDenominator ||
+                    verification.SharpnessPercent != values.SharpnessPercent ||
                     verification.NearPlaneUu != values.NearPlaneUu)
                     throw new InvalidDataException("No se pudo verificar dlss.ini. " + warning);
 
@@ -5135,7 +5485,7 @@ namespace BioshockVrLauncher
         private void ShowCreditsAndLicenses()
         {
             MessageBox.Show(this,
-                "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.3\n" +
+                "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.6\n" +
                 "Integración DLSS/DLAA y lanzador: Beren5556\n\n" +
                 "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\n" +
                 "Creador de BioShock VR y de la implementación VR fundamental " +
@@ -5301,7 +5651,19 @@ namespace BioshockVrLauncher
             if (args != null && args.Length > 0 && args[0] == "--self-test")
                 return ConfigDocument.SelfTest() && UpscalerConfigDocument.SelfTest() &&
                        DlssConfigDocument.SelfTest() && DlssQualityPolicy.SelfTest() &&
-                       GameIniDocument.SelfTest() ? 0 : 2;
+                       GameIniDocument.SelfTest() && MainForm.ImageControlsSelfTest() &&
+                       MainForm.SimpleImageSelfTest() ? 0 : 2;
+
+            if (args != null && (args.Length == 2 || args.Length == 3) && args[0] == "--preview-image")
+            {
+                int tabIndex = 0;
+                if (args.Length == 3 && (!int.TryParse(args[2], out tabIndex) || tabIndex < 0 || tabIndex > 6))
+                    return 2;
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                MainForm.WriteImagePreview(args[1], tabIndex);
+                return 0;
+            }
 
             if (args != null)
             {

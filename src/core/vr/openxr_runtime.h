@@ -16,6 +16,13 @@ struct ID3D11Texture2D;
 
 namespace bvr::vr {
 
+// Post-ResizeBuffers acknowledgement: an attempted resize is not proof that
+// the engine accepted a live controls request.
+void on_resize_complete(bool succeeded);
+
+// Bounded live image rebuild, shared by the XR and engine stereo watchdogs.
+bool image_reconfiguration_active() noexcept;
+
 // Create the XrInstance (loads the active 32-bit runtime). Fail-soft.
 void init_instance();
 

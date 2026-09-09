@@ -2,6 +2,7 @@
 
 #include "core/framework/framework.h"
 #include "core/gfx/frame_inspector.h"
+#include "core/gfx/image_controls.h"
 #include "core/input/xinput_bridge.h"
 #include "core/util/crash.h"
 #include "core/util/log.h"
@@ -47,6 +48,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         crash::note_teardown(msg == WM_CLOSE     ? "WM_CLOSE"
                              : msg == WM_DESTROY ? "WM_DESTROY"
                                                  : "WM_ENDSESSION");
+    const bool imageControlKey = wparam == VK_F1 || wparam == VK_F2 || wparam == VK_F3 ||
+        (wparam == VK_F4 && image_controls::graphics_panel_open());
+    if ((msg == WM_KEYDOWN || msg == WM_KEYUP) && imageControlKey &&
+        image_controls::enabled() && GetForegroundWindow() == hwnd) {
+        // Handle shortcuts even with both panels hidden. Bit 30 suppresses
+        // keyboard auto-repeat; these keys must not also reach game bindings.
+        if (msg == WM_KEYDOWN && (lparam & (LPARAM{1} << 30)) == 0)
+            image_controls::on_key(static_cast<unsigned>(wparam));
+        return 0;
+    }
     if (g_visible) {
         // ImGui's Win32 backend reports mouse positions in client-window
         // coordinates, while the overlay is rendered into the (much larger)
@@ -173,6 +184,26 @@ void DrawUi() {
     ImGui::End();
 }
 
+void DrawImageStatus(const std::string& text) {
+    const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+    const float scale = displaySize.x < 1600.0f ? 0.55f : 0.8f;
+    ImGui::SetNextWindowPos(ImVec2(displaySize.x * 0.5f,
+                                  displaySize.y * 0.10f),
+                            ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowSize(ImVec2(displaySize.x * 0.85f, 0.0f),
+                             ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.94f);
+    ImGui::Begin("Image controls##status", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                 ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+                 ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::SetWindowFontScale(scale);
+    ImGui::PushTextWrapPos();
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::End();
+}
+
 } // namespace
 
 void on_present(IDXGISwapChain* swapchain) {
@@ -212,7 +243,11 @@ void on_present(IDXGISwapChain* swapchain) {
         ImGui::GetIO().MouseDrawCursor = g_visible;
     }
 
-    if (!g_visible) return;
+    // In VR the compositor owns this panel. Drawing it into scene color here
+    // would duplicate it and could contaminate temporal reconstruction inputs.
+    const std::string imageStatus = image_controls::enabled() && !vr::vr_camera_mode()
+        ? image_controls::panel_status() : std::string{};
+    if (!g_visible && imageStatus.empty()) return;
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -230,7 +265,8 @@ void on_present(IDXGISwapChain* swapchain) {
                               static_cast<float>(targetHeight));
     }
     ImGui::NewFrame();
-    DrawUi();
+    if (g_visible) DrawUi();
+    if (!imageStatus.empty()) DrawImageStatus(imageStatus);
     ImGui::Render();
     g_context->OMSetRenderTargets(1, &g_rtv, nullptr);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

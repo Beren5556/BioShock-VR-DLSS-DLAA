@@ -1,4 +1,15 @@
-BIOSHOCK VR · DLSS/DLAA BETA 0.2.3
+BIOSHOCK VR · DLSS/DLAA BETA 0.2.6 — CANDIDATA DE PRUEBA
+
+Esta candidata requiere validar los nuevos controles en el juego/visor.
+La Release 0.2.3 publicada se conserva sin cambios.
+
+SE CONSERVAN LAS CORRECCIONES DE LA 0.2.5
+- El botón Cerrar termina el instalador y este se cierra tras abrir el lanzador.
+- El detector de bloqueos respeta la reconstrucción de imagen en caliente,
+  evitando el apagado erróneo del estéreo. Sus protecciones siguen activas
+  fuera del cambio y el margen no puede prolongarse más de 15 segundos.
+- Los registros de la última prueba contienen cambios con estéreo activo.
+  La nueva candidata requiere su propia confirmación en el visor.
 
 QUÉ ES
 Este instalador contiene un fork beta de BioShock VR v0.8.2 con soporte
@@ -33,6 +44,22 @@ MODOS DE IMAGEN DEL FORK
 
 FXAA y el antiguo reescalado espacial no forman parte de las opciones del
 lanzador. Al guardar o iniciar, ambos quedan desactivados.
+
+CONTROLES DE IMAGEN
+- F1 en DLSS: Modo / Resolución / Calidad DLSS / Sharpness DLSS / ocultar.
+- F1 en NORMAL y DLAA: Modo / Resolución / ocultar.
+- F2 aumenta y F3 disminuye el valor seleccionado; ocultos no cambian nada.
+- En Modo permiten seleccionar NORMAL, DLSS y DLAA. F6 ya no cambia el modo.
+- Mismas resoluciones, mismos tramos y mismos saltos de calidad que la 0.2.5.
+- Nitidez posterior a DLSS: 0–100 %, pasos de 5. Inicialmente 0 %: imagen
+  anterior intacta. No actúa en NORMAL/DLAA. La preferencia se conserva.
+- Panel con letra más pequeña y situado un poco más abajo en el visor.
+- NORMAL y DLAA mantienen 100 %; la preferencia DLSS no se pierde.
+- El cambio de resolución en caliente usa modo ventana. No se fuerza ventana
+  al arrancar; esa política del lanzador sigue pendiente.
+- La investigación del agua identifica copias repetidas y esperas por ojo
+  como costes a medir en la escena real. Se añaden contadores y tiempos
+  muestreados; no se anuncia todavía una mejora de rendimiento.
 
 INSTALACIÓN Y RESTAURACIÓN
 - Antes de instalar, abre BioShock Remastered una vez desde Steam, llega al

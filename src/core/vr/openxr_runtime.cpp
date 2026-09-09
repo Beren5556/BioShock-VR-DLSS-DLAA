@@ -5,17 +5,28 @@
 // quad layer containing a copy of the game backbuffer.
 
 #include "core/vr/openxr_runtime.h"
+#include "core/vr/deferred_eye_lease.h"
+#include "core/vr/frame_submission_stats.h"
+#include "core/vr/critical_path_probe.h"
+#ifdef BVR_DLSS_EARLY_DELIVERY
+#include "core/vr/delivery_probe.h"
+#endif
 
 #include "core/gfx/blit.h"
 #include "core/gfx/dlss45_client.h"
+#include "core/gfx/image_controls.h"
+#include "core/gfx/image_reconfigure_guard.h"
 #include "core/gfx/hud_capture.h"
 #include "core/gfx/spatial_upscaler.h"
 #include "core/ui/overlay.h"
 #include "core/util/log.h"
 #include "core/util/xr_math.h"
 #include "game/bioshock1r/temporal_guides.h"
+#include "game/bioshock1r/camera.h"
+#include "game/bioshock1r/performance_probe.h"
 
 #ifdef BVR_WITH_OPENXR
+#include "core/vr/image_status_quad.h"
 
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_D3D11
@@ -84,9 +95,13 @@ struct Dlss45Config {
     uint32_t outputWidth = 0;
     uint32_t outputHeight = 0;
     float nearPlaneUu = 10.0f;
+    uint32_t sharpnessPercent = 0;
 };
 bool g_dlss45Requested = false;
 bool g_dlss45Active = false;
+bool g_captureOnlyActive = false; // F4 diagnostic B: guides, no host/NGX, direct stereo output.
+uint64_t g_captureOnlyGenerated[2] = {}, g_captureOnlyRejected[2] = {};
+bool temporal_guides_active() { return g_dlss45Active || g_captureOnlyActive; }
 bool g_dlss45Faulted = false;
 bool g_dlss45SpatialFallback = false;
 bvr::dlss45::Mode g_dlss45Mode = bvr::dlss45::Mode::Off;
@@ -106,10 +121,103 @@ std::atomic<uint32_t> g_dlss45FallbackFrames{0};
 std::atomic<uint32_t> g_dlss45MixedPairRecoveries{0};
 std::atomic<uint32_t> g_dlss45TagMismatches{0};
 
+#ifdef BVR_DLSS_OVERLAP
+constexpr bool kDlssOverlap = true;
+#else
+constexpr bool kDlssOverlap = false;
+#endif
+#ifdef BVR_DLSS_TAIL_OVERLAP
+constexpr bool kDlssTailOverlap = true;
+#else
+constexpr bool kDlssTailOverlap = false;
+#endif
+bvr::DeferredEyeLease<XrSwapchain, ID3D11Texture2D*> g_dlssLeftLease;
+// perf3 retains the immutable-for-this-pending-frame shared input instead of
+// copying the raw LEFT a second time. Neither path retains a DXGI backbuffer.
+ID3D11Texture2D* g_dlssLeftBackup = nullptr;
+bool g_dlssOverlapUnavailable = false;
+uint64_t g_dlssOverlapSubmitted = 0, g_dlssOverlapCompleted = 0, g_dlssOverlapAborted = 0;
+uint64_t g_dlssTailFrames = 0, g_dlssSavedColorCopies = 0;
+double g_dlssTailCpuMs = 0, g_dlssTailMaxMs = 0;
+
+// Requested and applied settings live separately. No INI or panel claims a
+// change until both XR eyes and the real engine backbuffer agree.
+using ImageSettings = bvr::image_controls::Settings;
+using ImageMode = bvr::image_controls::RenderMode;
+using ImageProbe = bvr::image_controls::Probe;
+struct LiveImageChange {
+    bool active = false, restoring = false, needsEngine = false;
+    ImageSettings target{}, previous{};
+    uint64_t startedMs = 0, resizeSerial = 0;
+    std::string reason;
+};
+LiveImageChange g_liveImage;
+bool g_imageOverride = false;
+ImageSettings g_imageSettings{};
+std::atomic<uint64_t> g_resizeSerial{0};
+std::atomic<bool> g_resizeSucceeded{false};
+bvr::image_controls::ReconfigureWindow g_imageReconfigure;
+
+bvr::dlss45::Mode dlss_mode(ImageMode mode) {
+    return mode == ImageMode::Dlss ? bvr::dlss45::Mode::SuperResolution :
+           mode == ImageMode::Dlaa ? bvr::dlss45::Mode::Dlaa : bvr::dlss45::Mode::Off;
+}
+ImageSettings effective_image_settings() {
+    ImageSettings result = g_imageSettings;
+    result.mode = !g_dlss45Active ? ImageMode::Normal :
+                  g_dlss45Mode == bvr::dlss45::Mode::Dlaa ? ImageMode::Dlaa : ImageMode::Dlss;
+    result.renderWidth = g_renderW; result.renderHeight = g_renderH;
+    result.outputWidth = g_swapW; result.outputHeight = g_swapH;
+    if ((result.probe == ImageProbe::Captures && !g_captureOnlyActive) ||
+        ((result.probe == ImageProbe::Dlaa || result.probe == ImageProbe::Bridge) &&
+         result.mode != ImageMode::Dlaa))
+        result.probe = ImageProbe::Off; // Never label a failed diagnostic path as active.
+    return result;
+}
+
+#ifdef BVR_LATENCY_PROBE
+PFN_xrConvertTimeToWin32PerformanceCounterKHR g_latencyConvert = nullptr;
+int64_t g_latencyWaitReturn = 0, g_latencyPredictedQpc = 0;
+bool g_latencyPredictionValid = false;
+bvr::submission_probe::Window g_latencyWindow;
+ImageSettings g_latencySettings{};
+uint64_t g_latencyPhaseStart = 0, g_latencyLastReport = 0;
+void latency_report(bool force = false) {
+    const auto now = GetTickCount64();
+    auto& w = g_latencyWindow;
+    if (!w.count || (!force && now-g_latencyLastReport < 1000)) return;
+    const double n = double(w.count), p = w.leadSamples ? double(w.leadSamples) : 1.0;
+    BVR_LOG("[submission-probe] phase=%u mode=%u render=%ux%u output=%ux%u ageMs=%llu frames=%llu "
+            "periodMs=%.3f afterWaitToSubmitCpuMs=%.3f xrEndCpuMs=%.3f predictionSamples=%llu "
+            "predictionLeadAtWaitMs=%.3f predictionLeadAtSubmitMs=%.3f minSubmitLeadMs=%.3f "
+            "cpuPastPrediction=%llu notDisplayDeadline=1 notGpuCompletion=1 notTotalLatency=1",
+        unsigned(g_latencySettings.probe), unsigned(g_latencySettings.mode),
+        g_latencySettings.renderWidth, g_latencySettings.renderHeight,
+        g_latencySettings.outputWidth, g_latencySettings.outputHeight,
+        (unsigned long long)(now-g_latencyPhaseStart), (unsigned long long)w.count,
+        w.period/n, w.afterWait/n, w.endCall/n, (unsigned long long)w.leadSamples,
+        w.waitLead/p, w.submitLead/p, w.minLead, (unsigned long long)w.pastPrediction);
+    w = {}; g_latencyLastReport = now;
+}
+void latency_observe(int64_t submitStart, int64_t submitEnd, int64_t frequency) {
+    const auto settings = effective_image_settings();
+    if (!g_latencyPhaseStart || !bvr::image_controls::same_render_path(settings, g_latencySettings)) {
+        latency_report(true);
+        g_latencySettings = settings; g_latencyWindow = {};
+        g_latencyPhaseStart = g_latencyLastReport = GetTickCount64();
+    }
+    g_latencyWindow.add(bvr::submission_probe::sample(g_latencyWaitReturn, submitStart,
+        submitEnd, g_latencyPredictedQpc, frequency, g_frameState.predictedDisplayPeriod,
+        g_latencyPredictionValid));
+    latency_report();
+}
+#endif
+
 Dlss45Config read_dlss45_config();
 bool dlss45_host_path(wchar_t* out /*MAX_PATH*/);
 
 bool xr_root_dir(wchar_t* out /*MAX_PATH*/);
+bool retire_image_gpu();
 
 // M7 aim laser. One tiny swapchain holding a soft dot, drawn as several quad
 // layers along the aim ray. Runtimes are only required to accept 16 layers, so
@@ -1584,7 +1692,10 @@ DWORD WINAPI trace_thread_proc(void*) {
         lastKeepalives = keepalives;
         lastSkips = skips;
 
-        bool stalled = seenAny && dPresents == 0;
+        // A deliberate, bounded live rebuild is not an engine deadlock. The
+        // deadline is armed once per transaction, never renewed by polling.
+        const bool imageReconfigure = image_reconfiguration_active() || bvr::dlss45::bounded_wait_active();
+        bool stalled = seenAny && dPresents == 0 && !imageReconfigure;
 
         // Once per stall episode, and only after it is clearly not a hitch,
         // photograph the wedged thread's stack. This is the step that names the
@@ -1927,7 +2038,80 @@ void destroy_hud_swapchain() {
     g_hudSwapW = g_hudSwapH = 0;
 }
 
+bool close_dlss_left(bool publish) {
+    if (!g_dlssLeftLease.held()) return false;
+    const bool ok = g_dlssLeftLease.close(publish,
+        [&](bool wantOutput, ID3D11Texture2D* destination) {
+            return wantOutput ? bvr::dlss45::resolve_eye(g_context, 0, destination)
+                              : bvr::dlss45::discard_pending();
+        },
+        [&](ID3D11Texture2D* destination) {
+            bool restored = false;
+            if (g_context && g_dlssLeftBackup && destination) {
+                if (g_dlss45SpatialFallback)
+                    restored = bvr::spatial_upscaler::render(g_context, destination,
+                        g_dlssLeftBackup, kDlss45FallbackSharpness);
+                else if (g_swapW == g_renderW && g_swapH == g_renderH) {
+                    g_context->CopyResource(destination, g_dlssLeftBackup); restored = true;
+                }
+            }
+            if (restored) g_dlss45FallbackFrames.fetch_add(1, std::memory_order_relaxed);
+            else {
+                g_eyeValid[0] = false;
+                g_resizePending.store(true, std::memory_order_release);
+                BVR_LOG("[dlss45-overlap] left fallback failed; image invalidated, rebuild queued");
+            }
+            return restored;
+        },
+        [&](XrSwapchain chain) {
+            XrSwapchainImageReleaseInfo release{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+            const XrResult result = xrReleaseSwapchainImage(chain, &release);
+            if (XR_FAILED(result)) {
+                g_eyeValid[0] = false;
+                g_resizePending.store(true, std::memory_order_release);
+                BVR_LOG("[dlss45-overlap] deferred release failed: %s", res_str(result));
+            }
+            return XR_SUCCEEDED(result);
+        });
+    if (kDlssTailOverlap && g_dlssLeftBackup) {
+        g_dlssLeftBackup->Release();
+        g_dlssLeftBackup = nullptr; // Drop the retained input BEFORE the next LEFT submit.
+    }
+    if (ok) ++g_dlssOverlapCompleted;
+    else {
+        ++g_dlssOverlapAborted;
+        bvr::b1r::temporal_guides::invalidate();
+        g_dlss45PairSpatial = true;
+        g_dlss45ForceNextPairSpatial = true;
+    }
+    return ok;
+}
+
+bool snapshot_dlss_left(ID3D11Texture2D* backbuffer) {
+    if (!backbuffer || !g_device || !g_context || g_dlssOverlapUnavailable) return false;
+    if (!g_dlssLeftBackup) {
+        D3D11_TEXTURE2D_DESC desc{}; backbuffer->GetDesc(&desc);
+        desc.Usage = D3D11_USAGE_DEFAULT; desc.CPUAccessFlags = desc.MiscFlags = 0;
+        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        if (FAILED(g_device->CreateTexture2D(&desc, nullptr, &g_dlssLeftBackup))) {
+            g_dlssOverlapUnavailable = true;
+            BVR_LOG("[dlss45-overlap] fallback snapshot unavailable; retained synchronous DLSS");
+            return false;
+        }
+    }
+    g_context->CopyResource(g_dlssLeftBackup, backbuffer);
+    return true;
+}
+
 void destroy_swapchains() {
+    bvr::critical_path_probe::reset();
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    bvr::delivery_probe::end_phase();
+#endif
+    close_dlss_left(false); // Retire input ownership and release acquired XR images FIRST.
+    if (g_dlssLeftBackup) { g_dlssLeftBackup->Release(); g_dlssLeftBackup = nullptr; }
+    g_dlssOverlapUnavailable = false;
+    bvr::b1r::performance_probe::shutdown();
     // Session 54: the feed snapshot references these swapchains - drop it
     // BEFORE they die so a feed cycle can never submit a dead handle. (Feed
     // cycles cannot be in flight here: teardown drains the outstanding pace
@@ -1946,12 +2130,14 @@ void destroy_swapchains() {
     bvr::dlss45::release();
     bvr::b1r::temporal_guides::shutdown();
     g_dlss45Active = false;
+    g_captureOnlyActive = false;
     g_dlss45SpatialFallback = false;
     g_dlss45HaveLeft = false;
     g_dlss45PairSpatial = false;
     g_dlss45ForceNextPairSpatial = false;
     g_dlss45LeftBuildId = 0;
     bvr::spatial_upscaler::release();
+    bvr::imagehud::destroy();
     destroy_laser();
     destroy_hud_swapchain();
     g_swapW = g_swapH = g_renderW = g_renderH = 0;
@@ -2039,6 +2225,11 @@ void composite_hud(IDXGISwapChain* swapchain) {
 }
 
 void teardown_session(const char* why) {
+#ifdef BVR_LATENCY_PROBE
+    latency_report(true);
+    g_latencyWaitReturn = 0; g_latencyPhaseStart = 0;
+#endif
+    close_dlss_left(false);
     g_detachedNow = false;
 
     // SESSION 28: never call xrDestroySession while the pace thread is parked
@@ -2061,6 +2252,16 @@ void teardown_session(const char* why) {
         }
     }
     g_teardownPending = nullptr;
+    if (bvr::image_controls::enabled() && g_device && g_context && !retire_image_gpu()) {
+        g_teardownPending = why;
+        return;
+    }
+    if (g_liveImage.active) {
+        bvr::b1r::camera::cancel_pending_resolution();
+        g_liveImage.active = false;
+        g_imageReconfigure.end();
+        bvr::image_controls::unavailable("Cambio interrumpido al cerrar la sesion VR");
+    }
     BVR_LOG("xr: session teardown (%s)", why);
     input_on_session_teardown(); // action spaces are session children
     destroy_swapchains();
@@ -2207,6 +2408,9 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
     g_dlss45LeftBuildId = 0;
 
     XrSystemProperties properties{XR_TYPE_SYSTEM_PROPERTIES};
+    g_captureOnlyActive = false;
+    for (int eye = 0; eye < 2; ++eye)
+        g_captureOnlyGenerated[eye] = g_captureOnlyRejected[eye] = 0;
     const bool haveProperties =
         XR_SUCCEEDED(xrGetSystemProperties(g_instance, g_system, &properties));
     auto exceedsRuntime = [&](uint32_t width, uint32_t height) {
@@ -2226,10 +2430,31 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
     // is off, invalid or unavailable, use the original native direct copy.
     // The spatial shader below is retained solely as the internal SR safety
     // path for menus/transitions that have no valid temporal guides.
-    const Dlss45Config dlss = read_dlss45_config();
+    Dlss45Config dlss = read_dlss45_config();
+    if (!g_imageOverride) g_imageSettings.sharpnessPercent = dlss.sharpnessPercent;
+    if (g_imageOverride && bvr::image_controls::enabled()) {
+        dlss.filePresent = true;
+        dlss.valid = true;
+        dlss.mode = dlss_mode(g_imageSettings.mode);
+        dlss.outputWidth = g_imageSettings.outputWidth;
+        dlss.outputHeight = g_imageSettings.outputHeight;
+        dlss.sharpnessPercent = g_imageSettings.sharpnessPercent;
+    }
     g_dlss45Mode = dlss.mode;
     g_dlss45Requested = dlss.mode != bvr::dlss45::Mode::Off;
-    if (!dlss.filePresent) {
+    if (bvr::image_controls::kProbeAvailable && bvr::image_controls::enabled() &&
+        g_imageOverride && g_imageSettings.probe == ImageProbe::Captures) {
+        bvr::b1r::temporal_guides::PrepareDesc guideDesc{};
+        guideDesc.width = renderW; guideDesc.height = renderH;
+        guideDesc.nearPlane = dlss.nearPlaneUu;
+        guideDesc.farPlane = 65536.0f;
+        guideDesc.depthInverted = false;
+        g_captureOnlyActive = simpleBackbuffer &&
+            bvr::b1r::temporal_guides::prepare(g_device, guideDesc);
+        g_dlss45Status = g_captureOnlyActive ? "prueba B: capturas sin DLAA" : "fallo de capturas de prueba";
+        BVR_LOG("[perf-probe] capture-only prepare=%d render=%ux%u host=OFF NGX=OFF",
+                g_captureOnlyActive ? 1 : 0, renderW, renderH);
+    } else if (!dlss.filePresent) {
         g_dlss45Status = "sin dlss.ini";
     } else if (!g_dlss45Requested) {
         g_dlss45Status = "desactivado en dlss.ini";
@@ -2298,7 +2523,8 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
         const bool bridgeReady = guidesReady && bvr::dlss45::prepare(
             g_device, renderW, renderH, backbufferDesc.Format,
             dlss.outputWidth, dlss.outputHeight, dlss.mode,
-            guideDesc.depthInverted, hostPath);
+            guideDesc.depthInverted, hostPath,
+            g_imageOverride && g_imageSettings.probe == ImageProbe::Bridge);
         if (bridgeReady) {
             outputW = dlss.outputWidth;
             outputH = dlss.outputHeight;
@@ -2309,6 +2535,7 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
                     "two independent eye histories, depth=standard finite "
                     "(near %.3f far %.1f; runtime far selector not yet published)",
                     renderW, renderH, outputW, outputH,
+                    g_imageSettings.probe == ImageProbe::Bridge ? "BRIDGE (NO DLAA)" :
                     dlss.mode == bvr::dlss45::Mode::Dlaa ? "DLAA" : "DLSS SR",
                     guideDesc.nearPlane, guideDesc.farPlane);
         } else {
@@ -2409,8 +2636,206 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
         BVR_LOG("xr: swapchain pair %ux%u format %lld (%u images each)", g_swapW,
                 g_swapH, static_cast<long long>(pick), imageCount);
 
+    if (g_dlss45Active && g_dlss45Mode == bvr::dlss45::Mode::SuperResolution &&
+        !bvr::dlss45::set_sharpness(dlss.sharpnessPercent)) {
+        BVR_LOG("[image-controls] optional post-DLSS sharpness unavailable; kept at 0%%");
+        g_imageSettings.sharpnessPercent = 0;
+    }
     create_laser(pick); // fail-soft: no laser just means no dots
+    if (bvr::image_controls::enabled()) {
+        wchar_t root[MAX_PATH] = {}, ini[MAX_PATH] = {};
+        if (xr_root_dir(root)) swprintf_s(ini, L"%s\\dlss.ini", root);
+        bvr::image_controls::initialize(effective_image_settings(), ini);
+        if (!g_liveImage.active)
+            bvr::image_controls::report_effective(effective_image_settings(),
+                g_dlss45Requested && !g_dlss45Active
+                    ? "DLSS/DLAA no disponible; usando NORMAL nativo" : nullptr);
+    }
     return true;
+}
+
+bool image_backbuffer(IDXGISwapChain* swapchain, D3D11_TEXTURE2D_DESC& desc) {
+    ID3D11Texture2D* texture = nullptr;
+    if (FAILED(swapchain->GetBuffer(0, IID_PPV_ARGS(&texture))) || !texture) return false;
+    texture->GetDesc(&desc); texture->Release(); return true;
+}
+
+bool retire_image_gpu() {
+    // Helpers signal after NGX plus output copies; process_eye waits for that
+    // signal before returning. Then retire the GAME queue, including its final
+    // read of each helper output and every copy into the XR swapchains.
+    if (!bvr::dlss45::gpu_retired() || !g_device || !g_context) return false;
+    D3D11_QUERY_DESC desc{D3D11_QUERY_EVENT, 0};
+    ID3D11Query* event = nullptr;
+    if (FAILED(g_device->CreateQuery(&desc, &event))) return false;
+    g_context->End(event); g_context->Flush();
+    const uint64_t deadline = GetTickCount64() + 2000;
+    bool retired = false;
+    do {
+        BOOL done = FALSE;
+        const HRESULT hr = g_context->GetData(event, &done, sizeof(done),
+                                              D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        if (hr == S_OK && done) { retired = true; break; }
+        if (FAILED(hr) || FAILED(g_device->GetDeviceRemovedReason())) break;
+        Sleep(1);
+    } while (GetTickCount64() < deadline);
+    event->Release();
+    if (!retired) BVR_LOG("[image-controls] GPU retirement not proven; resources retained");
+    return retired;
+}
+
+bool queue_image_engine(IDXGISwapChain* swapchain) {
+    D3D11_TEXTURE2D_DESC desc{};
+    if (!image_backbuffer(swapchain, desc)) return false;
+    g_liveImage.needsEngine = desc.Width != g_liveImage.target.renderWidth ||
+                              desc.Height != g_liveImage.target.renderHeight;
+    g_liveImage.startedMs = GetTickCount64();
+    if (!g_liveImage.needsEngine) return true;
+    if (g_liveImage.target.probe != ImageProbe::Off || g_liveImage.previous.probe != ImageProbe::Off)
+        return false; // A diagnostic never changes the engine resolution, even during rollback.
+    g_liveImage.resizeSerial = g_resizeSerial.load(std::memory_order_acquire);
+    return bvr::b1r::camera::enqueue_resolution(g_liveImage.target.renderWidth,
+                                               g_liveImage.target.renderHeight);
+}
+
+void finish_image_failure(IDXGISwapChain* swapchain, const char* reason) {
+    // Last-resort direct VR at the actual size, not a false "DLAA" label. The
+    // previous INIs remain unchanged so the next launch recovers that setup.
+    D3D11_TEXTURE2D_DESC desc{};
+    if (!image_backbuffer(swapchain, desc)) {
+        g_liveImage.active = false;
+        g_imageReconfigure.end();
+        bvr::image_controls::unavailable("No se pudo recuperar el render; reinicia el juego");
+        return;
+    }
+    g_imageSettings = g_liveImage.previous;
+    g_imageSettings.mode = ImageMode::Normal;
+    g_imageSettings.probe = ImageProbe::Off;
+    g_imageSettings.outputWidth = g_imageSettings.renderWidth = desc.Width;
+    g_imageSettings.outputHeight = g_imageSettings.renderHeight = desc.Height;
+    g_imageOverride = true; g_dlss45Faulted = false;
+    g_liveImage.active = false;
+    destroy_swapchains(); // Includes partial helper/guide bundles with no XR handles.
+    if (create_swapchains(swapchain))
+        bvr::image_controls::report_effective(g_imageSettings, reason);
+    else
+        bvr::image_controls::unavailable("No se pudo reconstruir VR; reinicia el juego");
+    g_imageReconfigure.end();
+}
+
+void restore_image_change(IDXGISwapChain* swapchain, const char* reason) {
+    BVR_LOG("[image-controls] rolling back: %s", reason);
+    g_liveImage.reason = reason;
+    g_liveImage.restoring = true;
+    g_liveImage.target = g_liveImage.previous;
+    destroy_swapchains(); // A failed XR allocation can still own live helpers/guides.
+    if (!queue_image_engine(swapchain))
+        finish_image_failure(swapchain, "No se pudo restaurar. NORMAL temporal; reinicia el juego.");
+}
+
+// True means the frame loop must wait for the game-thread engine command.
+// No XR frame/pair is open on entry; neither eye is published while changing.
+bool service_image_change(IDXGISwapChain* swapchain) {
+    if (!bvr::image_controls::enabled()) return false;
+    if (!g_liveImage.active) {
+        ImageSettings requested, previous;
+        if (!bvr::image_controls::take_request(requested, previous)) return false;
+        if (bvr::image_controls::same_render_path(requested, previous)) {
+            // Only nitidez changed: no SETRES, XR teardown, host restart or
+            // history reset. Service runs between complete binocular pairs.
+            g_imageReconfigure.begin(GetTickCount64()); // also covers the first shader compilation
+            if (g_dlss45Active && g_dlss45Mode == bvr::dlss45::Mode::SuperResolution &&
+                bvr::dlss45::set_sharpness(requested.sharpnessPercent)) {
+                g_imageSettings = requested;
+                bvr::image_controls::confirm(requested);
+            } else bvr::image_controls::reject("No se pudo aplicar nitidez; se conserva la anterior");
+            g_imageReconfigure.end();
+            return false;
+        }
+        if (previous.mode == ImageMode::Normal) {
+            // An emergency SR spatial path is not a selectable render mode;
+            // recovery from it returns to direct native VR at the actual size.
+            previous.outputWidth = previous.renderWidth;
+            previous.outputHeight = previous.renderHeight;
+        }
+        XrSystemProperties properties{XR_TYPE_SYSTEM_PROPERTIES};
+        if (XR_SUCCEEDED(xrGetSystemProperties(g_instance, g_system, &properties)) &&
+            (requested.outputWidth > properties.graphicsProperties.maxSwapchainImageWidth ||
+             requested.outputHeight > properties.graphicsProperties.maxSwapchainImageHeight)) {
+            bvr::image_controls::reject("El visor no admite esa resolucion; se conserva la anterior");
+            return false;
+        }
+        // Retirement itself may legitimately wait up to two seconds. Arm
+        // before it, not only before starting NGX, or the 1.2 s stereo
+        // watchdog can already have switched off the second eye.
+        g_imageReconfigure.begin(GetTickCount64());
+        if (!retire_image_gpu()) {
+            g_imageReconfigure.end();
+            bvr::image_controls::reject("Cambio cancelado: GPU ocupada. Se conserva el ajuste anterior");
+            return false;
+        }
+        g_liveImage = {};
+        g_liveImage.active = true;
+        g_liveImage.target = requested; g_liveImage.previous = previous;
+        BVR_LOG("[image-controls] begin %ux%u -> %ux%u mode=%d; bilateral GPU retired",
+                requested.renderWidth, requested.renderHeight,
+                requested.outputWidth, requested.outputHeight, int(requested.mode));
+        destroy_swapchains();
+        if (!queue_image_engine(swapchain))
+            restore_image_change(swapchain, "El motor no acepto el cambio; restaurado el ajuste anterior");
+    }
+    if (!g_liveImage.active) return false;
+
+    if (g_liveImage.needsEngine) {
+        using Status = bvr::b1r::camera::ResolutionRequestStatus;
+        const auto status = bvr::b1r::camera::resolution_request_status();
+        const bool expired = GetTickCount64() - g_liveImage.startedMs > 8000;
+        if (status == Status::Pending) {
+            // A timeout must not cancel a command already executing or race a
+            // rollback into the same mailbox. The watchdog remains bounded.
+            if (!expired || !bvr::b1r::camera::cancel_pending_resolution()) return true;
+        }
+        D3D11_TEXTURE2D_DESC desc{};
+        const bool resized = status == Status::Dispatched &&
+            g_resizeSerial.load(std::memory_order_acquire) != g_liveImage.resizeSerial &&
+            g_resizeSucceeded.load(std::memory_order_acquire) &&
+            image_backbuffer(swapchain, desc) &&
+            desc.Width == g_liveImage.target.renderWidth && desc.Height == g_liveImage.target.renderHeight;
+        if (!resized) {
+            if (status == Status::Dispatched && !expired) return true;
+            if (g_liveImage.restoring)
+                finish_image_failure(swapchain, "No se pudo restaurar. NORMAL temporal; reinicia el juego.");
+            else
+                restore_image_change(swapchain, "El motor no cambio la resolucion; se restaura la anterior");
+            return true;
+        }
+    }
+
+    g_imageOverride = true;
+    g_imageSettings = g_liveImage.target;
+    g_resizePending.store(false, std::memory_order_relaxed);
+    g_dlss45Faulted = false; // An explicit new transaction gets one fresh attempt.
+    const bool built = create_swapchains(swapchain);
+    const bool matched = built && g_renderW == g_imageSettings.renderWidth &&
+        g_renderH == g_imageSettings.renderHeight && g_swapW == g_imageSettings.outputWidth &&
+        g_swapH == g_imageSettings.outputHeight &&
+        (g_imageSettings.mode == ImageMode::Normal ? !g_dlss45Active : g_dlss45Active) &&
+        (g_imageSettings.probe == ImageProbe::Captures ? g_captureOnlyActive : !g_captureOnlyActive) &&
+        g_dlss45Mode == dlss_mode(g_imageSettings.mode);
+    if (!matched) {
+        if (g_liveImage.restoring)
+            finish_image_failure(swapchain, "Puente no disponible. NORMAL temporal; reinicia el juego.");
+        else
+            restore_image_change(swapchain, "No se pudo aplicar DLSS/DLAA; se restaura el ajuste anterior");
+        return true;
+    }
+    if (g_liveImage.restoring) bvr::image_controls::reject(g_liveImage.reason.c_str());
+    else bvr::image_controls::confirm(g_imageSettings);
+    g_liveImage.active = false;
+    g_imageReconfigure.end();
+    g_hfovDeg.store(0.0f, std::memory_order_relaxed);
+    bvr::b1r::temporal_guides::invalidate();
+    return false;
 }
 
 // One bring-up attempt: system -> requirements -> session on the game device
@@ -2570,6 +2995,7 @@ void pump_events() {
                     break;
                 case XR_SESSION_STATE_STOPPING:
                     if (g_sessionBegun) {
+                        close_dlss_left(false);
                         xrEndSession(g_session);
                         g_sessionBegun = false;
                         // The next bring-up must pace freely again (bring-up
@@ -2651,7 +3077,11 @@ bool dlss45_host_path(wchar_t* out /*MAX_PATH*/) {
     wchar_t* slash = wcsrchr(path, L'\\');
     if (!slash) return false;
     *slash = L'\0';
+#ifdef BVR_LATENCY_PROBE
+    return swprintf_s(out, MAX_PATH, L"%s\\host64\\BioShockVR-DLSS45-Host64-Latency1.exe",
+#else
     return swprintf_s(out, MAX_PATH, L"%s\\host64\\BioShockVR-DLSS45-Host64.exe",
+#endif
                       path) > 0;
 }
 
@@ -2696,6 +3126,8 @@ Dlss45Config read_dlss45_config() {
     const int outputHeight = GetPrivateProfileIntW(L"dlss", L"outputHeight", 0, ini);
     if (outputWidth > 0) cfg.outputWidth = static_cast<uint32_t>(outputWidth);
     if (outputHeight > 0) cfg.outputHeight = static_cast<uint32_t>(outputHeight);
+    const int sharpness = GetPrivateProfileIntW(L"dlss", L"sharpnessPercent", 0, ini);
+    if (sharpness >= 0 && sharpness <= 100) cfg.sharpnessPercent = uint32_t(sharpness);
 
     wchar_t nearValue[32] = {};
     GetPrivateProfileStringW(L"dlss", L"nearPlaneUu", L"10.0", nearValue,
@@ -2853,13 +3285,22 @@ XrResult try_create_instance(const char* label, bool quietExplainer) {
         return XR_ERROR_EXTENSION_NOT_PRESENT;
     }
 
-    const char* enabled[] = {XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
+    const char* enabled[2] = {XR_KHR_D3D11_ENABLE_EXTENSION_NAME};
+    uint32_t enabledCount = 1;
+#ifdef BVR_LATENCY_PROBE
+    g_latencyConvert = nullptr;
+    for (const auto& e : exts)
+        if (strcmp(e.extensionName, XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME) == 0) {
+            enabled[enabledCount++] = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME;
+            break;
+        }
+#endif
     XrInstanceCreateInfo ici{XR_TYPE_INSTANCE_CREATE_INFO};
     strcpy_s(ici.applicationInfo.applicationName, "bioshock-vr");
     ici.applicationInfo.applicationVersion = 1;
     strcpy_s(ici.applicationInfo.engineName, "bioshock-vr");
     ici.applicationInfo.apiVersion = XR_API_VERSION_1_0;
-    ici.enabledExtensionCount = 1;
+    ici.enabledExtensionCount = enabledCount;
     ici.enabledExtensionNames = enabled;
     r = xrCreateInstance(&ici, &g_instance);
     if (XR_FAILED(r)) {
@@ -2886,6 +3327,13 @@ XrResult try_create_instance(const char* label, bool quietExplainer) {
         g_instance = XR_NULL_HANDLE;
         return r;
     }
+#ifdef BVR_LATENCY_PROBE
+    if (enabledCount == 2)
+        xrGetInstanceProcAddr(g_instance, "xrConvertTimeToWin32PerformanceCounterKHR",
+                             reinterpret_cast<PFN_xrVoidFunction*>(&g_latencyConvert));
+    BVR_LOG("[submission-probe] predictionClock=%s; CPU telemetry only, no added GPU waits",
+            g_latencyConvert ? "OpenXR-converted-QPC" : "unavailable");
+#endif
     return XR_SUCCESS;
 }
 
@@ -3014,6 +3462,9 @@ void on_present_begin(IDXGISwapChain* swapchain) {
     // preserves the hold's invariant, which is about waitFrame and locateViews,
     // not events: neither runs on this path.
     pump_events();
+    if (g_dlssLeftLease.held() && (!g_frameOpen || !g_sessionBegun ||
+            g_state != XR_SESSION_STATE_FOCUSED || g_resizePending.load(std::memory_order_acquire)))
+        close_dlss_left(false);
     if (g_session == XR_NULL_HANDLE || !g_sessionBegun) {
         g_srPairOpen = false; // never strand a hold across a stopped session
         return;
@@ -3104,6 +3555,7 @@ void on_present_begin(IDXGISwapChain* swapchain) {
     // re-locate - the pair shares one prediction and one pose set.
     if (g_srPairOpen) {
         if (GetTickCount64() - g_srPairOpenMs <= kPairHoldMaxMs) return;
+        close_dlss_left(false);
         // The sibling never came. Drop the hold and fall through so the
         // leaked-frame close below reclaims the open frame.
         BVR_LOG("xr: pair hold outlived %u ms with no right-eye present - "
@@ -3112,7 +3564,7 @@ void on_present_begin(IDXGISwapChain* swapchain) {
         g_srPairOpen = false;
         g_srPairAborts.fetch_add(1, std::memory_order_relaxed);
         g_pmAbortExpired.fetch_add(1, std::memory_order_relaxed);
-        if (g_dlss45Active) {
+        if (temporal_guides_active()) {
             bvr::b1r::temporal_guides::invalidate();
             g_dlss45HaveLeft = false;
             g_dlss45PairSpatial = false;
@@ -3138,12 +3590,17 @@ void on_present_begin(IDXGISwapChain* swapchain) {
         return;
     }
 
+    if (!g_frameOpen && !g_srPairOpen && !g_paceOutstanding &&
+        service_image_change(swapchain)) return;
+    if (g_liveImage.active) return;
+
     // Deferred swapchain teardown for a real size change (see on_resize). This
     // is the safe point: past the pair-hold early return, before any wait, so no
     // XR frame is open and the compositor is not holding an image we are about
     // to free. Both flags are checked anyway - the cost is two atomic loads and
     // the failure mode it prevents is a use-after-free inside the runtime.
     if (g_resizePending.load(std::memory_order_acquire) && !g_frameOpen && !g_srPairOpen) {
+        if (bvr::image_controls::enabled() && !retire_image_gpu()) return;
         g_resizePending.store(false, std::memory_order_relaxed);
         BVR_LOG("xr: performing the queued XR swapchain rebuild (no frame open)");
         destroy_swapchains();
@@ -3165,6 +3622,7 @@ void on_present_begin(IDXGISwapChain* swapchain) {
     // leaked - and waiting on a leaked frame is the other way a runtime can
     // block forever. Close it and take the dropped frame instead.
     if (g_frameOpen) {
+        bvr::critical_path_probe::reset(); // A leaked/expired pair is not a healthy cycle.
         XrFrameEndInfo leaked{XR_TYPE_FRAME_END_INFO};
         leaked.displayTime = g_frameState.predictedDisplayTime;
         leaked.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -3180,8 +3638,16 @@ void on_present_begin(IDXGISwapChain* swapchain) {
     // a game armed it (BS1/BS2 never do).
     pace_sync_gate();
 
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    if (bvr::image_controls::enabled()) {
+        bvr::delivery_probe::install(g_runtimeName);
+        bvr::delivery_probe::before_wait();
+    }
+#endif
     XrResult r;
     int64_t tPhase = phase_now();
+    {
+    bvr::critical_path_probe::Scope cpuWait(bvr::critical_path_probe::Stage::XrWait);
     if (g_paceOffThread.load(std::memory_order_relaxed) && pace_thread_start()) {
         // One request outstanding at a time keeps wait:begin at 1:1.
         if (!g_paceOutstanding) {
@@ -3242,6 +3708,7 @@ void on_present_begin(IDXGISwapChain* swapchain) {
         g_pairWaitSumUs.fetch_add(g_phaseLastUs[kPhWait].load(std::memory_order_relaxed),
                                   std::memory_order_relaxed);
     }
+    }
     g_lastShouldRender.store(g_frameState.shouldRender != XR_FALSE, std::memory_order_relaxed);
     // Session 42: the runtime's own frame period, previously discarded. 0 stays
     // 0 on runtimes that do not fill it; consumers must treat that as unknown.
@@ -3253,6 +3720,13 @@ void on_present_begin(IDXGISwapChain* swapchain) {
         return;
     }
     tPhase = phase_now();
+#ifdef BVR_LATENCY_PROBE
+    g_latencyWaitReturn = tPhase;
+    LARGE_INTEGER latencyPrediction{};
+    g_latencyPredictionValid = g_latencyConvert &&
+        XR_SUCCEEDED(g_latencyConvert(g_instance, g_frameState.predictedDisplayTime, &latencyPrediction));
+    g_latencyPredictedQpc = latencyPrediction.QuadPart;
+#endif
     XrFrameBeginInfo fbi{XR_TYPE_FRAME_BEGIN_INFO};
     r = xrBeginFrame(g_session, &fbi);
     phase_record(kPhBeginFrame, tPhase);
@@ -3773,15 +4247,20 @@ enum class CaptureResult {
     Failed,
     DirectOrSpatial,
     Dlss,
+    GuidesOnly,
+    DlssPendingLeft,
 };
 
 CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
                             int eye, bool temporalEyeFrame, uint64_t buildId,
-                            float tanHalfFovX, float tanHalfFovY) {
+                            float tanHalfFovX, float tanHalfFovY, bool deferLeft,
+                            bvr::dlss45::BeforeResolveWork rightWork = {}) {
     if (!g_context || !dst || !backbuffer) return CaptureResult::Failed;
     const bool dlssOutputPath = g_dlss45Active || g_dlss45SpatialFallback;
+    if (!temporal_guides_active() || !temporalEyeFrame || eye < 0 || eye > 1)
+        bvr::b1r::performance_probe::guides_end(); // No guide dispatch in this frame.
 
-    if (g_dlss45Active) {
+    if (temporal_guides_active()) {
         if (temporalEyeFrame && eye >= 0 && eye < 2) {
             bvr::b1r::temporal_guides::EyeGuides guides{};
             bvr::b1r::temporal_guides::Projection projection{};
@@ -3802,18 +4281,66 @@ CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
                     observedAge > 0xFFFFFFFFull ? 0xFFFFFFFFull : observedAge);
                 projection.observedValid = observedAge <= 500;
             }
-            const bool haveGuides = bvr::b1r::temporal_guides::generate_eye(
-                g_context, eye, projection, &guides);
-            if (haveGuides && guides.cameraValid &&
-                bvr::dlss45::process_eye(
-                    g_context, eye, dst, backbuffer, guides.depthTexture,
-                    guides.motionTexture, guides.resetRequired,
-                    0.0f, 0.0f)) {
+            bool haveGuides;
+            {
+                bvr::critical_path_probe::Scope cpuGuides(bvr::critical_path_probe::Stage::Guides);
+                haveGuides = bvr::b1r::temporal_guides::generate_eye(
+                    g_context, eye, projection, &guides);
+            }
+            bvr::b1r::performance_probe::guides_end();
+            if (g_captureOnlyActive) {
+                // Identical guide selection/generation and eye tags, but no
+                // transport, waits or NGX. Display this eye's original color.
+                const bool valid = haveGuides && guides.cameraValid;
+                if (valid) ++g_captureOnlyGenerated[eye];
+                else {
+                    ++g_captureOnlyRejected[eye];
+                    bvr::b1r::temporal_guides::invalidate_eye(eye);
+                }
+                if (g_swapW != g_renderW || g_swapH != g_renderH) return CaptureResult::Failed;
+                g_context->CopyResource(dst, backbuffer);
+                return valid ? CaptureResult::GuidesOnly : CaptureResult::DirectOrSpatial;
+            }
+            bool processed = false;
+            if (haveGuides && guides.cameraValid) {
+                if (deferLeft && (kDlssTailOverlap || snapshot_dlss_left(backbuffer))) {
+                    if (bvr::dlss45::submit_eye(g_context, 0, dst, backbuffer,
+                            guides.depthTexture, guides.motionTexture, guides.resetRequired, 0.0f, 0.0f)) {
+                        if (kDlssTailOverlap) {
+                            if (g_dlssLeftBackup) g_dlssLeftBackup->Release();
+                            g_dlssLeftBackup = bvr::dlss45::retain_submitted_color(0, dst);
+                        }
+                        if (g_dlssLeftBackup && g_dlssLeftLease.arm(g_swapchains[0], dst, buildId)) {
+                            if (kDlssTailOverlap) ++g_dlssSavedColorCopies;
+                            ++g_dlssOverlapSubmitted;
+                            return CaptureResult::DlssPendingLeft;
+                        }
+                        bvr::dlss45::discard_pending();
+                        if (kDlssTailOverlap && g_dlssLeftBackup) {
+                            g_dlssLeftBackup->Release(); g_dlssLeftBackup = nullptr;
+                        }
+                    }
+                } else {
+                    // RIGHT is submitted before waiting. LEFT's host has been
+                    // processing while the engine built/rendered this eye.
+                    processed = bvr::dlss45::process_eye(g_context, eye, dst, backbuffer,
+                        guides.depthTexture, guides.motionTexture, guides.resetRequired, 0.0f, 0.0f,
+                        eye == 1 ? rightWork : bvr::dlss45::BeforeResolveWork{});
+                    if (processed && eye == 1 && g_dlssLeftLease.held()) {
+                        processed = close_dlss_left(true);
+                        if (processed) g_dlss45Frames.fetch_add(1, std::memory_order_relaxed);
+                    }
+                }
+            }
+            if (processed) {
                 g_dlss45Status = "activo";
                 g_dlss45Frames.fetch_add(1, std::memory_order_relaxed);
                 return CaptureResult::Dlss;
             }
 
+            // Neither eye has been released yet on the deferred path. Restore
+            // LEFT from its own raw snapshot before RIGHT takes its fallback.
+            close_dlss_left(false);
             // A missing principal DSV/camera is a per-frame condition, not a
             // reason to poison the whole session. Reset only this eye and use
             // the prepared spatial/direct path for the current image.
@@ -3830,12 +4357,16 @@ CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
                 bvr::b1r::temporal_guides::shutdown();
                 bvr::dlss45::release();
                 g_dlss45Status = "fallo del host; reinicia el juego para reintentar";
+                bvr::image_controls::report_effective(effective_image_settings(),
+                    "Fallo de DLSS/DLAA; respaldo temporal. Reinicia para recuperar.",
+                    g_dlss45SpatialFallback);
             }
         } else {
             // Menus, loading boards and cinematic quad frames do not carry a
             // valid stereo camera/eye tag. Never feed them into an old temporal
             // history; SR uses the spatial fallback until gameplay resumes.
             bvr::b1r::temporal_guides::invalidate();
+            close_dlss_left(false);
         }
     }
 
@@ -3856,6 +4387,7 @@ CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
             g_dlss45Active = false;
             g_dlss45Faulted = true;
             g_dlss45Status = "fallo del respaldo espacial; reconstruccion pendiente";
+            bvr::image_controls::unavailable("Reconstruyendo VR tras un fallo de imagen...");
         }
         g_resizePending.store(true, std::memory_order_release);
         BVR_LOG("[dlss45] internal spatial fallback failed - queued native rebuild");
@@ -3877,13 +4409,42 @@ const char* dlss45_depth_clear_hint(
 }
 
 void dlss45_diag_heartbeat() {
-    if (!g_dlss45Active) return;
+    if (!temporal_guides_active() && g_imageSettings.probe == ImageProbe::Off) return;
     const uint64_t now = GetTickCount64();
     if (now - g_dlss45DiagLogMs < 5000) return;
     g_dlss45DiagLogMs = now;
 
     bvr::b1r::temporal_guides::Diagnostics diagnostics{};
     bvr::b1r::temporal_guides::get_diagnostics(&diagnostics);
+    bvr::dlss45::log_performance();
+    bvr::b1r::temporal_guides::log_performance();
+    if (kDlssOverlap)
+        BVR_LOG("[dlss45-overlap] submitted=%llu completed=%llu aborted=%llu held=%d unavailable=%d "
+                "order=%s same-pair-output",
+                static_cast<unsigned long long>(g_dlssOverlapSubmitted),
+                static_cast<unsigned long long>(g_dlssOverlapCompleted),
+                static_cast<unsigned long long>(g_dlssOverlapAborted),
+                g_dlssLeftLease.held()?1:0, g_dlssOverlapUnavailable?1:0,
+                kDlssTailOverlap ? "submit-L/render-R/submit-R/layers/resolve-R/resolve-L"
+                                 : "submit-L/render-R/resolve-R/resolve-L");
+    if (kDlssTailOverlap) {
+        BVR_LOG("[dlss45-tail] frames=%llu workCpuAvgMs=%.3f workCpuMaxMs=%.3f "
+                "savedColorCopies=%llu same-frame-input-backup no-added-frame no-quality-change",
+                static_cast<unsigned long long>(g_dlssTailFrames),
+                g_dlssTailFrames ? g_dlssTailCpuMs / double(g_dlssTailFrames) : 0.0,
+                g_dlssTailMaxMs, static_cast<unsigned long long>(g_dlssSavedColorCopies));
+        g_dlssTailFrames = 0; g_dlssTailCpuMs = g_dlssTailMaxMs = 0;
+    }
+    if (g_imageSettings.probe != ImageProbe::Off)
+        BVR_LOG("[perf-probe] ACTIVE %s render=%ux%u output=%ux%u host=%d "
+                "captureOnly=%d generated=%llu/%llu rejected=%llu/%llu",
+                bvr::image_controls::probe_name(g_imageSettings.probe),
+                g_renderW, g_renderH, g_swapW, g_swapH, g_dlss45Active ? 1 : 0,
+                g_captureOnlyActive ? 1 : 0,
+                static_cast<unsigned long long>(g_captureOnlyGenerated[0]),
+                static_cast<unsigned long long>(g_captureOnlyGenerated[1]),
+                static_cast<unsigned long long>(g_captureOnlyRejected[0]),
+                static_cast<unsigned long long>(g_captureOnlyRejected[1]));
     BVR_LOG("[dlss45] totals processed=%u fallback=%u mixed=%u "
             "tagMismatch=%u copies=%llu pairTags=%llu/%llu depthCfg=%s "
             "near=%.3f far=%.3f(dynamic-selector-unobserved)",
@@ -3929,9 +4490,21 @@ void dlss45_diag_heartbeat() {
 
 void on_present_end(IDXGISwapChain* swapchain) {
     PhaseScope psEnd(kPhPresentEnd); // records on every return path
+#ifdef BVR_CRITICAL_PATH_PROBE
+    const auto cpuSettings = effective_image_settings();
+    bvr::critical_path_probe::configure({unsigned(cpuSettings.probe), unsigned(cpuSettings.mode),
+        g_renderW, g_renderH, g_swapW, g_swapH},
+        bvr::image_controls::enabled() && cpuSettings.probe != bvr::image_controls::Probe::Off &&
+        g_frameOpen && g_state == XR_SESSION_STATE_FOCUSED);
+#endif
+    if constexpr (bvr::image_controls::kProbeAvailable) {
+        if (bvr::image_controls::enabled())
+            bvr::b1r::performance_probe::configure(g_device, g_imageSettings);
+    }
     phase_heartbeat_maybe(GetTickCount64());
     if (!g_frameOpen) {
-        if (g_dlss45Active) {
+        close_dlss_left(false);
+        if (temporal_guides_active()) {
             bvr::b1r::temporal_guides::invalidate();
             g_dlss45HaveLeft = false;
             g_dlss45PairSpatial = false;
@@ -3978,8 +4551,8 @@ void on_present_end(IDXGISwapChain* swapchain) {
     g_srPairOpen = false;
     g_frameOpen = false; // the pair-hold path below re-arms both
     if (!g_frameState.shouldRender &&
-        (g_dlss45Active || g_dlss45SpatialFallback)) {
-        if (g_dlss45Active) {
+        (temporal_guides_active() || g_dlss45SpatialFallback)) {
+        if (temporal_guides_active()) {
             bvr::b1r::temporal_guides::invalidate();
             g_dlss45ForceNextPairSpatial = true;
         }
@@ -4002,7 +4575,7 @@ void on_present_end(IDXGISwapChain* swapchain) {
     // BOTH slots share the kMaxLaserDots budget - then up to two aim dots, the
     // s51 hand ref quad and the HUD quad (worst case 13 of the 16 runtimes
     // must accept).
-    const XrCompositionLayerBaseHeader* layers[1 + kMaxLaserDots + 4] = {};
+    const XrCompositionLayerBaseHeader* layers[1 + kMaxLaserDots + 5] = {};
     uint32_t layerCount = 0;
 
     // Keep the renderer's real projection separate from the FOV merely claimed
@@ -4125,6 +4698,10 @@ void on_present_end(IDXGISwapChain* swapchain) {
     const SrEyeTag srTag = sr_pop_eye();
     int srSign = srTag.sign;
     bool srFrame = projectionMode && srSign != 0;
+    bvr::critical_path_probe::Scope cpuCapture(srFrame ?
+        (srSign < 0 ? bvr::critical_path_probe::Stage::CaptureLeft :
+                      bvr::critical_path_probe::Stage::CaptureRight) :
+        bvr::critical_path_probe::Stage::CaptureOther);
     // HUD capture gate (session 19): the gameswf redirect runs only while
     // stereo gameplay frames flow (menus stop the eye tags -> gate drops).
     bvr::hud::set_gate(srFrame);
@@ -4189,7 +4766,7 @@ void on_present_end(IDXGISwapChain* swapchain) {
                 g_pmAbortLeft.fetch_add(1, std::memory_order_relaxed);
             else
                 g_pmAbortUntag.fetch_add(1, std::memory_order_relaxed);
-            if (g_dlss45Active) {
+            if (temporal_guides_active()) {
                 bvr::b1r::temporal_guides::invalidate();
                 g_dlss45HaveLeft = false;
                 g_dlss45PairSpatial = false;
@@ -4201,6 +4778,10 @@ void on_present_end(IDXGISwapChain* swapchain) {
     bool pairHold = srFrame && srSign < 0 && !pairSecond &&
                     g_srPairPacing.load(std::memory_order_relaxed) &&
                     g_frameState.shouldRender && g_swapchains[0] != XR_NULL_HANDLE;
+    if (g_dlssLeftLease.held() && (!pairSecond || !srFrame || srSign != +1 ||
+            !g_frameState.shouldRender || !g_dlssLeftLease.sibling(srTag.buildId) ||
+            bvr::overlay::visible()))
+        close_dlss_left(false);
 
     // AlternateEye bookkeeping. imageSign is the eye offset baked into THIS
     // backbuffer: the sign was published at the tail of the previous Present
@@ -4215,20 +4796,20 @@ void on_present_end(IDXGISwapChain* swapchain) {
     int currentEyeSign = (g_currentEye == 0 ? -1 : 1) * eyeFlip;
     bool eyeCaptured = false;
     const int srEye = srSign < 0 ? 0 : 1;
-    if (!srFrame && (g_dlss45Active || g_dlss45SpatialFallback)) {
+    if (!srFrame && (temporal_guides_active() || g_dlss45SpatialFallback)) {
         // Menus/cinematics or a missing eye tag break the logical DLSS pair
         // even when XR pair pacing is switched off.
         g_dlss45HaveLeft = false;
         g_dlss45PairSpatial = false;
         g_dlss45LeftBuildId = 0;
-        if (g_dlss45Active) g_dlss45ForceNextPairSpatial = true;
+        if (temporal_guides_active()) g_dlss45ForceNextPairSpatial = true;
     }
     // A tag can still arrive on an OpenXR frame whose shouldRender bit is
     // false (runtime pause/visibility transition).  Such a frame never enters
     // the capture block below, so it must not open a logical DLSS eye pair.
     const bool dlssPairPath = srFrame && g_frameState.shouldRender &&
                               g_swapchains[0] != XR_NULL_HANDLE &&
-                              (g_dlss45Active || g_dlss45SpatialFallback);
+                              (temporal_guides_active() || g_dlss45SpatialFallback);
     if (dlssPairPath) {
         if (srEye == 0) {
             g_dlss45HaveLeft = true;
@@ -4275,14 +4856,19 @@ void on_present_end(IDXGISwapChain* swapchain) {
             }
         }
     }
-    const bool temporalAllowed = dlssPairPath && g_dlss45Active &&
+    const bool temporalAllowed = dlssPairPath && temporal_guides_active() &&
                                  !g_dlss45PairSpatial &&
                                  srTag.buildId != 0 &&
                                  !bvr::overlay::visible();
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    bool deliveredTemporalPair = false;
+#endif
     auto noteDlssPairResult = [&](CaptureResult result) {
         if (!dlssPairPath) return;
+        const bool temporalResult = result == CaptureResult::Dlss || result == CaptureResult::GuidesOnly ||
+                                    result == CaptureResult::DlssPendingLeft;
         if (srEye == 0) {
-            if (result != CaptureResult::Dlss) g_dlss45PairSpatial = true;
+            if (!temporalResult) g_dlss45PairSpatial = true;
             if (result == CaptureResult::Failed) {
                 bvr::b1r::temporal_guides::invalidate();
                 g_dlss45HaveLeft = false;
@@ -4292,11 +4878,16 @@ void on_present_end(IDXGISwapChain* swapchain) {
             return;
         }
 
+#ifdef BVR_DLSS_EARLY_DELIVERY
+        // Capture the result BEFORE the pair bookkeeping below is reset.
+        deliveredTemporalPair = result == CaptureResult::Dlss &&
+            g_dlss45HaveLeft && !g_dlss45PairSpatial;
+#endif
         // If LEFT already reached NGX but RIGHT had to fall back, that one pair
         // cannot be undone. Reset both histories and force the following pair
         // wholly spatial so temporal processing resumes from a clean boundary.
         if (g_dlss45HaveLeft && !g_dlss45PairSpatial &&
-            result != CaptureResult::Dlss) {
+            !temporalResult) {
             const uint32_t recoveries =
                 g_dlss45MixedPairRecoveries.fetch_add(1, std::memory_order_relaxed);
             g_dlss45ForceNextPairSpatial = true;
@@ -4313,6 +4904,123 @@ void on_present_end(IDXGISwapChain* swapchain) {
         g_dlss45PairSpatial = false;
         g_dlss45LeftBuildId = 0;
     };
+
+    // Independent XR layers may be prepared while the RIGHT host evaluates.
+    // Do not move the desktop mirror/composite here: fallback still needs the
+    // unmodified raw backbuffer if either host fails. Build each auxiliary once.
+    const XrCompositionLayerBaseHeader* auxiliaryLayers[kMaxLaserDots + 4] = {};
+    uint32_t auxiliaryCount = 0;
+    bool auxiliaryPrepared = false;
+    auto prepareAuxiliaryLayers = [&](bool haveFrame) {
+        if (auxiliaryPrepared) return;
+        auxiliaryPrepared = true;
+        // Aim laser on top of the game frame - projection mode only, since in quad
+        // ("cinema screen") mode there is no world for it to point into.
+        if (haveFrame && projectionMode) {
+            // Slot 0 first, then the session-40 second beam within whatever is
+            // LEFT of the shared dot budget - the layer arrays never grow, so a
+            // dual-wield game cannot push the total past what slot 0 alone could.
+            uint32_t dots = build_laser_from(snapshot_laser_slot(0), laserQuads, kMaxLaserDots);
+            uint32_t dots2 = build_laser_from(snapshot_laser_slot(1), laserQuads + dots,
+                                              kMaxLaserDots - static_cast<int>(dots));
+            uint32_t aimDot = build_aim_dot_slot(&dotQuad, 0);
+            uint32_t aimDot2 = build_aim_dot_slot(&dot2Quad, 1);
+            uint32_t handRef = build_hand_ref_quad(&handQuad);
+            // ONE acquire feeds every quad that referenced this swapchain, lasers
+            // and aim dots alike - two acquires in a frame would be invalid.
+            if ((dots || dots2 || aimDot || aimDot2 || handRef) && !publish_laser_image()) {
+                dots = 0;
+                dots2 = 0;
+                aimDot = 0;
+                aimDot2 = 0;
+                handRef = 0;
+            }
+            for (uint32_t i = 0; i < dots + dots2; ++i)
+                auxiliaryLayers[auxiliaryCount++] =
+                    reinterpret_cast<const XrCompositionLayerBaseHeader*>(&laserQuads[i]);
+            if (aimDot)
+                auxiliaryLayers[auxiliaryCount++] =
+                    reinterpret_cast<const XrCompositionLayerBaseHeader*>(&dotQuad);
+            if (aimDot2)
+                auxiliaryLayers[auxiliaryCount++] =
+                    reinterpret_cast<const XrCompositionLayerBaseHeader*>(&dot2Quad);
+            if (handRef)
+                auxiliaryLayers[auxiliaryCount++] =
+                    reinterpret_cast<const XrCompositionLayerBaseHeader*>(&handQuad);
+            g_laserLayersSubmitted.store(dots + dots2, std::memory_order_relaxed);
+            g_dotLayersSubmitted.store(aimDot + aimDot2, std::memory_order_relaxed);
+        } else {
+            g_laserLayersSubmitted.store(0, std::memory_order_relaxed);
+            g_dotLayersSubmitted.store(0, std::memory_order_relaxed);
+        }
+
+        // HUD floating quad (session 19): head-locked, fed from the gameswf
+        // capture - or, s52, from a game-registered provider (Infinite's GFx
+        // lane). Submitted only in projection mode with fresh HUD content and
+        // a live view space.
+        if (haveFrame && projectionMode && g_viewSpace != XR_NULL_HANDLE) {
+            HudTextureProviderFn prov = g_hudTexProvider.load(std::memory_order_relaxed);
+            ID3D11Texture2D* hudTex =
+                prov ? prov(g_context) : bvr::hud::texture(g_context); // alpha-repaired
+            if (hudTex) {
+                D3D11_TEXTURE2D_DESC hd{};
+                hudTex->GetDesc(&hd);
+                if (g_hudSwapchain == XR_NULL_HANDLE || g_hudSwapW != hd.Width ||
+                    g_hudSwapH != hd.Height)
+                    create_hud_swapchain(hd.Width, hd.Height);
+                if (g_hudSwapchain != XR_NULL_HANDLE) {
+                    uint32_t idx = 0;
+                    XrSwapchainImageAcquireInfo ai{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+                    if (XR_SUCCEEDED(xrAcquireSwapchainImage(g_hudSwapchain, &ai, &idx))) {
+                        XrSwapchainImageWaitInfo wi{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+                        wi.timeout = XR_INFINITE_DURATION;
+                        if (XR_SUCCEEDED(xrWaitSwapchainImage(g_hudSwapchain, &wi)))
+                            g_context->CopyResource(g_hudImages[idx].texture, hudTex);
+                        XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+                        xrReleaseSwapchainImage(g_hudSwapchain, &ri);
+
+                        // The processed capture is premultiplied rgb + repaired
+                        // alpha - premultiplied compositor semantics (no
+                        // UNPREMULTIPLIED bit).
+                        hudQuad.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+                        hudQuad.space = g_viewSpace; // head-locked
+                        hudQuad.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+                        hudQuad.subImage.swapchain = g_hudSwapchain;
+                        hudQuad.subImage.imageRect = {
+                            {0, 0}, {static_cast<int32_t>(hd.Width), static_cast<int32_t>(hd.Height)}};
+                        hudQuad.pose.orientation.w = 1.0f;
+                        hudQuad.pose.position = {0.0f, g_hudUpM.load(std::memory_order_relaxed),
+                                                 -g_hudDistM.load(std::memory_order_relaxed)};
+                        float w = g_hudWidthM.load(std::memory_order_relaxed);
+                        hudQuad.size = {w, w * static_cast<float>(hd.Height) /
+                                               static_cast<float>(hd.Width)};
+                        auxiliaryLayers[auxiliaryCount++] =
+                            reinterpret_cast<const XrCompositionLayerBaseHeader*>(&hudQuad);
+                        g_hudFramesSubmitted.fetch_add(1, std::memory_order_relaxed);
+                        if (!g_loggedFirstHudQuad.exchange(true))
+                            BVR_LOG("xr: HUD quad live (%ux%u, %.2f m wide at %.2f m)",
+                                    hd.Width, hd.Height, w,
+                                    g_hudDistM.load(std::memory_order_relaxed));
+                    }
+                }
+            }
+        }
+    };
+    auto overlapRightTail = [&] {
+        const int64_t started = phase_now();
+        prepareAuxiliaryLayers(true);
+        const double elapsed = double(phase_now() - started) * 1000.0 / double(g_qpcFreq);
+        ++g_dlssTailFrames;
+        g_dlssTailCpuMs += elapsed;
+        g_dlssTailMaxMs = std::max(g_dlssTailMaxMs, elapsed);
+    };
+    bvr::dlss45::BeforeResolveWork rightTail{};
+    if (kDlssTailOverlap && g_dlss45Active && bvr::image_controls::enabled() &&
+        pairSecond && srEye == 1 && temporalAllowed &&
+        g_dlssLeftLease.sibling(srTag.buildId) && !g_resizePending.load(std::memory_order_acquire)) {
+        using TailWork = decltype(overlapRightTail);
+        rightTail = {[](void* work) { (*static_cast<TailWork*>(work))(); }, &overlapRightTail};
+    }
 
     if (g_frameState.shouldRender && g_swapchains[0] != XR_NULL_HANDLE) {
         ID3D11Texture2D* backbuffer = nullptr;
@@ -4355,15 +5063,21 @@ void on_present_end(IDXGISwapChain* swapchain) {
                     // included. Under an engine letterbox the copy becomes an
                     // unsqueeze blit instead (session 22, capture_frame).
                     int64_t tCap = phase_now();
+                    bvr::b1r::performance_probe::capture_begin(srEye, srTag.buildId);
                     captureResult = capture_frame(
                         g_images[target][index].texture, backbuffer, srEye,
-                        temporalAllowed, srTag.buildId, guideTanH, guideTanV);
+                        temporalAllowed, srTag.buildId, guideTanH, guideTanV,
+                        kDlssOverlap && bvr::image_controls::enabled() && g_dlss45Active &&
+                            pairHold && srEye == 0 && temporalAllowed &&
+                            !g_resizePending.load(std::memory_order_acquire), rightTail);
+                    bvr::b1r::performance_probe::capture_end(static_cast<int>(captureResult));
                     phase_record(kPhCapture, tCap);
                 }
                 noteDlssPairResult(captureResult);
                 const bool frameCaptured = captureResult != CaptureResult::Failed;
                 XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
-                xrReleaseSwapchainImage(g_swapchains[target], &ri);
+                if (captureResult != CaptureResult::DlssPendingLeft)
+                    xrReleaseSwapchainImage(g_swapchains[target], &ri);
 
                 if (frameCaptured) {
                     // Captured content is attributed to the locate generation it
@@ -4592,119 +5306,106 @@ void on_present_end(IDXGISwapChain* swapchain) {
         }
     }
 
+    // A failed right acquire/Wait/GetBuffer cannot strand the LEFT lease.
+    // The healthy left-only path has already returned through pairHold above.
+    close_dlss_left(false);
     // Mirror, right half: the right eye's XR capture is done (or was skipped
     // this present) - pin the backbuffer to the held left image before the
     // real Present displays it. The window HUD composite comes after (the
     // re-blit would overwrite it).
-    int64_t tComp = phase_now();
-    if (srSign > 0) mirror_present(swapchain, srSign);
-    composite_hud(swapchain);
-    phase_record(kPhComposite, tComp);
+    const auto desktopComposite = [&] {
+        bvr::critical_path_probe::Scope cpuDesktop(bvr::critical_path_probe::Stage::DesktopComposite);
+        const int64_t start = phase_now();
+        if (srSign > 0) mirror_present(swapchain, srSign);
+        composite_hud(swapchain);
+        phase_record(kPhComposite, start);
+    };
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    // XR destinations already contain both eyes. The mirror/window HUD touch
+    // only the desktop backbuffer: queue them AFTER XR's submission fence so
+    // they no longer delay the headset's image dependency. No pose/time edits.
+    const bool desktopAfterXr = bvr::delivery_probe::defer_desktop(
+        bvr::image_controls::enabled(), g_dlss45Active && deliveredTemporalPair,
+        srFrame && pairSecond && srSign > 0, layerCount && g_lastLayer == 2,
+        g_state == XR_SESSION_STATE_FOCUSED);
+    bvr::delivery_probe::DesktopTail desktopTail(desktopAfterXr);
+    double desktopCpuMs = 0;
+    const auto measuredDesktop = [&] {
+        const auto start = phase_now(); desktopComposite();
+        desktopCpuMs = double(phase_now()-start)*1000.0/double(g_qpcFreq);
+    };
+    desktopTail.run(false, measuredDesktop);
+#else
+    desktopComposite();
+#endif
 
-    // Aim laser on top of the game frame - projection mode only, since in quad
-    // ("cinema screen") mode there is no world for it to point into.
-    if (layerCount && projectionMode) {
-        // Slot 0 first, then the session-40 second beam within whatever is
-        // LEFT of the shared dot budget - the layer arrays never grow, so a
-        // dual-wield game cannot push the total past what slot 0 alone could.
-        uint32_t dots = build_laser_from(snapshot_laser_slot(0), laserQuads, kMaxLaserDots);
-        uint32_t dots2 = build_laser_from(snapshot_laser_slot(1), laserQuads + dots,
-                                          kMaxLaserDots - static_cast<int>(dots));
-        uint32_t aimDot = build_aim_dot_slot(&dotQuad, 0);
-        uint32_t aimDot2 = build_aim_dot_slot(&dot2Quad, 1);
-        uint32_t handRef = build_hand_ref_quad(&handQuad);
-        // ONE acquire feeds every quad that referenced this swapchain, lasers
-        // and aim dots alike - two acquires in a frame would be invalid.
-        if ((dots || dots2 || aimDot || aimDot2 || handRef) && !publish_laser_image()) {
-            dots = 0;
-            dots2 = 0;
-            aimDot = 0;
-            aimDot2 = 0;
-            handRef = 0;
-        }
-        for (uint32_t i = 0; i < dots + dots2; ++i)
-            layers[layerCount++] =
-                reinterpret_cast<const XrCompositionLayerBaseHeader*>(&laserQuads[i]);
-        if (aimDot)
-            layers[layerCount++] =
-                reinterpret_cast<const XrCompositionLayerBaseHeader*>(&dotQuad);
-        if (aimDot2)
-            layers[layerCount++] =
-                reinterpret_cast<const XrCompositionLayerBaseHeader*>(&dot2Quad);
-        if (handRef)
-            layers[layerCount++] =
-                reinterpret_cast<const XrCompositionLayerBaseHeader*>(&handQuad);
-        g_laserLayersSubmitted.store(dots + dots2, std::memory_order_relaxed);
-        g_dotLayersSubmitted.store(aimDot + aimDot2, std::memory_order_relaxed);
+    prepareAuxiliaryLayers(layerCount != 0);
+    if (layerCount) {
+        for (uint32_t i = 0; i < auxiliaryCount; ++i)
+            layers[layerCount++] = auxiliaryLayers[i];
     } else {
         g_laserLayersSubmitted.store(0, std::memory_order_relaxed);
         g_dotLayersSubmitted.store(0, std::memory_order_relaxed);
     }
 
-    // HUD floating quad (session 19): head-locked, fed from the gameswf
-    // capture - or, s52, from a game-registered provider (Infinite's GFx
-    // lane). Submitted only in projection mode with fresh HUD content and
-    // a live view space.
-    if (layerCount && projectionMode && g_viewSpace != XR_NULL_HANDLE) {
-        HudTextureProviderFn prov = g_hudTexProvider.load(std::memory_order_relaxed);
-        ID3D11Texture2D* hudTex =
-            prov ? prov(g_context) : bvr::hud::texture(g_context); // alpha-repaired
-        if (hudTex) {
-            D3D11_TEXTURE2D_DESC hd{};
-            hudTex->GetDesc(&hd);
-            if (g_hudSwapchain == XR_NULL_HANDLE || g_hudSwapW != hd.Width ||
-                g_hudSwapH != hd.Height)
-                create_hud_swapchain(hd.Width, hd.Height);
-            if (g_hudSwapchain != XR_NULL_HANDLE) {
-                uint32_t idx = 0;
-                XrSwapchainImageAcquireInfo ai{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
-                if (XR_SUCCEEDED(xrAcquireSwapchainImage(g_hudSwapchain, &ai, &idx))) {
-                    XrSwapchainImageWaitInfo wi{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
-                    wi.timeout = XR_INFINITE_DURATION;
-                    if (XR_SUCCEEDED(xrWaitSwapchainImage(g_hudSwapchain, &wi)))
-                        g_context->CopyResource(g_hudImages[idx].texture, hudTex);
-                    XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
-                    xrReleaseSwapchainImage(g_hudSwapchain, &ri);
-
-                    // The processed capture is premultiplied rgb + repaired
-                    // alpha - premultiplied compositor semantics (no
-                    // UNPREMULTIPLIED bit).
-                    hudQuad.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-                    hudQuad.space = g_viewSpace; // head-locked
-                    hudQuad.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-                    hudQuad.subImage.swapchain = g_hudSwapchain;
-                    hudQuad.subImage.imageRect = {
-                        {0, 0}, {static_cast<int32_t>(hd.Width), static_cast<int32_t>(hd.Height)}};
-                    hudQuad.pose.orientation.w = 1.0f;
-                    hudQuad.pose.position = {0.0f, g_hudUpM.load(std::memory_order_relaxed),
-                                             -g_hudDistM.load(std::memory_order_relaxed)};
-                    float w = g_hudWidthM.load(std::memory_order_relaxed);
-                    hudQuad.size = {w, w * static_cast<float>(hd.Height) /
-                                           static_cast<float>(hd.Width)};
-                    layers[layerCount++] =
-                        reinterpret_cast<const XrCompositionLayerBaseHeader*>(&hudQuad);
-                    g_hudFramesSubmitted.fetch_add(1, std::memory_order_relaxed);
-                    if (!g_loggedFirstHudQuad.exchange(true))
-                        BVR_LOG("xr: HUD quad live (%ux%u, %.2f m wide at %.2f m)",
-                                hd.Width, hd.Height, w,
-                                g_hudDistM.load(std::memory_order_relaxed));
-                }
-            }
-        }
-    }
-
     XrFrameEndInfo fei{XR_TYPE_FRAME_END_INFO};
     fei.displayTime = g_frameState.predictedDisplayTime;
     fei.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+    if (bvr::image_controls::enabled() && g_frameState.shouldRender &&
+        layerCount && layerCount < _countof(layers)) {
+        if (const auto* status = bvr::imagehud::layer(
+                g_session, g_viewSpace, g_device, g_context,
+                bvr::image_controls::panel_status()))
+            layers[layerCount++] = status;
+    }
     fei.layerCount = layerCount;
     fei.layers = layerCount ? layers : nullptr;
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    bvr::delivery_probe::begin_end_frame();
+#endif
     int64_t tEnd = phase_now();
     XrResult r;
     {
         PhaseMark mark(kPhEndFrame); // the measured pacer - name it while in flight
+        bvr::critical_path_probe::Scope cpuEnd(bvr::critical_path_probe::Stage::XrEnd);
         r = xrEndFrame(g_session, &fei);
     }
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    const auto endReturn = phase_now();
+    const auto vdGpu = bvr::delivery_probe::finish_end_frame();
+#endif
     phase_record(kPhEndFrame, tEnd);
+#ifdef BVR_CRITICAL_PATH_PROBE
+    if (XR_SUCCEEDED(r) && srFrame && pairSecond && srSign == +1 && g_lastLayer == 2 && layerCount &&
+        g_state == XR_SESSION_STATE_FOCUSED)
+        bvr::critical_path_probe::end_cycle();
+    else
+        bvr::critical_path_probe::reset();
+#endif
+#ifdef BVR_LATENCY_PROBE
+    if (XR_SUCCEEDED(r) && srFrame && g_lastLayer == 2 && layerCount &&
+        g_state == XR_SESSION_STATE_FOCUSED && bvr::image_controls::enabled())
+        latency_observe(tEnd,
+#ifdef BVR_DLSS_EARLY_DELIVERY
+            endReturn,
+#else
+            phase_now(),
+#endif
+            g_qpcFreq);
+#endif
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    // Also runs if xrEndFrame fails, before teardown; still exactly one
+    // desktop composite and still before the real DXGI Present.
+    desktopTail.run(true, measuredDesktop);
+    if (XR_SUCCEEDED(r) && srFrame && g_lastLayer == 2 && layerCount &&
+        g_state == XR_SESSION_STATE_FOCUSED && bvr::image_controls::enabled()) {
+        const auto settings = effective_image_settings();
+        bvr::delivery_probe::observe({unsigned(settings.probe), unsigned(settings.mode),
+            g_renderW, g_renderH, g_swapW, g_swapH, desktopAfterXr}, vdGpu,
+            double(endReturn-tEnd)*1000.0/double(g_qpcFreq), desktopCpuMs);
+        bvr::delivery_probe::after_end(endReturn);
+    }
+#endif
     if (XR_FAILED(r)) {
         BVR_LOG("xr: xrEndFrame failed: %s", res_str(r));
         teardown_session("endframe failed");
@@ -4742,7 +5443,17 @@ void on_present_end(IDXGISwapChain* swapchain) {
     }
 }
 
+bool image_reconfiguration_active() noexcept {
+    return bvr::image_controls::enabled() && g_imageReconfigure.active(GetTickCount64());
+}
+
+void on_resize_complete(bool succeeded) {
+    g_resizeSucceeded.store(succeeded, std::memory_order_relaxed);
+    g_resizeSerial.fetch_add(1, std::memory_order_release);
+}
+
 void on_resize(unsigned width, unsigned height, unsigned format) {
+    close_dlss_left(false); // Does not retain the game's resizable backbuffer.
     // Backbuffer-derived views MUST go regardless: DXGI fails the game's
     // ResizeBuffers call outright while anyone still holds a buffer reference.
     // Our own copy textures are merely size-tied and recreate lazily - cheap.
@@ -4768,7 +5479,7 @@ void on_resize(unsigned width, unsigned height, unsigned format) {
                           (height == 0 || height == g_renderH) &&
                           (format == 0 /*DXGI_FORMAT_UNKNOWN*/ || format == g_backbufferFmt);
     if (sameSize) {
-        if (g_dlss45Active) {
+        if (temporal_guides_active()) {
             bvr::b1r::temporal_guides::invalidate();
             g_dlss45HaveLeft = false;
             g_dlss45PairSpatial = false;
@@ -4791,7 +5502,7 @@ void on_resize(unsigned width, unsigned height, unsigned format) {
     // So only QUEUE it. The frame loop performs the destroy at a point where it
     // can prove no XR frame is open, and the existing null-swapchain branch in
     // on_present_begin then rebuilds at the new size.
-    if (g_dlss45Active) {
+    if (temporal_guides_active()) {
         bvr::b1r::temporal_guides::invalidate();
         g_dlss45HaveLeft = false;
         g_dlss45PairSpatial = false;
@@ -5866,6 +6577,8 @@ void init_instance() {
 void on_present_begin(IDXGISwapChain*) {}
 void on_present_end(IDXGISwapChain*) {}
 void on_resize(unsigned, unsigned, unsigned) {}
+void on_resize_complete(bool) {}
+bool image_reconfiguration_active() noexcept { return false; }
 void pair_probe(PairProbe*) {}
 void draw_debug_ui() {}
 bool get_head_pose(HeadPose&) { return false; }

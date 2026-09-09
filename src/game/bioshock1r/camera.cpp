@@ -7,6 +7,7 @@
 #include "core/debug/value_scan.h"
 #include "core/gfx/frame_inspector.h"
 #include "core/gfx/hud_capture.h"
+#include "core/gfx/image_controls.h"
 #include "core/ui/overlay.h"
 #include "core/input/swing.h"
 #include "core/input/xinput_bridge.h"
@@ -35,6 +36,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iterator>
+#include <mutex>
 #include <share.h>
 
 namespace bvr::b1r::camera {
@@ -90,6 +92,33 @@ std::atomic<bool> g_autoVr{true};
 // established pending-atomic seam and is performed on the game thread, next to
 // the preset consumers. Packed as one 64-bit value so the pair cannot tear.
 std::atomic<uint64_t> g_resWritePending{0};
+
+// The renderer posts only after reaching its resize safepoint. Keep the
+// mailbox lock short: engine SETRES and the controls' INI persistence happen
+// after releasing it, so no renderer/game-thread lock cycle is introduced.
+std::mutex g_liveResolutionMutex;
+uint64_t g_liveResolutionPending = 0;
+std::atomic<ResolutionRequestStatus> g_liveResolutionStatus{
+    ResolutionRequestStatus::Unavailable};
+
+void consume_live_resolution() {
+    uint64_t request = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_liveResolutionMutex);
+        request = g_liveResolutionPending;
+        g_liveResolutionPending = 0;
+    }
+    if (!request) return;
+    const auto result = console_exec::set_viewport_resolution(
+        static_cast<uint32_t>(request >> 32), static_cast<uint32_t>(request));
+    g_liveResolutionStatus.store(
+        result == console_exec::ResolutionDispatch::Dispatched
+            ? ResolutionRequestStatus::Dispatched
+            : result == console_exec::ResolutionDispatch::Fault
+                  ? ResolutionRequestStatus::Fault
+                  : ResolutionRequestStatus::Unavailable,
+        std::memory_order_release);
+}
 
 // M8 session 18 part 2: the flat-screen crosshair, DEFAULT HIDDEN (user ask).
 // The lever is `ShockPlayer.bReticleDisabled` - the game's own RenderReticle
@@ -429,6 +458,19 @@ void apply_command(const char* cmd, const char* args) {
         }
     } else if (strcmp(cmd, "buildgate") == 0) {
         patterns::handle_buildgate_command(args);
+    } else if (strcmp(cmd, "vrimage") == 0) {
+        // Same controller as physical keys; an explicit test command is safe
+        // from the command pump because engine work is only queued here.
+        char key[16] = {};
+        sscanf_s(args, "%15s", key, static_cast<unsigned>(sizeof(key)));
+        const unsigned vk = _stricmp(key, "f1") == 0 ? VK_F1 :
+                            _stricmp(key, "f2") == 0 ? VK_F2 :
+                            _stricmp(key, "f3") == 0 ? VK_F3 :
+                            _stricmp(key, "f4") == 0 ? VK_F4 :
+                            _stricmp(key, "f6") == 0 ? VK_F6 : 0;
+        if (vk) bvr::image_controls::on_key(vk);
+        BVR_LOG("[image-controls] command %s; panel: %s", key,
+                bvr::image_controls::panel_status().c_str());
     } else if (strcmp(cmd, "vrres") == 0) {
         // The eye render IS the game's backbuffer, so the game's resolution is
         // the VR resolution. `SETRES` faults (ENGINE_NOTES session 27), so the
@@ -1177,6 +1219,10 @@ void __fastcall CalcViewDetour(void* self, void* edx, void** viewActor,
 
     uint64_t now = GetTickCount64();
     g_lastCalcViewMs = now; // session 22: cutscene-silence detector
+    // Persistence only: live SETRES is dispatched before scene construction
+    // in BuildDetour, and the renderer confirms dimensions before this tick.
+    // The second-pass branch returned above.
+    bvr::image_controls::game_tick();
     poll_command_file(now);
     // Overlay preset buttons land here (game thread; the overlay draws on
     // the render thread and only sets the pending flags).
@@ -1867,6 +1913,36 @@ void atomic_slider(const char* label, std::atomic<float>& value, float lo, float
 }
 
 } // namespace
+
+bool enqueue_resolution(uint32_t width, uint32_t height) {
+    if (!g_hookLive.load(std::memory_order_relaxed) || !patterns::rva_trusted() ||
+        width < 320 || height < 320 || width > 8192 || height > 8192)
+        return false;
+    std::lock_guard<std::mutex> lock(g_liveResolutionMutex);
+    if (g_liveResolutionStatus.load(std::memory_order_acquire) ==
+        ResolutionRequestStatus::Pending)
+        return false;
+    g_liveResolutionStatus.store(ResolutionRequestStatus::Pending, std::memory_order_release);
+    g_liveResolutionPending = (static_cast<uint64_t>(width) << 32) | height;
+    return true;
+}
+
+ResolutionRequestStatus resolution_request_status() {
+    return g_liveResolutionStatus.load(std::memory_order_acquire);
+}
+
+void dispatch_pending_resolution() {
+    consume_live_resolution();
+}
+
+bool cancel_pending_resolution() {
+    std::lock_guard<std::mutex> lock(g_liveResolutionMutex);
+    if (!g_liveResolutionPending) return false;
+    g_liveResolutionPending = 0;
+    g_liveResolutionStatus.store(ResolutionRequestStatus::Unavailable,
+                                 std::memory_order_release);
+    return true;
+}
 
 bool install(void* eventPlayerCalcView) {
     if (!eventPlayerCalcView) return false;

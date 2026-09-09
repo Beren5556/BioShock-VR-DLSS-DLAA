@@ -13,6 +13,21 @@ bool install(void* eventPlayerCalcView);
 
 bool hook_live();
 
+enum class ResolutionRequestStatus { Pending, Dispatched, Unavailable, Fault };
+
+// Called by the render-side controls only after closing the XR pair/frame
+// and retiring size-dependent resources. Queues one engine SETRES on the
+// next outer gameplay scene build; never runs engine code from the calling thread.
+// Dispatched is not success: the caller confirms the actual DXGI dimensions.
+bool enqueue_resolution(uint32_t width, uint32_t height);
+ResolutionRequestStatus resolution_request_status();
+// Game-thread scene-build entry only, before the original starts building
+// either eye. The scene adapter gates depth, gameplay caller and thread.
+void dispatch_pending_resolution();
+// True only when the request was still queued and has been removed. A false
+// result may mean SETRES is already executing; do not begin a competing resize.
+bool cancel_pending_resolution();
+
 // True while the foreground lens match is armed AND writing (session 15):
 // the rig renders through the WORLD lens, so the render-lock solve must use
 // the world tan scales and k = 1.

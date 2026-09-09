@@ -2,6 +2,24 @@
 
 Este proyecto sigue versiones con el formato MAJOR.MINOR.PATCH y sufijos de prepublicación cuando corresponde.
 
+## 0.2.11 · 2026-09-09
+
+Publicación del instalador probado, con las mejoras desarrolladas desde 0.2.3.
+
+- Instalador MSI completo con detección de carpeta, actualización y reparación,
+  acceso directo opcional y versionado e instrucciones finales de uso.
+- Corregidos los avisos de seguridad RBF y el conflicto de paquete instalado.
+- Lanzador compacto, Imagen simplificada y opciones gráficas contrastadas.
+- Reflejos y ondulaciones desactivados por defecto; se conservan preferencias
+  al actualizar. Cuatro optimizaciones de rendimiento mantenidas.
+- Menú F1 en el visor, F2 anterior y F3 siguiente; F4 solo para opciones gráficas.
+  Resolución de 100 en 100 píxeles y calidad DLSS de 5 en 5 puntos porcentuales.
+- Recuperación del segundo ojo tras una desactivación automática del watchdog.
+- NVIDIA 310.7.0.0 incluida; otras versiones x64 permitidas con advertencia.
+- Las releases 0.2.0-beta, 0.2.1-beta y 0.2.3-beta pasan a borradores.
+
+Detalles y límites: [notas públicas](docs/releases/v0.2.11-public.md).
+
 ## 0.2.3-beta · 2026-09-08
 
 Revisión de fiabilidad del flujo de instalación, arranque y restauración.

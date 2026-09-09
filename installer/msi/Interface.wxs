@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <UI Id="BioShockUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="10" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WIXUI_INSTALLDIR" Value="GAMEDIR" />
+      <Property Id="WixUI_Mode" Value="InstallDir" />
+      <DialogRef Id="BrowseDlg" />
+      <DialogRef Id="DiskCostDlg" />
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="VerifyReadyDlg" />
+      <DialogRef Id="MaintenanceWelcomeDlg" />
+      <DialogRef Id="MaintenanceTypeDlg" />
+
+      <Dialog Id="BioShockProgressDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]" Modeless="yes">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24"
+                 Text="{\WixUI_Font_Title}BioShock VR · DLSS/DLAA [ProductVersion]" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="Description" Type="Text" X="20" Y="57" Width="330" Height="25"
+                 Text="Espera mientras Windows aplica los cambios." />
+        <Control Id="StatusLabel" Type="Text" X="20" Y="88" Width="330" Height="15" Text="Estado de la instalación:" />
+        <Control Id="ActionText" Type="Text" X="20" Y="107" Width="330" Height="38" NoPrefix="yes">
+          <Subscribe Event="ActionText" Attribute="Text" />
+        </Control>
+        <Control Id="ProgressBar" Type="ProgressBar" X="20" Y="157" Width="330" Height="12" ProgressBlocks="yes">
+          <Subscribe Event="SetProgress" Attribute="Progress" />
+        </Control>
+        <Control Id="BottomLine" Type="Line" X="0" Y="235" Width="370" Height="0" />
+        <Control Id="Cancel" Type="PushButton" X="296" Y="243" Width="62" Height="18" Default="yes" Cancel="yes" Text="Cancelar">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="GameFolderDlg" Width="370" Height="270" Title="[ProductName]">
+        <Control Id="Title" Type="Text" X="15" Y="12" Width="340" Height="24" Transparent="yes"
+                 Text="{\WixUI_Font_Title}BioShock VR · DLSS/DLAA [ProductVersion]" />
+        <Control Id="Description" Type="Text" X="15" Y="40" Width="340" Height="30"
+                 Text="Instala el mod completo para BioShock Remastered. Confirma la carpeta del juego o selecciónala con Explorar." />
+        <Control Id="FolderLabel" Type="Text" X="15" Y="79" Width="330" Height="14" Text="Carpeta de instalación del juego" />
+        <Control Id="Folder" Type="Edit" X="15" Y="97" Width="267" Height="19" Property="BVR_GAMEPATH" />
+        <Control Id="Browse" Type="PushButton" X="287" Y="97" Width="68" Height="19" Text="Explorar…">
+          <Publish Property="_BrowseProperty" Value="GAMEDIR" Order="1" />
+          <Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+        </Control>
+        <Control Id="FirstRun" Type="Text" X="15" Y="130" Width="340" Height="29"
+                 Text="Antes de instalar, abre el juego una vez desde Steam y ciérralo para que se cree su configuración." />
+        <Control Id="Credits" Type="Text" X="15" Y="162" Width="340" Height="34"
+                 Text="Basado en BioShock VR v0.8.2 de Mohamad Balouza, creador de la adaptación a VR. Fork DLSS/DLAA de Beren5556. Créditos y licencias incluidos." />
+        <Control Id="Runtime" Type="Text" X="15" Y="200" Width="340" Height="14"
+                 Text="Incluye NVIDIA DLSS 310.7.0.0." />
+        <Control Id="DesktopShortcut" Type="CheckBox" X="15" Y="217" Width="340" Height="15"
+                 Property="BVR_DESKTOPSHORTCUT" CheckBoxValue="1"
+                 Text="Crear acceso directo en tu escritorio" />
+        <Control Id="Line" Type="Line" X="0" Y="235" Width="370" Height="0" />
+        <Control Id="Next" Type="PushButton" X="226" Y="243" Width="62" Height="18" Default="yes" Text="Siguiente">
+          <Publish Event="DoAction" Value="ValidateGame" Order="1" />
+          <Publish Event="SpawnDialog" Value="GameErrorDlg" Order="2" Condition="BVR_VALID &lt;&gt; &quot;1&quot;" />
+          <Publish Event="SetTargetPath" Value="GAMEDIR" Order="3" Condition="BVR_VALID = &quot;1&quot;" />
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" Order="4" Condition="BVR_VALID = &quot;1&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="243" Width="62" Height="18" Cancel="yes" Text="Cancelar">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+      <Dialog Id="BioShockExitDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24"
+                 Text="{\WixUI_Font_Title}Operación completada" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="ShortcutHelp" Type="Text" X="20" Y="65" Width="330" Height="48" Hidden="yes"
+                 Text="Para abrir el lanzador, haz doble clic en el acceso «BioShock VR DLSS-DLAA [ProductVersion]» de tu escritorio. También está disponible en la carpeta del juego:"
+                 ShowCondition="NOT (REMOVE ~= &quot;ALL&quot;) AND BVR_DESKTOPSHORTCUT = &quot;1&quot;" />
+        <Control Id="FolderHelp" Type="Text" X="20" Y="65" Width="330" Height="48" Hidden="yes"
+                 Text="Para abrir el lanzador, haz doble clic en «Lanzador BioShock VR DLSS-DLAA.exe», dentro de esta carpeta:"
+                 ShowCondition="NOT (REMOVE ~= &quot;ALL&quot;) AND BVR_DESKTOPSHORTCUT &lt;&gt; &quot;1&quot;" />
+        <Control Id="GamePath" Type="Text" X="20" Y="121" Width="330" Height="65" Hidden="yes" NoPrefix="yes"
+                 Text="[GAMEDIR]" ShowCondition="NOT (REMOVE ~= &quot;ALL&quot;)" />
+        <Control Id="Removed" Type="Text" X="20" Y="65" Width="330" Height="48" Hidden="yes"
+                 Text="Se ha completado la desinstalación. Puedes cerrar este asistente."
+                 ShowCondition="REMOVE ~= &quot;ALL&quot;" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="235" Width="370" Height="0" />
+        <Control Id="Finish" Type="PushButton" X="296" Y="243" Width="62" Height="18" Default="yes" Cancel="yes" Text="Finalizar" />
+      </Dialog>
+      <Dialog Id="GameErrorDlg" Width="300" Height="120" Title="Carpeta del juego">
+        <Control Id="Message" Type="Text" X="15" Y="15" Width="270" Height="66" Property="BVR_ERROR" Text="[BVR_ERROR]" />
+        <Control Id="OK" Type="PushButton" X="118" Y="91" Width="64" Height="18" Default="yes" Cancel="yes" Text="Aceptar">
+          <Publish Event="EndDialog" Value="Return" />
+        </Control>
+      </Dialog>
+      <Publish Dialog="BrowseDlg" Control="OK" Event="CheckTargetPath" Value="GAMEDIR" Order="1" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="3" />
+      <Publish Dialog="BrowseDlg" Control="OK" Property="BVR_GAMEPATH" Value="[GAMEDIR]" Order="4" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="5" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="GameFolderDlg" Order="1" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2" Condition="Installed" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <Publish Dialog="BioShockExitDlg" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+      <InstallUISequence>
+        <Show Dialog="override ExitDialog" Sequence="1250" Condition="0" />
+        <Show Dialog="BioShockExitDlg" OnExit="success" />
+        <Show Dialog="GameFolderDlg" Before="ProgressDlg" Condition="NOT Installed" />
+        <Show Dialog="override ProgressDlg" Sequence="1298" Condition="0" />
+        <Show Dialog="BioShockProgressDlg" Sequence="1299" />
+      </InstallUISequence>
+    </UI>
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>

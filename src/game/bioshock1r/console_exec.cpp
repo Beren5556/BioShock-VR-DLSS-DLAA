@@ -3,10 +3,12 @@
 #include "core/util/log.h"
 #include "game/bioshock1r/input_drive.h"
 #include "game/bioshock1r/patterns.h"
+#include "game/bioshock1r/graphics_options.h"
 
 #include <windows.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <utility>
 
@@ -79,19 +81,19 @@ int filter_capture(EXCEPTION_POINTERS* ep) {
 // caller's esp having moved, whatever the compiler did with the argument pushes.
 // Repairing esp is what turns "the process is now quietly corrupt" into "one
 // command did nothing and said so".
-__declspec(noinline) int call_exec(ExecFn fn, void* obj, const wchar_t* wcmd, bool* balanced) {
+__declspec(noinline) int call_exec(ExecFn fn, void* obj, const wchar_t* wcmd, bool* balanced, void* output = &g_stub) {
     int r = 0;
 #ifdef _M_IX86
     uintptr_t before = 0, after = 0;
     __asm mov before, esp
-    r = fn(obj, nullptr, wcmd, &g_stub);
+    r = fn(obj, nullptr, wcmd, output);
     __asm mov after, esp
     *balanced = (before == after);
     if (before != after) {
         __asm mov esp, before
     }
 #else
-    r = fn(obj, nullptr, wcmd, &g_stub);
+    r = fn(obj, nullptr, wcmd, output);
     *balanced = true;
 #endif
     return r;
@@ -148,6 +150,65 @@ void* resolve_engine() {
 }
 
 enum class Entry { Viewport, Client, Engine };
+
+// Resolution has its own failure latch: trying the new, corrected FExec
+// subobject must not enable or disable unrelated shipping console commands.
+bool g_resolutionDisabled = false;
+uintptr_t g_resolutionFaultIp = 0;
+uintptr_t g_resolutionFaultAddr = 0;
+
+int capture_resolution_fault(EXCEPTION_POINTERS* ep) {
+    g_resolutionFaultIp = ep->ContextRecord->Eip;
+    g_resolutionFaultAddr = ep->ExceptionRecord->NumberParameters >= 2
+                               ? ep->ExceptionRecord->ExceptionInformation[1]
+                               : 0;
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+bool validate_resolution_target(uint8_t* base, uint8_t* viewport) {
+    __try {
+        auto* primary = *reinterpret_cast<uint8_t**>(viewport);
+        auto* exec = viewport + patterns::kViewportExecThisOffset;
+        auto* secondary = *reinterpret_cast<uint8_t**>(exec);
+        if (primary != base + patterns::kViewportVtableRva ||
+            secondary != base + patterns::kViewportExecVtableRva ||
+            *reinterpret_cast<uint8_t**>(secondary) != base + patterns::kViewportExecRva)
+            return false;
+        auto* primaryCol = *reinterpret_cast<uint32_t**>(primary - sizeof(void*));
+        auto* secondaryCol = *reinterpret_cast<uint32_t**>(secondary - sizeof(void*));
+        return reinterpret_cast<uint8_t*>(secondaryCol) ==
+                   base + patterns::kViewportExecLocatorRva &&
+               primaryCol[0] == 0 && primaryCol[1] == 0 &&
+               secondaryCol[0] == 0 &&
+               secondaryCol[1] == patterns::kViewportExecThisOffset &&
+               secondaryCol[3] == primaryCol[3]; // same RTTI TypeDescriptor
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+int call_resolution_guarded(ExecFn fn, void* exec, const wchar_t* command) {
+    bool balanced = true;
+    int result = 0;
+    __try {
+        result = call_exec(fn, exec, command, &balanced);
+    } __except (capture_resolution_fault(GetExceptionInformation())) {
+        g_resolutionDisabled = true;
+        auto* base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+        BVR_LOG("[b1r] live resolution: SETRES fault exe+0x%X address=%p; "
+                "live-resolution lane disabled for this session",
+                static_cast<unsigned>(g_resolutionFaultIp - reinterpret_cast<uintptr_t>(base)),
+                reinterpret_cast<void*>(g_resolutionFaultAddr));
+        return -1;
+    }
+    if (!balanced) {
+        g_resolutionDisabled = true;
+        BVR_LOG("[b1r] live resolution: SETRES stack imbalance repaired; "
+                "live-resolution lane disabled for this session");
+        return -1;
+    }
+    return result;
+}
 
 void run(const char* args, uint32_t rva, const char* label, Entry entry) {
     if (!args || !args[0]) {
@@ -211,6 +272,68 @@ void run(const char* args, uint32_t rva, const char* label, Entry entry) {
 
 } // namespace
 
+namespace {
+bool g_graphicsDisabled = false;
+bool g_graphicsUnexpectedSlot = false;
+wchar_t g_graphicsOutput[512]{};
+void* g_graphicsVtbl[kStubSlots]{};
+struct GraphicsOutput { void** vptr = g_graphicsVtbl; } g_graphicsDevice;
+template<int Slot> int __stdcall GraphicsSlot(const void* text, int) {
+    if constexpr (Slot == 4) return 1; // Enable the known Logf filter.
+    if constexpr (Slot == 1) {
+        if (text) wcsncpy_s(g_graphicsOutput, static_cast<const wchar_t*>(text), _TRUNCATE);
+    } else g_graphicsUnexpectedSlot = true;
+    return 0;
+}
+template<int... I> void fill_graphics(std::integer_sequence<int, I...>) {
+    ((g_graphicsVtbl[I] = reinterpret_cast<void*>(&GraphicsSlot<I>)), ...);
+}
+bool graphics_key(const char* key) {
+    if (!key) return false;
+    for (const auto& option : graphics_options::kOptions)
+        if (strcmp(key, option.key) == 0) return true;
+    return false;
+}
+bool graphics_exec(const wchar_t* command) {
+    if (g_graphicsDisabled || !patterns::rva_trusted()) return false;
+    void* engine = resolve_engine();
+    if (!engine) return false;
+    if (!g_graphicsVtbl[0]) fill_graphics(std::make_integer_sequence<int, kStubSlots>{});
+    g_graphicsOutput[0] = 0;
+    g_graphicsUnexpectedSlot = false;
+    auto* base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+    bool balanced = true;
+    int result = 0;
+    __try {
+        result = call_exec(reinterpret_cast<ExecFn>(base + patterns::kEngineExecRva),
+            static_cast<uint8_t*>(engine) + patterns::kEngineExecThisOffset,
+            command, &balanced, &g_graphicsDevice);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        g_graphicsDisabled = true;
+    }
+    if (!balanced || g_graphicsUnexpectedSlot) g_graphicsDisabled = true;
+    if (g_graphicsDisabled) BVR_LOG("[graphics-controls] console lane unavailable; use launcher after exit");
+    return result != 0 && !g_graphicsDisabled;
+}
+}
+
+bool read_render_option(const char* key, std::wstring& value) {
+    if (!graphics_key(key)) return false;
+    wchar_t command[160];
+    swprintf_s(command, L"get Engine.RenderConfig %hs", key);
+    if (!graphics_exec(command) || !g_graphicsOutput[0]) return false;
+    value = g_graphicsOutput;
+    return true;
+}
+bool set_render_option(const char* key, const char* value) {
+    if (!graphics_key(key) || !value) return false;
+    const bool fluid = strcmp(key, "FluidSurfaceDetail") == 0;
+    if (strcmp(value, fluid ? "High" : "True") != 0 && strcmp(value, fluid ? "Low" : "False") != 0) return false;
+    wchar_t command[160];
+    swprintf_s(command, L"set Engine.RenderConfig %hs %hs", key, value);
+    return graphics_exec(command);
+}
+
 void run_viewport(const char* args) {
     run(args, patterns::kViewportExecRva, "viewport", Entry::Viewport);
 }
@@ -221,6 +344,36 @@ void run_client(const char* args) {
 
 void run_engine(const char* args) {
     run(args, patterns::kEngineExecRva, "engine", Entry::Engine);
+}
+
+ResolutionDispatch set_viewport_resolution(uint32_t width, uint32_t height) {
+    if (g_resolutionDisabled) return ResolutionDispatch::Fault;
+    if (width < 320 || height < 320 || width > 8192 || height > 8192 ||
+        !patterns::rva_trusted())
+        return ResolutionDispatch::Unavailable;
+
+    void* client = nullptr;
+    void* viewportObject = nullptr;
+    if (!input_drive::resolve_engine_objects(&client, &viewportObject))
+        return ResolutionDispatch::Unavailable;
+    auto* base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
+    auto* viewport = static_cast<uint8_t*>(viewportObject);
+    if (!base || !validate_resolution_target(base, viewport)) {
+        BVR_LOG("[b1r] live resolution: viewport/FExec identity check failed");
+        return ResolutionDispatch::Unavailable;
+    }
+
+    wchar_t command[64];
+    swprintf_s(command, L"setres %ux%ux32w", width, height);
+    ensure_stub();
+    auto fn = reinterpret_cast<ExecFn>(base + patterns::kViewportExecRva);
+    const int result = call_resolution_guarded(
+        fn, viewport + patterns::kViewportExecThisOffset, command);
+    BVR_LOG("[b1r] live resolution: %ls -> %s (thread %lu; awaiting actual DXGI size)",
+            command, result < 0 ? "FAULT" : result ? "HANDLED" : "unhandled",
+            GetCurrentThreadId());
+    return result < 0 ? ResolutionDispatch::Fault
+                     : result ? ResolutionDispatch::Dispatched : ResolutionDispatch::Unavailable;
 }
 
 } // namespace bvr::b1r::console_exec

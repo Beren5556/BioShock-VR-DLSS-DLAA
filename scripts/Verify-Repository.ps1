@@ -44,17 +44,24 @@ try {
         'SECURITY.md',
         'LICENSE',
         'installer/payload-manifest.json',
-        'release/SHA256SUMS-v0.2.3-beta.txt',
-        'docs/releases/v0.2.3-beta.md',
+        'release/SHA256SUMS-v0.2.11.txt',
+        'release/manifest-v0.2.11.json',
+        'docs/releases/v0.2.11.md',
+        'docs/releases/v0.2.11-public.md',
         'apps/launcher/src/BioshockVrLauncher.cs',
-        'installer/src/BioshockVrDlss45StandaloneInstaller.cs'
+        'apps/launcher/src/ImageTab.cs',
+        'installer/msi/Build-Msi.ps1',
+        'installer/msi/Package.wxs',
+        'installer/msi/Interface.wxs',
+        'installer/msi/MsiActions.cs'
     )
     foreach ($file in $required) { $null = Read-Utf8 $file }
 
     $manifestText = Read-Utf8 'installer/payload-manifest.json'
     $manifest = $manifestText | ConvertFrom-Json
     Assert-True ($manifest.schemaVersion -eq 1) 'Unexpected payload manifest schema.'
-    Assert-True ($manifest.release -eq 'v0.2.3-beta') 'Unexpected payload manifest release.'
+    # The legacy EXE input manifest remains as provenance for shared inputs.
+    # The authoritative distribution manifest is the immutable MSI manifest below.
     Assert-True (@($manifest.payload).Count -eq 8) 'The payload manifest must contain 8 binary inputs.'
     Assert-True ($manifest.expectedGame.sha256 -match '^[0-9A-F]{64}$') 'Invalid expected game hash.'
     Assert-True ($manifest.installer.sha256 -match '^[0-9A-F]{64}$') 'Invalid installer hash.'
@@ -65,16 +72,38 @@ try {
         Assert-True ([string]$entry.sha256 -match '^[0-9A-F]{64}$') "Invalid payload hash: $($entry.sourcePath)"
     }
 
-    $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.3-beta.txt').Trim()
-    $expectedSum = "$($manifest.installer.sha256) *$($manifest.installer.releaseAsset)"
-    Assert-True ($sumLine -eq $expectedSum) 'Release checksum does not match the payload manifest.'
+    $msiManifest = (Read-Utf8 'release/manifest-v0.2.11.json') | ConvertFrom-Json
+    Assert-True ($msiManifest.version -eq '0.2.11') 'Unexpected MSI manifest version.'
+    Assert-True ($msiManifest.installer -eq 'BioShock-VR-DLSS-DLAA-0.2.11.msi') 'Unexpected MSI asset name.'
+    Assert-True ($msiManifest.testFamily -eq '') 'An isolated test MSI must not be published.'
+    Assert-True ($msiManifest.launcherAutoStart -eq $false) 'MSI must not auto-start the launcher.'
+    Assert-True ($msiManifest.runtime -eq '310.7.0.0') 'Unexpected bundled runtime.'
+    Assert-True (@($msiManifest.files).Count -eq 23) 'The MSI must have 23 explicit payload files.'
+    foreach ($entry in $msiManifest.files) {
+        Assert-True (-not [IO.Path]::IsPathRooted($entry.path)) 'Absolute payload path.'
+        Assert-True ($entry.path -notmatch '(^|[\\/])\.\.([\\/]|$)|BioshockHD\.exe') 'Unsafe or game payload path.'
+        Assert-True ($entry.sha256 -match '^[0-9A-F]{64}$') "Invalid MSI payload hash: $($entry.path)"
+    }
+    $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.11.txt').Trim()
+    $expectedSum = "$($msiManifest.sha256)  $($msiManifest.installer)"
+    Assert-True ($sumLine -eq $expectedSum) 'Release checksum does not match the MSI manifest.'
+    $msiBuilder = Read-Utf8 'installer/msi/Build-Msi.ps1'
+    Assert-True ($msiBuilder.Contains('ya se ha entregado. Usa una versión nueva')) 'Delivered MSI version guard is missing.'
+    $preset = (Read-Utf8 'CMakePresets.json') | ConvertFrom-Json
+    $stable = @($preset.configurePresets | Where-Object name -eq 'stable-win32')[0]
+    foreach ($flag in @('BVR_DLSS_OVERLAP','BVR_DEPTH_COPY_REUSE','BVR_DLSS_TAIL_OVERLAP','BVR_DLSS_EARLY_DELIVERY')) {
+        Assert-True ($stable.cacheVariables.$flag -eq 'ON') "Stable optimization disabled: $flag"
+    }
+    foreach ($flag in @('BVR_PERFORMANCE_PROBE','BVR_LATENCY_PROBE','BVR_CRITICAL_PATH_PROBE')) {
+        Assert-True ($stable.cacheVariables.$flag -eq 'OFF') "Diagnostic enabled in stable build: $flag"
+    }
 
     $cmake = Read-Utf8 'CMakeLists.txt'
-    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.3-beta")')) 'CMake distribution version is not v0.2.3-beta.'
+    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.11")')) 'CMake distribution version is not 0.2.11.'
     Assert-True ($cmake.Contains('project(BioshockVR VERSION 0.8.2')) 'The upstream base must remain v0.8.2.'
 
     $launcher = Read-Utf8 'apps/launcher/src/BioshockVrLauncher.cs'
-    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.3.0")]')) 'Launcher version is not 0.2.3.0.'
+    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.11.0")]')) 'Launcher version is not 0.2.11.0.'
     Assert-True ($launcher.Contains('private const bool FinalDlssEdition = true;')) 'Final launcher policy is not enabled.'
     Assert-True ($launcher.Contains('InitializeHiddenIniEditor();')) 'Hidden INI infrastructure is missing.'
     Assert-True ($launcher.Contains('fxaaGroup.Visible = !FinalDlssEdition;')) 'FXAA visibility guard is missing.'
@@ -97,15 +126,7 @@ try {
     $hiddenMethod = $launcher.Substring($hiddenStart, $hiddenEnd - $hiddenStart)
     Assert-True (-not $hiddenMethod.Contains('TabPages.Add(page)')) 'The full Bioshock.ini page is exposed.'
 
-    $installer = Read-Utf8 'installer/src/BioshockVrDlss45StandaloneInstaller.cs'
-    Assert-True ([regex]::Matches($installer, 'new Payload\(').Count -eq 20) 'Installer source must embed 20 resources.'
-    Assert-True ($installer.Contains('[assembly: AssemblyVersion("0.2.3.0")]')) 'Installer version is not 0.2.3.0.'
-    Assert-True ($installer.Contains('HasInitializedGameConfiguration()')) 'First-run Bioshock.ini check is missing.'
-    Assert-True ($installer.Contains('El mod se ha instalado correctamente, pero Windows no ha podido abrir el lanzador.')) 'Successful install / launcher-open separation is missing.'
-    Assert-True ($installer.Contains('RemoveEmptyPayloadDirectories(manifest.GameDirectory, log);')) 'Empty payload directory cleanup is missing.'
-    Assert-True ($installer.Contains('manifest.Version != "0.2.2" && manifest.Version != "0.2.3"')) 'Safe 0.2.2 to 0.2.3 migration is missing.'
-
-    foreach ($releaseFile in @('README.md', 'PROVENANCE.md', 'docs/releases/v0.2.3-beta.md')) {
+    foreach ($releaseFile in @('README.md', 'PROVENANCE.md', 'docs/releases/v0.2.11-public.md')) {
         Assert-True (-not (Read-Utf8 $releaseFile).Contains('PENDIENTE_DE_COMPILACION_FINAL')) "Pending release hash in $releaseFile."
     }
 
@@ -119,7 +140,7 @@ try {
         Assert-True ($LASTEXITCODE -eq 0) 'Launcher build failed.'
         $launcherExe = Join-Path $repoRoot 'artifacts\launcher\Lanzador BioShock VR DLSS-DLAA.exe'
         Assert-True (Test-Path -LiteralPath $launcherExe -PathType Leaf) 'Launcher build output is missing.'
-        $process = Start-Process -FilePath $launcherExe -ArgumentList '--self-test' -Wait -PassThru
+        $process = Start-Process -FilePath $launcherExe -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
         try {
             Assert-True ($process.ExitCode -eq 0) "Launcher self-test failed with exit code $($process.ExitCode)."
         }

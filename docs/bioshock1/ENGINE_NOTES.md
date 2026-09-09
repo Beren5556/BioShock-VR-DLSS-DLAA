@@ -3518,3 +3518,69 @@ fg path (route B - unnecessary, the cluster lever passed first) and the fovA
 consumer hunt (route A - stays parked with its in-headset world-coupling
 negative). `kActorDrawScaleOffset`/dirty-protocol constants remain declared,
 still unreferenced.
+
+## Beta 0.2.4 - live resolution candidate: corrected viewport FExec subobject
+
+Offline investigation on 2026-09-08 revises the interpretation of session 27's
+SETRES fault. The existing private installer-test EXE has the supported PE
+identity. No game was launched for this investigation. The public source's
+viewport resolver returns the UObject base, but the Exec entry at RVA
+`0x8525C0` expects its FExec subobject at **viewport + `0x44`**.
+
+Three independent static checks agree:
+
+- The secondary vtable at RVA `0xE4E338` points to `0x8525C0`.
+- Its CompleteObjectLocator at `0xE7EE08` declares offset `0x44` and the same
+  TypeDescriptor as the primary viewport vtable at `0xE4E448` (offset zero).
+- The SETRES branch converts its `this` back by `0x44`, checks the primary
+  vtable and passes that base object to the render device. The earlier fault
+  at `0x4C2353` occurs in the superclass command chain, before SETRES parsing,
+  when the unadjusted `this` causes a UObject field to be read as a pointer.
+
+The new `console_exec::set_viewport_resolution` lane constructs only a bounded
+`setres WxHx32w` command and checks host identity, both vtables and RTTI before
+calling with the corrected subobject. It has a separate fault latch; the
+generic shipping Exec seam and its commands are unchanged. Resolution requests
+cross a single mailbox to the outer gameplay BuildDetour entry, before its
+original constructs the first eye. Dispatch requires depth zero, the known
+gameplay caller, the CalcView-established game thread and no second-eye tag.
+They do not run inside CalcView, from Present or during second-eye replay.
+CalcView retains only the separate persistence tick for confirmed settings.
+
+This is a **statically justified candidate**, not evidence that a live resize
+works. `Dispatched` means that Exec returned HANDLED. Acceptance requires the
+actual DXGI backbuffer to reach the requested size, both XR eyes to be rebuilt
+coherently and a real game test. The render-side coordinator must close its
+frame/pair and retire outstanding GPU use before enqueueing; failed dispatch
+or unconfirmed geometry must keep or restore the last applied configuration.
+INI persistence remains separate and follows confirmed dimensions only.
+
+## 2026-09-09 — 0.2.9 graphical-options candidate (not live-validated)
+
+F1 now appends a nine-row graphics page. F2/F3 select a row; F4 is consumed
+only while this page is visible. The shipping build has all three diagnostic
+probes disabled, so it cannot reuse the former F4 A/B/C experiment. Existing
+mode, resolution, quality and sharpness controls/ladders remain unchanged.
+
+The backend allowlists exactly the nine RenderConfig keys used by the launcher.
+It uses the established UGameEngine FExec subobject (+0x40) and trusted-host
+guard, with a separate FOutputDevice capture stub for GET and SET. Only the
+known Logf filter (slot 4) and wide Serialize (slot 1) are expected. Faults,
+unexpected slots or measured stack imbalance disable this graphics lane.
+No arbitrary user-supplied console commands are accepted through F4.
+
+GET/SET dispatch happens on the existing CalcView game-thread tick, never in
+WndProc/Present or as a render-size request. Reading the page does not save.
+Toggle first reads the engine value, SETs the opposite, then GETs it back;
+an ignored/unconfirmed SET is not persisted and attempts to restore its prior
+value. Confirmed settings are saved only to the target Engine.RenderConfig
+key in a staged private copy of Bioshock.ini. Unavailable GET falls back to
+displaying the INI value as requiring the launcher and restart.
+
+IMPORTANT: this proves neither successful live output-device capture nor
+immediate visual updating of every effect. Unit tests use a simulated console.
+Runtime GET may describe a property whose renderer resources are cached.
+The UI explicitly advises restart if an effect does not change. A user VR
+test must check the output lane and each effect before calling this stable.
+The performance investigation remains paused; no rendering optimization,
+host, NVIDIA runtime, game executable or BioShock 2 code was changed here.

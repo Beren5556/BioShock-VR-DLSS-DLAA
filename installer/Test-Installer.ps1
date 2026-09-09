@@ -7,14 +7,17 @@ param(
 
     [string]$TestOutputRoot = '',
 
-    [string]$PreviousInstaller = ''
+    [string]$PreviousInstaller = '',
+
+    [string]$PayloadDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $sourceRoot = [IO.Path]::GetFullPath($PSScriptRoot)
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $sourceRoot '..'))
-$installer = Join-Path $repoRoot 'artifacts\release\Instalador BioShock VR DLSS-DLAA Beta 0.2.3.exe'
-$launcherPayload = Join-Path $sourceRoot 'Payload\Lanzador BioShock VR DLSS-DLAA.exe'
+$installer = Join-Path $repoRoot 'artifacts\release\Instalador BioShock VR DLSS-DLAA Beta 0.2.6.exe'
+$payloadRoot = if ($PayloadDirectory) { [IO.Path]::GetFullPath($PayloadDirectory) } else { Join-Path $sourceRoot 'Payload' }
+$launcherPayload = Join-Path $payloadRoot 'Lanzador BioShock VR DLSS-DLAA.exe'
 $gameSource = [IO.Path]::GetFullPath($GameExecutable)
 if ([string]::IsNullOrWhiteSpace($TestOutputRoot)) {
     $TestOutputRoot = Join-Path ([IO.Path]::GetTempPath()) 'BvrInstallerTests'
@@ -31,13 +34,20 @@ function Invoke-WinExe([string]$file, [string[]]$arguments) {
     $quoted = foreach ($argument in $arguments) {
         if ($argument -match '[\s"]') { '"' + $argument.Replace('"', '\"') + '"' } else { $argument }
     }
-    Start-Process -FilePath $file -ArgumentList $quoted -PassThru -Wait
+    Start-Process -FilePath $file -ArgumentList $quoted -WindowStyle Hidden -PassThru -Wait
 }
 
 function Close-ExactProcess([Diagnostics.Process]$process, [string]$label) {
     $process.Refresh()
     Assert-True (-not $process.HasExited) "$label se cerró antes de mostrar su interfaz."
     $processId = $process.Id
+    if ($process.MainWindowHandle -eq [IntPtr]::Zero) {
+        # .NET deliberately omits hidden top-level windows from MainWindowHandle.
+        # This is our exact hidden smoke PID, never an existing user process.
+        $process.Kill()
+        Assert-True ($process.WaitForExit(5000)) "No se pudo cerrar el PID oculto $processId de $label."
+        return
+    }
     $null = $process.CloseMainWindow()
     if (-not $process.WaitForExit(5000)) {
         $process.Kill()
@@ -49,17 +59,14 @@ function Start-Smoke([string]$file, [string[]]$arguments, [string]$label) {
     $quoted = foreach ($argument in $arguments) {
         if ($argument -match '[\s"]') { '"' + $argument.Replace('"', '\"') + '"' } else { $argument }
     }
-    $process = Start-Process -FilePath $file -ArgumentList $quoted -PassThru
+    $process = Start-Process -FilePath $file -ArgumentList $quoted -WindowStyle Hidden -PassThru
     try {
-        try { $null = $process.WaitForInputIdle(5000) } catch { }
-        $deadline = [DateTime]::UtcNow.AddSeconds(10)
-        do {
-            $process.Refresh()
-            if ($process.HasExited -or $process.MainWindowHandle -ne [IntPtr]::Zero) { break }
-            Start-Sleep -Milliseconds 100
-        } while ([DateTime]::UtcNow -lt $deadline)
+        $idle = $false
+        try { $idle = $process.WaitForInputIdle(5000) } catch { }
+        Start-Sleep -Milliseconds 750
+        $process.Refresh()
         Assert-True (-not $process.HasExited) "$label no permaneció abierto."
-        Assert-True ($process.MainWindowHandle -ne [IntPtr]::Zero) "$label no creó una ventana principal."
+        Assert-True $idle "$label no llegó a su bucle de mensajes de interfaz."
         Close-ExactProcess $process $label
     }
     finally {
@@ -135,23 +142,25 @@ Assert-True ($testRoot.StartsWith($safePrefix, [StringComparison]::OrdinalIgnore
 if (-not [string]::IsNullOrWhiteSpace($PreviousInstaller)) {
     $PreviousInstaller = [IO.Path]::GetFullPath($PreviousInstaller)
     Assert-True (Test-Path -LiteralPath $PreviousInstaller -PathType Leaf) "Falta el instalador anterior: $PreviousInstaller"
+    Assert-True ((Get-FileHash -Algorithm SHA256 -LiteralPath $PreviousInstaller).Hash -eq
+        '4209EC30993EB50814199D49372B5AF1F25A763FA36E319787497E992F2D5547') 'La migración requiere el instalador 0.2.5 conservado, sin modificaciones.'
 }
 
 $realPaths = @($ProtectedPaths | ForEach-Object { [IO.Path]::GetFullPath($_) })
 
 $expected = [ordered]@{
     'xinput1_3.dll' = '441BF1728BB38A2EC2BA57605CF840D786122E862D47A6DFA642BFF484F8E191'
-    'bioshockvr.dll' = '7107B2CEBE567913888CD2FE6F58F304F435438466C81FF5E002627F0B192C78'
+    'bioshockvr.dll' = '781BF9095B2F0D807820D0C6945D327D93835AB447C7D431B9A93A7AFF652ACE'
     'bvr_steamvr32.dll' = '56537A2EA8F88FCE6A2928EAECDE11EEEEED9C4D04F36B39E466B4D03330B972'
     'openvr_api.dll' = 'AB696E4F218A95B3E396BC310F9FE6485DF48C99C0969762083212B1E1F025A6'
     'host64\BioShockVR-DLSS45-Host64.exe' = '480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453'
     'host64\nvngx_dlss.dll' = 'BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E'
     'host64\dlss-capabilities.ini' = '7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77'
-    'Lanzador BioShock VR DLSS-DLAA.exe' = '403B43DA8980622C4B85FAFDC4574F0D369C8B707489955F0C1C414E8123740A'
-    'BioShockVR-DLSS45\LEEME-DLSS45.md' = '4B3D306C19BA1108C51E3304602DE09D295E978BACD4931A50D6F2AA9B7AE115'
+    'Lanzador BioShock VR DLSS-DLAA.exe' = '214CE0BFEC8A5CF364A98095D7E35CC951F5DAD9DBCD5B6B0DDB686AFA402A11'
+    'BioShockVR-DLSS45\LEEME-DLSS45.md' = '64A8C61F23DC706B1B6F6B6530451198E92D1D574D318B8330901573FC761666'
     'BioShockVR-DLSS45\NVIDIA-DLSS-LICENSE.txt' = 'A3E28883672AB1B48187A0CC004EA468C76F6BEA15F33F0F38A970B7F7E04C64'
-    'BioShockVR-DLSS45\INFORMACION-DEL-PAQUETE.txt' = '8437CDAD3722489821787ADD90881DDBDC549E5490F81F4D2B0ADC32EEDEB9A6'
-    'BioShockVR-DLSS45\dlss.ini.example' = '2632EED19448D7D1C25A56DE33D3E5F69481140B8AD36BE2DD0891195D549CDE'
+    'BioShockVR-DLSS45\INFORMACION-DEL-PAQUETE.txt' = '2A8C6C77FE34DF9C278266073DEED2F36677BB984E738D05FA665A9DD5CD8F16'
+    'BioShockVR-DLSS45\dlss.ini.example' = 'DE2825C895948FCBD58A3082802B0B50C1D99EEFA06A34FB513FC6E5F5E33009'
     'BioShockVR-DLSS45\Licenses\BioShockVR-MIT-LICENSE.txt' = '199384980B6925AA5DA072314C0C265BB097F41C7849A7AB0E6DE9294D3D8114'
     'BioShockVR-DLSS45\Licenses\DLSS-Host-MIT-LICENSE.txt' = '1CE240E402901FB81EB82A60A6BAFD2FB913CD5746860B0A4EC52A5ACB49CED7'
     'BioShockVR-DLSS45\Licenses\THIRD_PARTY_NOTICES.md' = '56EB4D3AEF9087E47113609CE507856A0270A62B8C6E1734CDF0EE5A2B670C13'
@@ -174,6 +183,11 @@ try {
     $selfText = Get-Content -LiteralPath $selfTestResult -Encoding UTF8 -Raw
     Assert-True ($selfText.StartsWith('PASS: 20 recursos')) 'El self-test no verificó los 20 recursos.'
 
+    $uiCloseResult = Join-Path $testRoot 'ui-close-test.txt'
+    $uiClose = Invoke-WinExe $installer @('--ui-close-self-test', $uiCloseResult)
+    Assert-True ($uiClose.ExitCode -eq 0) 'Falló la prueba real del cierre del instalador.'
+    Assert-True ((Get-Content -LiteralPath $uiCloseResult -Encoding UTF8 -Raw).StartsWith('PASS: 4 cierres UI reales')) 'El cierre no se verificó sobre la ventana modeless.'
+
     Start-Smoke $installer @() 'El instalador'
 
     $cleanGame = New-Fixture 'Clean'
@@ -189,6 +203,8 @@ try {
     Assert-True ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $cleanGame 'BioshockHD.exe')).Hash -eq $gameHashBefore) 'La instalación alteró BioshockHD.exe.'
 
     $installedLauncher = Join-Path $cleanGame 'Lanzador BioShock VR DLSS-DLAA.exe'
+    $launcherSelfTest = Invoke-WinExe $installedLauncher @('--self-test')
+    Assert-True ($launcherSelfTest.ExitCode -eq 0) 'Falló la autoprueba del lanzador instalado (configuración y controles).'
     Start-Smoke $installedLauncher @('--game', (Join-Path $cleanGame 'BioshockHD.exe')) 'El lanzador'
 
     $cleanRestoreResult = Join-Path $testRoot 'clean-restore.txt'
@@ -205,17 +221,17 @@ try {
         $versionUpgradeState = Join-Path $testRoot 'VersionUpgrade-State'
         $versionUpgradeGameHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $versionUpgradeGame 'BioshockHD.exe')).Hash
 
-        Invoke-IntegrationInstall $versionUpgradeGame $versionUpgradeState (Join-Path $testRoot 'version-upgrade-022-install.txt') $PreviousInstaller
+        Invoke-IntegrationInstall $versionUpgradeGame $versionUpgradeState (Join-Path $testRoot 'version-upgrade-025-install.txt') $PreviousInstaller
         $previousManifest = Get-Content -LiteralPath (Join-Path $versionUpgradeState 'install.manifest') -Encoding UTF8 -Raw
-        Assert-True ($previousManifest -match '(?m)^Version=0\.2\.2\r?$') 'La instalación anterior no produjo un manifiesto 0.2.2.'
+        Assert-True ($previousManifest -match '(?m)^Version=0\.2\.5\r?$') 'La instalación anterior no produjo un manifiesto 0.2.5.'
 
-        Invoke-IntegrationInstall $versionUpgradeGame $versionUpgradeState (Join-Path $testRoot 'version-upgrade-023-install.txt')
+        Invoke-IntegrationInstall $versionUpgradeGame $versionUpgradeState (Join-Path $testRoot 'version-upgrade-026-install.txt')
         foreach ($entry in $expected.GetEnumerator()) {
             $installed = Join-Path $versionUpgradeGame $entry.Key
-            Assert-True ((Get-FileHash -Algorithm SHA256 -LiteralPath $installed).Hash -eq $entry.Value) "La migración 0.2.2 -> 0.2.3 no instaló: $($entry.Key)"
+            Assert-True ((Get-FileHash -Algorithm SHA256 -LiteralPath $installed).Hash -eq $entry.Value) "La migración 0.2.5 -> 0.2.6 no instaló: $($entry.Key)"
         }
         $currentManifest = Get-Content -LiteralPath (Join-Path $versionUpgradeState 'install.manifest') -Encoding UTF8 -Raw
-        Assert-True ($currentManifest -match '(?m)^Version=0\.2\.3\r?$') 'La migración no actualizó el manifiesto a 0.2.3.'
+        Assert-True ($currentManifest -match '(?m)^Version=0\.2\.6\r?$') 'La migración no actualizó el manifiesto a 0.2.6.'
 
         Invoke-IntegrationRestore $versionUpgradeState (Join-Path $testRoot 'version-upgrade-restore.txt')
         foreach ($relative in $expected.Keys) {
@@ -255,10 +271,12 @@ try {
     Assert-Snapshot $realBefore 'La batería de pruebas'
     $success = $true
     Write-Output 'PASS: self-test de 20 recursos'
-    Write-Output 'PASS: instalador y lanzador permanecen abiertos y se cierran por PID exacto'
+    Write-Output 'PASS: seis grupos de autopruebas del lanzador instalado, incluidos controles y nitidez'
+    Write-Output 'PASS: botón Cerrar y cierre tras abrir el lanzador (4 casos de ventana modeless real)'
+    Write-Output 'PASS: arranque oculto de instalador/lanzador, bucle UI activo y cierre por PID exacto'
     Write-Output 'PASS: instalación limpia autónoma y restauración'
     if (-not [string]::IsNullOrWhiteSpace($PreviousInstaller)) {
-        Write-Output 'PASS: migración real 0.2.2 -> 0.2.3 y restauración limpia'
+        Write-Output 'PASS: migración real 0.2.5 -> 0.2.6 y restauración limpia'
     }
     Write-Output 'PASS: actualización y restauración byte a byte de 20 archivos previos'
     Write-Output 'PASS: rechazo sin escrituras de carpeta no compatible'

@@ -7,6 +7,21 @@
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "Win32", "strategy": "set" },
       "binaryDir": "${sourceDir}/build"
+    },
+    {
+      "name": "stable-win32",
+      "inherits": "win32",
+      "displayName": "0.2.11 - stereo recovery and MSI upgrade",
+      "binaryDir": "${sourceDir}/artifacts/stable-0.2.11/build",
+      "cacheVariables": {
+        "BVR_DLSS_OVERLAP": "ON",
+        "BVR_DEPTH_COPY_REUSE": "ON",
+        "BVR_DLSS_TAIL_OVERLAP": "ON",
+        "BVR_DLSS_EARLY_DELIVERY": "ON",
+        "BVR_PERFORMANCE_PROBE": "OFF",
+        "BVR_LATENCY_PROBE": "OFF",
+        "BVR_CRITICAL_PATH_PROBE": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -19,6 +34,11 @@
       "name": "release",
       "configurePreset": "win32",
       "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "stable",
+      "configurePreset": "stable-win32",
+      "configuration": "Release"
     }
   ]
 }

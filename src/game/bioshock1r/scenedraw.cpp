@@ -12,12 +12,16 @@
 #include "game/bioshock1r/scenedraw.h"
 
 #include "core/gfx/frame_inspector.h"
+#include "core/gfx/dlss45_client.h"
 #include "core/gfx/hud_capture.h"
 #include "core/hooks/d3d11_hook.h"
 #include "core/util/log.h"
 #include "core/vr/openxr_runtime.h"
+#include "core/vr/critical_path_probe.h"
 #include "game/bioshock1r/camera.h"
 #include "game/bioshock1r/patterns.h"
+#include "game/bioshock1r/performance_probe.h"
+#include "game/bioshock1r/stereo_recovery.h"
 
 #include <windows.h>
 #include <MinHook.h>
@@ -91,6 +95,7 @@ std::atomic<int>   g_dumpRemaining{0};  // per-call submit dump lines left
 // (pass 1 = left eye, pass 2 = right - camera.cpp applies the offsets) and
 // each nested submit pushes its eye tag to core/vr for per-Present capture.
 std::atomic<bool>  g_stereo{false};
+std::atomic<bool>  g_stereoRequested{false}; // user intent, never changed by watchdog
 std::atomic<uint32_t> g_stereoSkips{0}; // second calls skipped (render stalled)
 // Drains skipped by the empty-slot guard (session-7 forensics: entering the
 // drain with [this+0xC] == NULL is the recurring drain+0x33 crash).
@@ -146,6 +151,7 @@ std::atomic<bool> g_wdKickEnabled{false};
 // watchdog must never resurrect a state the user turned off on purpose.
 std::atomic<bool> g_stereoAutoOff{false};
 std::atomic<bool> g_autoOffDouble{false}; // g_doubleCall as it was at auto-off
+StereoRecoveryGate g_stereoRecovery; // game-thread build boundaries only
 std::atomic<bool>  g_poisoned{false};
 std::atomic<uint32_t> g_lastExcCode{0};
 std::atomic<uint32_t> g_lastExcRva{0};
@@ -181,13 +187,23 @@ uint64_t g_beatPresents = 0;
 struct ScopedEyeBuild {
     int previousEye = -1;
     uint64_t previousId = 0;
+    bvr::critical_path_probe::Scope cpuScope;
 
     ScopedEyeBuild(int eye, uint64_t id)
-        : previousEye(t_eyeBuild), previousId(t_eyeBuildId) {
+        : previousEye(t_eyeBuild), previousId(t_eyeBuildId),
+          cpuScope(eye == 0 ? bvr::critical_path_probe::Stage::EngineLeft :
+                             bvr::critical_path_probe::Stage::EngineRight,
+                   id && previousId == 0 && g_forceInline.load(std::memory_order_relaxed)) {
         t_eyeBuild = id ? eye : -1;
         t_eyeBuildId = id;
+        // Only the proven inline path may issue immediate-context timestamps
+        // here. Threaded/untagged/nested builds remain completely unmeasured.
+        if (id && previousId == 0 && g_forceInline.load(std::memory_order_relaxed))
+            performance_probe::scene_begin(eye, id);
     }
     ~ScopedEyeBuild() {
+        if (t_eyeBuildId && previousId == 0)
+            performance_probe::build_end(t_eyeBuild, t_eyeBuildId);
         t_eyeBuild = previousEye;
         t_eyeBuildId = previousId;
     }
@@ -369,33 +385,26 @@ DWORD WINAPI WatchdogMain(void*) {
     uint32_t lastBuilds = 0;
     uint64_t lastPresents = 0;
     int stallTicks = 0;
-    int healthyTicks = 0;
     for (;;) {
         Sleep(100);
         if (g_watchdogExit.load(std::memory_order_relaxed)) return 0;
+        // A user-requested live image rebuild blocks Present inside this
+        // detour while recreating NGX. In the 0.2.4 log it took 1.46 s, so
+        // this 1.2 s watchdog auto-disabled stereo just before success.
+        // Reset sampled progress during the SAME bounded window used by XR;
+        // do not force stereo on, change user intent or disable the watchdog.
+        if (bvr::vr::image_reconfiguration_active() || bvr::dlss45::bounded_wait_active()) {
+            stallTicks = 0;
+            lastBuilds = g_buildEntries.load(std::memory_order_relaxed);
+            lastPresents = bvr::d3d11_hook::present_count();
+            continue;
+        }
         if (!g_stereo.load(std::memory_order_relaxed)) {
             stallTicks = 0;
-            // Only ever re-arm what WE turned off. Requires the pipeline to be
-            // moving again AND the game thread to be outside our detours, for
-            // 500 ms - re-arming into a live deadlock would just re-wedge it.
-            if (g_stereoAutoOff.load(std::memory_order_relaxed)) {
-                uint32_t b = g_buildEntries.load(std::memory_order_relaxed);
-                uint64_t p = bvr::d3d11_hook::present_count();
-                bool moving = (b != lastBuilds) || (p != lastPresents);
-                bool outside = g_activeDepth.load(std::memory_order_relaxed) == 0;
-                lastBuilds = b;
-                lastPresents = p;
-                if (moving && outside && ++healthyTicks >= 5) {
-                    g_doubleCall.store(g_autoOffDouble.load(std::memory_order_relaxed),
-                                       std::memory_order_relaxed);
-                    g_stereo.store(true, std::memory_order_relaxed);
-                    g_stereoAutoOff.store(false, std::memory_order_relaxed);
-                    healthyTicks = 0;
-                    BVR_LOG("[reentry] watchdog: pipeline moving again - stereo RE-ARMED "
-                            "(the auto-off was a false positive; hooks were never dropped)");
-                }
-                if (!moving || !outside) healthyTicks = 0;
-            }
+            // The game thread now re-arms at a proven frame boundary. Sampling
+            // depth==0 five times here starved forever in the 0.2.10 timeout log.
+            lastBuilds = g_buildEntries.load(std::memory_order_relaxed);
+            lastPresents = bvr::d3d11_hook::present_count();
             continue;
         }
         // A loading screen is not a deadlock. Pure-gameswf intervals (loading,
@@ -457,11 +466,10 @@ DWORD WINAPI WatchdogMain(void*) {
                     "(will re-arm automatically if the pipeline recovers)");
             g_autoOffDouble.store(g_doubleCall.load(std::memory_order_relaxed),
                                   std::memory_order_relaxed);
-            g_stereoAutoOff.store(true, std::memory_order_relaxed);
             g_stereo.store(false, std::memory_order_relaxed);
             g_doubleCall.store(false, std::memory_order_relaxed);
+            g_stereoAutoOff.store(true, std::memory_order_release);
             stallTicks = 0;
-            healthyTicks = 0;
         }
     }
 }
@@ -817,6 +825,36 @@ void __fastcall BuildDetour(void* ecx, void* edx, void* a1, void* a2, void* a3,
         static_cast<uint32_t>(bvr::d3d11_hook::present_count());
     uint32_t presentDelta = presentLow - g_lastBuildPresentLow;
     g_lastBuildPresentLow = presentLow;
+
+    // The renderer queues only at its closed-pair resize safepoint. Dispatch
+    // the single mailbox here, before the first eye's original build starts:
+    // SETRES from inside CalcView would reconfigure an in-progress scene.
+    // Keep transition/load callers and any nested/second-eye build excluded.
+    if (depth == 0 && callerRva == patterns::kSceneBuildGameplayRetRva &&
+        tid == g_lastCalcTid.load(std::memory_order_relaxed) &&
+        g_secondPassTid.load(std::memory_order_relaxed) != tid)
+        camera::dispatch_pending_resolution();
+
+    if (depth == 0 && tid == g_lastCalcTid.load(std::memory_order_relaxed)) {
+        const bool eligible = callerRva == patterns::kSceneBuildGameplayRetRva &&
+            g_stereoRequested.load(std::memory_order_relaxed) &&
+            g_stereoAutoOff.load(std::memory_order_acquire) &&
+            !g_stereo.load(std::memory_order_relaxed) &&
+            !g_poisoned.load(std::memory_order_relaxed) &&
+            g_forceInline.load(std::memory_order_relaxed) &&
+            g_build.enabled.load(std::memory_order_relaxed) &&
+            g_submit.enabled.load(std::memory_order_relaxed) &&
+            g_secondPassTid.load(std::memory_order_relaxed) != tid &&
+            !bvr::hud::screen_only() && !camera::calcview_silent(400) &&
+            !bvr::vr::image_reconfiguration_active() && !bvr::dlss45::bounded_wait_active();
+        if (g_stereoRecovery.observe(GetTickCount64(), bvr::d3d11_hook::present_count(), eligible) &&
+            g_stereoAutoOff.exchange(false, std::memory_order_acq_rel)) {
+            g_doubleCall.store(g_autoOffDouble.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            g_stereo.store(true, std::memory_order_relaxed);
+            BVR_LOG("[reentry] stereo RE-ARMED at gameplay frame boundary after 500 ms of progress; "
+                    "only watchdog auto-off recovered, camera and user settings unchanged");
+        }
+    }
 
     // Session 22: scripted cameras (bathysphere descent) bypass CalcView, so
     // the FOV write's restore path never runs there - do it from here, the
@@ -1307,8 +1345,8 @@ void apply_vrstereo(bool on) {
                 g_stereo.load(std::memory_order_relaxed) ? 1 : 0);
     } else {
         BVR_LOG("[reentry] VRSTEREO OFF: stereo -> camera mode -> 1t");
-        if (g_stereo.load(std::memory_order_relaxed))
-            handle_command("stereo off");
+        // Even after watchdog auto-off, an explicit OFF must cancel recovery.
+        handle_command("stereo off");
         bvr::vr::set_camera_mode(false);
         if (g_forceInline.load(std::memory_order_relaxed))
             handle_command("1t off");
@@ -1381,6 +1419,7 @@ void handle_command(const char* args) {
                          sizeof patterns::kSceneBuildPrologue);
         }
     } else if (strcmp(verb, "unhook") == 0) {
+        g_stereoRequested.store(false, std::memory_order_relaxed);
         g_doubleCall.store(false, std::memory_order_relaxed);
         g_pulseCount.store(0, std::memory_order_relaxed);
         g_stereoAutoOff.store(false, std::memory_order_relaxed); // deliberate: no re-arm
@@ -1403,6 +1442,7 @@ void handle_command(const char* args) {
         }
     } else if (strcmp(verb, "off") == 0) {
         g_doubleCall.store(false, std::memory_order_relaxed);
+        g_autoOffDouble.store(false, std::memory_order_relaxed);
         g_pulseCount.store(0, std::memory_order_relaxed);
         BVR_LOG("[reentry] double-call off");
     } else if (strcmp(verb, "pulse") == 0) {
@@ -1452,6 +1492,8 @@ void handle_command(const char* args) {
                     BVR_LOG("[reentry] drain-guard install FAILED - stereo "
                             "continues unguarded");
                 ensure_watchdog();
+                g_stereoRequested.store(true, std::memory_order_relaxed);
+                g_stereoAutoOff.store(false, std::memory_order_relaxed);
                 g_stereo.store(true, std::memory_order_relaxed);
                 BVR_LOG("[reentry] STEREO ON (%s render): every build doubled "
                         "L/R, submits tagged for per-present eye capture "
@@ -1460,6 +1502,7 @@ void handle_command(const char* args) {
                                              : "single-threaded");
             }
         } else {
+            g_stereoRequested.store(false, std::memory_order_relaxed);
             g_stereoAutoOff.store(false, std::memory_order_relaxed); // deliberate: no re-arm
             g_stereo.store(false, std::memory_order_relaxed);
             BVR_LOG("[reentry] stereo off (hooks stay; 'reentry unhook' to drop)");

@@ -1,6 +1,12 @@
 #include "core/gfx/dlss45_client.h"
+#include "core/gfx/dlss_sharpen.h"
+#include "core/gfx/sampled_gpu_timer.h"
+#include "core/gfx/input_wait_probe.h"
+#include "core/vr/critical_path_probe.h"
+#include "../../../components/dlss-host/src/latency_probe_protocol.h"
 
 #include "core/util/log.h"
+#include "core/util/bounded_activity.h"
 
 #include <d3d11_4.h>
 #include <dxgi1_2.h>
@@ -19,6 +25,8 @@
 namespace bvr::dlss45 {
 namespace {
 
+namespace CP = bvr::critical_path_probe;
+
 constexpr std::uint32_t kIpcMagic = 0x35534C44u; // 'DLS5', inherited wire magic
 constexpr std::uint32_t kIpcVersion = 8u;
 constexpr DWORD kStartupTimeoutMs = 30000;
@@ -27,6 +35,10 @@ constexpr DWORD kBuildTimeoutMs = 20000;
 constexpr DWORD kFramePipeTimeoutMs = 1500;
 constexpr DWORD kFrameFenceTimeoutMs = 5000;
 constexpr DWORD kShutdownTimeoutMs = 3000;
+// A small scheduling margin, not a new rendering timeout. Once the original
+// bound expires, an actually stuck API remains visible to both watchdogs.
+constexpr DWORD kWatchdogWaitMarginMs = 250;
+bvr::BoundedActivity g_boundedWait;
 
 enum FeedSlot : int {
     FeedColor = 0,
@@ -119,14 +131,26 @@ struct EyeState {
     HANDLE pipe = INVALID_HANDLE_VALUE;
     HANDLE pipeEvent = nullptr;
     HANDLE completionEvent = nullptr;
+#ifdef BVR_CRITICAL_PATH_PROBE
+    HANDLE inputProbeEvent = nullptr; // optional, auto-reset; never changes output ownership
+#endif
     ID3D11Texture2D* textures[FeedSlotCount] = {};
     HANDLE textureHandles[FeedSlotCount] = {};
     ID3D11Fence* fenceIn = nullptr;
     ID3D11Fence* fenceOut = nullptr;
     std::uint64_t frame = 0;
+    ID3D11Texture2D* pendingDestination = nullptr; // borrowed XR lease; never a DXGI backbuffer ref
+    double pendingSubmitMs = 0;
 };
 
 EyeState g_eyes[2];
+unsigned g_sharpnessPercent = 0;
+struct CpuCosts { uint64_t count = 0; double submit = 0, wait = 0, total = 0, maxTotal = 0; };
+CpuCosts g_cpuCosts[2];
+#ifdef BVR_CRITICAL_PATH_PROBE
+bvr::input_wait_probe::Counters g_inputWaitCosts[2];
+#endif
+bvr::SampledGpuTimer g_inputTimers[2];
 ID3D11Device* g_device = nullptr;
 ID3D11Device5* g_device5 = nullptr;
 HANDLE g_job = nullptr;
@@ -139,6 +163,7 @@ DXGI_FORMAT g_colorFormat = DXGI_FORMAT_UNKNOWN;
 DXGI_FORMAT g_outputFormat = DXGI_FORMAT_UNKNOWN;
 Mode g_mode = Mode::Off;
 bool g_depthInverted = false;
+bool g_diagnosticTransport = false;
 bool g_isReady = false;
 bool g_faulted = false;
 char g_status[512] = "desactivado";
@@ -362,6 +387,8 @@ void close_all_pipes() noexcept {
 }
 
 void stop_helpers_bounded() noexcept {
+    bvr::BoundedActivity::Scope activity(g_boundedWait, GetTickCount64(),
+        kShutdownTimeoutMs + 1000 + kWatchdogWaitMarginMs);
     close_all_pipes();
 
     HANDLE processes[2] = {};
@@ -405,12 +432,24 @@ void release_resources() noexcept {
         }
         if (eye.pipeEvent) CloseHandle(eye.pipeEvent);
         if (eye.completionEvent) CloseHandle(eye.completionEvent);
+#ifdef BVR_CRITICAL_PATH_PROBE
+        if (eye.inputProbeEvent) CloseHandle(eye.inputProbeEvent);
+        eye.inputProbeEvent = nullptr;
+#endif
         eye.pipeEvent = nullptr;
         eye.completionEvent = nullptr;
         eye.frame = 0;
         eye.directory.clear();
+        eye.pendingDestination = nullptr;
+        eye.pendingSubmitMs = 0;
         eye.executable.clear();
     }
+    bvr::dlss_sharpen::release();
+    g_sharpnessPercent = 0;
+    for (int i=0; i<2; ++i) { g_inputTimers[i].release(); g_cpuCosts[i] = {}; }
+#ifdef BVR_CRITICAL_PATH_PROBE
+    for (auto& costs : g_inputWaitCosts) costs = {};
+#endif
     release_one(g_device5);
     release_one(g_device);
     g_renderWidth = g_renderHeight = 0;
@@ -518,14 +557,20 @@ bool stage_runtime(const std::wstring& hostSource) {
         return prepare_failure("no se pudo leer LOCALAPPDATA");
 
     const std::wstring bioshockDir = join_path(localBuffer.data(), L"BioshockVR");
+#ifdef BVR_LATENCY_PROBE
+    const std::wstring runtimeRoot = join_path(bioshockDir, L"DLSS45Host-Latency1");
+#else
     const std::wstring runtimeRoot = join_path(bioshockDir, L"DLSS45Host");
+#endif
     if (!ensure_directory(bioshockDir) || !ensure_directory(runtimeRoot))
         return prepare_failure("no se pudo crear el runtime local aislado para DLSS 4.5");
 
     for (int index = 0; index < 2; ++index) {
         EyeState& eye = g_eyes[index];
         eye.index = index;
-        eye.directory = join_path(runtimeRoot, index == 0 ? L"eye0" : L"eye1");
+        eye.directory = join_path(runtimeRoot, g_diagnosticTransport
+            ? (index == 0 ? L"bridge-eye0" : L"bridge-eye1")
+            : (index == 0 ? L"eye0" : L"eye1"));
         eye.executable = join_path(eye.directory, L"BioShockVR-DLSS45-Host64.exe");
         if (!ensure_directory(eye.directory))
             return prepare_failure("no se pudo crear la carpeta aislada de un ojo");
@@ -595,6 +640,11 @@ bool connect_pipe(EyeState& eye, DWORD gamePid) noexcept {
 
     eye.pipeEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     eye.completionEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+#ifdef BVR_CRITICAL_PATH_PROBE
+    // Optional diagnostic allocation: failure disables only the extra input
+    // wake, never installation, host startup or current-frame rendering.
+    eye.inputProbeEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+#endif
     if (!eye.pipeEvent || !eye.completionEvent) return false;
 
     const ULONGLONG deadline = GetTickCount64() + kStartupTimeoutMs;
@@ -620,6 +670,8 @@ bool connect_pipe(EyeState& eye, DWORD gamePid) noexcept {
 
 bool pipe_transfer(EyeState& eye, bool write, void* bytes, DWORD size,
                    DWORD timeoutMs) noexcept {
+    bvr::BoundedActivity::Scope activity(g_boundedWait, GetTickCount64(),
+        timeoutMs + kWatchdogWaitMarginMs);
     BYTE* cursor = static_cast<BYTE*>(bytes);
     while (size) {
         OVERLAPPED operation{};
@@ -744,7 +796,7 @@ bool build_host(EyeState& eye) noexcept {
     // convention temporal_guides copied from the game.
     build.depthInverted = g_depthInverted ? 1 : 0;
     build.flagsOverride = -1;
-    build.transport = 0;
+    build.transport = g_diagnosticTransport ? bvr_latency_probe::kFullImageTransport : 0;
     build.motionScaleX = 1.0f;
     build.motionScaleY = 1.0f;
     for (int slot = 0; slot < FeedSlotCount; ++slot)
@@ -778,6 +830,7 @@ bool build_host(EyeState& eye) noexcept {
     const bool wantSr = g_mode == Mode::SuperResolution;
     const bool gotSr = (ack.flags & kAckSrActive) != 0;
     if (!ack.ok || wantSr != gotSr ||
+        !bvr_latency_probe::matching_ack(g_diagnosticTransport, ack.flags) ||
         ack.outputFormat != static_cast<std::uint32_t>(g_outputFormat)) {
         BVR_LOG("[dlss45] eye%d build rejected: ok=%d ngx=0x%08X flags=0x%X "
                 "output=%u expected=%u", eye.index, ack.ok, ack.ngxResult, ack.flags,
@@ -807,7 +860,7 @@ bool build_host(EyeState& eye) noexcept {
     BVR_LOG("[dlss45] eye%d ready: %ux%u -> %ux%u, %s, depth=%s, IPC v%u, "
             "same-frame",
             eye.index, g_renderWidth, g_renderHeight, g_outputWidth, g_outputHeight,
-            wantSr ? "DLSS 4.5 SR" : "DLAA 4.5",
+            g_diagnosticTransport ? "DIAGNOSTIC BRIDGE / NO DLAA" : wantSr ? "DLSS 4.5 SR" : "DLAA 4.5",
             g_depthInverted ? "reversed" : "normal", kIpcVersion);
     return true;
 }
@@ -860,13 +913,54 @@ bool validate_frame_resources(ID3D11Texture2D* destination,
            motionDesc.Format == DXGI_FORMAT_R16G16_FLOAT;
 }
 
-bool wait_for_output(EyeState& eye, std::uint64_t value) noexcept {
-    if (eye.fenceOut->GetCompletedValue() >= value) return true;
+bool wait_for_output(EyeState& eye, std::uint64_t value, bool observe = false) noexcept {
+    bvr::BoundedActivity::Scope activity(g_boundedWait, GetTickCount64(),
+        kFrameFenceTimeoutMs + kWatchdogWaitMarginMs);
+#ifdef BVR_CRITICAL_PATH_PROBE
+    if (observe) {
+        struct Hooks {
+            EyeState& eye;
+            double now_ms() { return bvr::diagnostic_clock_ms(); }
+            std::uint64_t input_value() { return eye.fenceIn->GetCompletedValue(); }
+            std::uint64_t output_value() { return eye.fenceOut->GetCompletedValue(); }
+            bool register_output(std::uint64_t target) {
+                ResetEvent(eye.completionEvent);
+                return SUCCEEDED(eye.fenceOut->SetEventOnCompletion(target, eye.completionEvent));
+            }
+            bool register_input(std::uint64_t target) {
+                if (!eye.inputProbeEvent) return false;
+                ResetEvent(eye.inputProbeEvent);
+                return SUCCEEDED(eye.fenceIn->SetEventOnCompletion(target, eye.inputProbeEvent));
+            }
+            bvr::input_wait_probe::Wake wait(bool input, std::uint32_t remaining) {
+                using Wake = bvr::input_wait_probe::Wake;
+                HANDLE handles[3] = {eye.completionEvent, eye.process, eye.inputProbeEvent};
+                const DWORD result = WaitForMultipleObjects(input ? 3u : 2u, handles, FALSE, remaining);
+                if (result == WAIT_OBJECT_0) return Wake::Output;
+                if (result == WAIT_OBJECT_0 + 1) return Wake::Process;
+                if (input && result == WAIT_OBJECT_0 + 2) return Wake::Input;
+                return result == WAIT_TIMEOUT ? Wake::Timeout : Wake::Failed;
+            }
+        } hooks{eye};
+        bvr::input_wait_probe::Observation observation{};
+        const bool ok = bvr::input_wait_probe::wait(hooks, value, kFrameFenceTimeoutMs,
+                                                   bvr::input_wait_probe::sampled_frame(value), observation);
+        g_inputWaitCosts[eye.index].add(observation);
+        return ok;
+    }
+#else
+    (void)observe;
+#endif
+    const auto completed = eye.fenceOut->GetCompletedValue();
+    if (completed == UINT64_MAX) return false; // Device removal is not completion.
+    if (completed >= value) return true;
     ResetEvent(eye.completionEvent);
     if (FAILED(eye.fenceOut->SetEventOnCompletion(value, eye.completionEvent)))
         return false;
     HANDLE waits[2] = {eye.completionEvent, eye.process};
-    return WaitForMultipleObjects(2, waits, FALSE, kFrameFenceTimeoutMs) == WAIT_OBJECT_0;
+    if (WaitForMultipleObjects(2, waits, FALSE, kFrameFenceTimeoutMs) != WAIT_OBJECT_0) return false;
+    const auto finished = eye.fenceOut->GetCompletedValue();
+    return finished != UINT64_MAX && finished >= value;
 }
 
 bool prepare_impl(ID3D11Device* device,
@@ -936,7 +1030,9 @@ bool prepare_impl(ID3D11Device* device,
 
     g_isReady = true;
     g_faulted = false;
+    for (auto& timer : g_inputTimers) timer.prepare(g_device);
     set_status("%s activo: %ux%u -> %ux%u, dos ojos, same-frame",
+               g_diagnosticTransport ? "PRUEBA PUENTE SIN DLAA" :
                mode == Mode::Dlaa ? "DLAA 4.5" : "DLSS 4.5 SR",
                renderWidth, renderHeight, outputWidth, outputHeight);
     BVR_LOG("[dlss45] %s", g_status);
@@ -948,8 +1044,14 @@ bool prepare_impl(ID3D11Device* device,
 bool prepare(ID3D11Device* device,
              UINT renderWidth, UINT renderHeight, DXGI_FORMAT backbufferFormat,
              UINT outputWidth, UINT outputHeight, Mode mode, bool depthInverted,
-             const wchar_t* hostExePath) noexcept {
+             const wchar_t* hostExePath, bool diagnosticTransport) noexcept {
     try {
+        g_diagnosticTransport = diagnosticTransport;
+#ifndef BVR_LATENCY_PROBE
+        if (diagnosticTransport) return prepare_failure("prueba de puente no disponible en esta version");
+#endif
+        if (diagnosticTransport && (mode != Mode::Dlaa || renderWidth != outputWidth || renderHeight != outputHeight))
+            return prepare_failure("la prueba de puente requiere resolucion nativa identica");
         return prepare_impl(device, renderWidth, renderHeight, backbufferFormat,
                             outputWidth, outputHeight, mode, depthInverted,
                             hostExePath);
@@ -961,14 +1063,20 @@ bool prepare(ID3D11Device* device,
     }
 }
 
-bool process_eye(ID3D11DeviceContext* context, int eyeIndex,
+bool submit_eye(ID3D11DeviceContext* context, int eyeIndex,
                  ID3D11Texture2D* destination, ID3D11Texture2D* backbuffer,
                  ID3D11Texture2D* depth, ID3D11Texture2D* motion,
                  bool reset, float jitterX, float jitterY) noexcept {
+    CP::Scope submitScope(eyeIndex == 0 ? CP::Stage::HostSubmitLeft : CP::Stage::HostSubmitRight,
+                          eyeIndex >= 0 && eyeIndex < 2);
     try {
         if (!g_isReady || g_faulted) return false;
         if (eyeIndex < 0 || eyeIndex > 1) {
             runtime_failure("indice de ojo no valido: %d", eyeIndex);
+            return false;
+        }
+        if (g_eyes[eyeIndex].pendingDestination) {
+            runtime_failure("entrada de ojo %d reutilizada antes de completar", eyeIndex);
             return false;
         }
         if (!context_uses_device(context) ||
@@ -989,11 +1097,18 @@ bool process_eye(ID3D11DeviceContext* context, int eyeIndex,
         }
 
         EyeState& eye = g_eyes[eyeIndex];
-        context->CopyResource(eye.textures[FeedColor], backbuffer);
-        context->CopyResource(eye.textures[FeedDepth], depth);
-        context->CopyResource(eye.textures[FeedMotion], motion);
+        const double started = bvr::diagnostic_clock_ms();
+        {
+            CP::Scope copiesScope(CP::Stage::HostCopies);
+            g_inputTimers[eyeIndex].begin(context);
+            context->CopyResource(eye.textures[FeedColor], backbuffer);
+            context->CopyResource(eye.textures[FeedDepth], depth);
+            context->CopyResource(eye.textures[FeedMotion], motion);
+            g_inputTimers[eyeIndex].end(context);
+        }
 
         const std::uint64_t value = ++eye.frame;
+        eye.pendingDestination = destination;
         const HRESULT signalResult = context4->Signal(eye.fenceIn, value);
         if (FAILED(signalResult)) {
             release_one(context4);
@@ -1001,39 +1116,111 @@ bool process_eye(ID3D11DeviceContext* context, int eyeIndex,
                             static_cast<unsigned>(signalResult));
             return false;
         }
-        context->Flush();
+        {
+            CP::Scope flushScope(CP::Stage::HostFlush);
+            context->Flush();
+        }
 
         FeedFrame frame{};
         frame.fenceValue = value;
         frame.reset = (reset || value == 1) ? 1u : 0u;
         frame.jitterX = jitterX;
         frame.jitterY = jitterY;
-        const BYTE tag = 'F';
-        if (!pipe_write(eye, &tag, 1, kFramePipeTimeoutMs) ||
-            !pipe_write(eye, &frame, sizeof(frame), kFramePipeTimeoutMs)) {
+        bool sent = false;
+        {
+            CP::Scope pipeScope(CP::Stage::HostPipe);
+#ifdef BVR_DLSS_TAIL_OVERLAP
+            // Byte-stream IPC v8 is unchanged. Avoid a second overlapped WriteFile
+            // and event round trip for the tag; never rely on struct padding here.
+            BYTE packet[1 + sizeof(frame)]{};
+            packet[0] = 'F';
+            std::memcpy(packet + 1, &frame, sizeof(frame));
+            sent = pipe_write(eye, packet, sizeof(packet), kFramePipeTimeoutMs);
+#else
+            const BYTE tag = 'F';
+            sent = pipe_write(eye, &tag, 1, kFramePipeTimeoutMs) &&
+                   pipe_write(eye, &frame, sizeof(frame), kFramePipeTimeoutMs);
+#endif
+        }
+        if (!sent) {
             release_one(context4);
             runtime_failure("se perdio el pipe del host del ojo %d", eyeIndex);
             return false;
         }
 
+        eye.pendingSubmitMs = bvr::diagnostic_clock_ms() - started;
+        release_one(context4);
+        return true;
+    } catch (...) {
+        runtime_failure("excepcion enviando un ojo con DLSS 4.5");
+        return false;
+    }
+}
+
+bool resolve_eye(ID3D11DeviceContext* context, int eyeIndex,
+                 ID3D11Texture2D* destination) noexcept {
+    CP::Scope resolveScope(eyeIndex == 0 ? CP::Stage::HostResolveLeft : CP::Stage::HostResolveRight,
+                           eyeIndex >= 0 && eyeIndex < 2);
+    try {
+        if (!g_isReady || g_faulted) return false;
+        if (eyeIndex < 0 || eyeIndex > 1 || !destination || !context_uses_device(context)) {
+            runtime_failure("recursos no validos al completar ojo %d", eyeIndex);
+            return false;
+        }
+        EyeState& eye = g_eyes[eyeIndex];
+        if (eye.pendingDestination != destination) {
+            runtime_failure("salida pendiente no coincide en ojo %d", eyeIndex);
+            return false;
+        }
+        ID3D11DeviceContext4* context4 = nullptr;
+        if (FAILED(context->QueryInterface(IID_PPV_ARGS(&context4))) || !context4) {
+            runtime_failure("ID3D11DeviceContext4 no disponible al completar");
+            return false;
+        }
+        const auto value = eye.frame;
         // Wait on the CPU with a process/timeout escape before recording any GPU
         // dependency. A crashed helper can therefore never leave the game's queue
         // waiting forever. Once complete, retain the explicit D3D11 fence wait so
         // Output(n) -> dstXR is ordered by the GPU contract, not CPU timing luck.
-        if (!wait_for_output(eye, value)) {
+        const double waitStarted = bvr::diagnostic_clock_ms();
+        bool completed = false;
+        {
+            CP::Scope waitScope(eyeIndex == 0 ? CP::Stage::HostWaitLeft : CP::Stage::HostWaitRight);
+            completed = wait_for_output(eye, value, true);
+        }
+        if (!completed) {
             release_one(context4);
             runtime_failure("timeout esperando DLSS 4.5 en ojo %d, frame %llu",
                             eyeIndex, static_cast<unsigned long long>(value));
             return false;
         }
-        const HRESULT waitResult = context4->Wait(eye.fenceOut, value);
-        if (FAILED(waitResult)) {
-            release_one(context4);
-            runtime_failure("fallo Wait de salida en ojo %d: 0x%08X", eyeIndex,
-                            static_cast<unsigned>(waitResult));
-            return false;
+        const double waitFinished = bvr::diagnostic_clock_ms();
+        {
+            CP::Scope copyScope(CP::Stage::HostCopy);
+            const HRESULT waitResult = context4->Wait(eye.fenceOut, value);
+            if (FAILED(waitResult)) {
+                release_one(context4);
+                runtime_failure("fallo Wait de salida en ojo %d: 0x%08X", eyeIndex,
+                                static_cast<unsigned>(waitResult));
+                return false;
+            }
+            if (!g_sharpnessPercent || g_mode != Mode::SuperResolution)
+                context->CopyResource(destination, eye.textures[FeedOutput]);
+            else if (!bvr::dlss_sharpen::render(context, eyeIndex, destination, g_sharpnessPercent)) {
+                // Do not publish a pair with one sharpened eye and one unfiltered eye.
+                release_one(context4);
+                runtime_failure("no se pudo aplicar nitidez en el ojo %d", eyeIndex);
+                return false;
+            }
         }
-        context->CopyResource(destination, eye.textures[FeedOutput]);
+        const double finished = bvr::diagnostic_clock_ms();
+        auto& costs = g_cpuCosts[eyeIndex];
+        const double total = eye.pendingSubmitMs + finished - waitStarted;
+        ++costs.count; costs.submit += eye.pendingSubmitMs;
+        costs.wait += waitFinished - waitStarted; costs.total += total;
+        if (total > costs.maxTotal) costs.maxTotal = total;
+        eye.pendingDestination = nullptr;
+        eye.pendingSubmitMs = 0;
         release_one(context4);
         return true;
     } catch (...) {
@@ -1042,12 +1229,120 @@ bool process_eye(ID3D11DeviceContext* context, int eyeIndex,
     }
 }
 
+
+bool process_eye(ID3D11DeviceContext* context, int eye,
+                 ID3D11Texture2D* destination, ID3D11Texture2D* backbuffer,
+                 ID3D11Texture2D* depth, ID3D11Texture2D* motion,
+                 bool reset, float jitterX, float jitterY,
+                 BeforeResolveWork beforeResolve) noexcept {
+    if (!submit_eye(context, eye, destination, backbuffer, depth, motion, reset, jitterX, jitterY))
+        return false;
+    try {
+        if (beforeResolve.run) beforeResolve.run(beforeResolve.context);
+    } catch (...) {
+        runtime_failure("excepcion preparando la entrega mientras DLSS procesa el ojo %d", eye);
+        return false;
+    }
+    return resolve_eye(context, eye, destination);
+}
+
+ID3D11Texture2D* retain_submitted_color(int eyeIndex, ID3D11Texture2D* destination) noexcept {
+    if (!ready() || eyeIndex < 0 || eyeIndex > 1 || !destination) return nullptr;
+    const auto& eye = g_eyes[eyeIndex];
+    if (eye.pendingDestination != destination || !eye.textures[FeedColor]) return nullptr;
+    eye.textures[FeedColor]->AddRef();
+    return eye.textures[FeedColor];
+}
+
+bool discard_pending() noexcept {
+    bool ok = g_isReady && !g_faulted;
+    for (EyeState& eye : g_eyes) {
+        if (!eye.pendingDestination) continue;
+        if (ok && !wait_for_output(eye, eye.frame)) {
+            runtime_failure("timeout descartando ojo pendiente %d", eye.index);
+            ok = false;
+        }
+        eye.pendingDestination = nullptr;
+        eye.pendingSubmitMs = 0;
+    }
+    return ok;
+}
+
 void release() noexcept {
     cleanup(true);
 }
 
+bool gpu_retired() noexcept {
+    for (const EyeState& eye : g_eyes) {
+        if (eye.pendingDestination) return false; // Still owns an unpublished XR destination.
+        if (!eye.frame) continue;
+        if (!eye.fenceOut) return false;
+        const auto completed = eye.fenceOut->GetCompletedValue();
+        if (completed == UINT64_MAX || completed < eye.frame) return false;
+    }
+    return true;
+}
+
 bool ready() noexcept {
     return g_isReady && !g_faulted;
+}
+
+bool bounded_wait_active() noexcept {
+    return g_boundedWait.active(GetTickCount64());
+}
+
+bool set_sharpness(unsigned percent) noexcept {
+    if (!ready() || percent > 100 || (percent && g_mode != Mode::SuperResolution)) return false;
+    if (percent && !bvr::dlss_sharpen::prepare(g_device, g_eyes[0].textures[FeedOutput],
+                                              g_eyes[1].textures[FeedOutput])) return false;
+    g_sharpnessPercent = percent;
+    return true;
+}
+
+void log_performance() noexcept {
+    if (!ready()) return;
+    for (int i=0; i<2; ++i) {
+        const auto& c = g_cpuCosts[i];
+        const auto& gpu = g_inputTimers[i];
+        const double n = c.count ? double(c.count) : 1;
+        BVR_LOG("[dlss45-perf] mode=%s eye=%d frames=%llu render=%ux%u output=%ux%u sharpness=%u "
+                "cpuSubmitAvgMs=%.3f cpuWaitAvgMs=%.3f cpuTotalAvgMs=%.3f cpuTotalMaxMs=%.3f "
+                "gpuInputSamples=%llu gpuInputAvgMs=%.3f gpuInputMaxMs=%.3f",
+                g_diagnosticTransport ? "BRIDGE" : g_mode == Mode::SuperResolution ? "DLSS" : "DLAA", i,
+                static_cast<unsigned long long>(c.count), g_renderWidth, g_renderHeight,
+                g_outputWidth, g_outputHeight, g_sharpnessPercent,
+                c.submit/n, c.wait/n, c.total/n, c.maxTotal,
+                static_cast<unsigned long long>(gpu.samples()), gpu.average_ms(), gpu.max_ms());
+        g_cpuCosts[i] = {}; g_inputTimers[i].clear_stats();
+#ifdef BVR_CRITICAL_PATH_PROBE
+        const auto& w = g_inputWaitCosts[i];
+        // Separate counts keep unavailable/coalesced observations out of the
+        // averages. These are CPU-observed wakes, not exclusive GPU/IPC cost.
+        BVR_LOG("[input-wait-probe] mode=%s eye=%d frames=%llu render=%ux%u output=%ux%u "
+                "inputReadyAtResolve=%llu inputPendingAtResolve=%llu inputRemovedAtResolve=%llu "
+                "outputReadyAtResolve=%llu sampled=%llu sampleEvery=16 splitObserved=%llu "
+                "unobserved=%llu coalesced=%llu inputRegistrationFailed=%llu unsuccessful=%llu "
+                "staleInputWakes=%llu inputRemovedDuringWait=%llu "
+                "sampledWaitAvgMs=%.3f unsampled=%llu unsampledWaitAvgMs=%.3f "
+                "beforeInputWakeAvgMs=%.3f afterInputWakeAvgMs=%.3f "
+                "cpuObservedNotGpuTimestamp=1",
+                g_diagnosticTransport ? "BRIDGE" : g_mode == Mode::SuperResolution ? "DLSS" : "DLAA", i,
+                static_cast<unsigned long long>(w.frames), g_renderWidth, g_renderHeight,
+                g_outputWidth, g_outputHeight,
+                static_cast<unsigned long long>(w.inputReady), static_cast<unsigned long long>(w.inputPending),
+                static_cast<unsigned long long>(w.inputRemoved), static_cast<unsigned long long>(w.outputReady),
+                static_cast<unsigned long long>(w.sampled), static_cast<unsigned long long>(w.split),
+                static_cast<unsigned long long>(w.unobserved), static_cast<unsigned long long>(w.coalesced),
+                static_cast<unsigned long long>(w.registrationFailed), static_cast<unsigned long long>(w.unsuccessful),
+                static_cast<unsigned long long>(w.staleInputWakes), static_cast<unsigned long long>(w.removedDuringWait),
+                w.sampled ? w.sampledTotalMs / double(w.sampled) : -1.0,
+                static_cast<unsigned long long>(w.unsampled),
+                w.unsampled ? w.unsampledTotalMs / double(w.unsampled) : -1.0,
+                w.split ? w.beforeInputMs / double(w.split) : -1.0,
+                w.split ? w.afterInputMs / double(w.split) : -1.0);
+        g_inputWaitCosts[i] = {};
+#endif
+    }
 }
 
 const char* status() noexcept {

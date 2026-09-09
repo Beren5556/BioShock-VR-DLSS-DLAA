@@ -23,6 +23,12 @@ add_library(bioshockvr SHARED
     core/gfx/blit.h
     core/gfx/dlss45_client.cpp
     core/gfx/dlss45_client.h
+    core/gfx/image_control_policy.h
+    core/gfx/image_controls.cpp
+    core/gfx/image_controls.h
+    core/gfx/dlss_sharpen.cpp
+    core/gfx/dlss_sharpen.h
+    core/gfx/sampled_gpu_timer.h
     core/gfx/frame_inspector.cpp
     core/gfx/frame_inspector.h
     core/gfx/gfx_hud.cpp
@@ -69,6 +75,8 @@ add_library(bioshockvr SHARED
     game/bioshock1r/console_exec.cpp
     game/bioshock1r/game_ini.cpp
     game/bioshock1r/game_ini.h
+    game/bioshock1r/graphics_options.cpp
+    game/bioshock1r/graphics_options.h
     game/bioshock1r/console_exec.h
     game/bioshock1r/frame_context.h
     game/bioshock1r/hands.cpp
@@ -81,6 +89,9 @@ add_library(bioshockvr SHARED
     game/bioshock1r/recorder.h
     game/bioshock1r/scenedraw.cpp
     game/bioshock1r/scenedraw.h
+    game/bioshock1r/performance_probe.cpp
+    game/bioshock1r/performance_probe.h
+    core/gfx/eye_timeline.h
     game/bioshock1r/temporal_guides.cpp
     game/bioshock1r/temporal_guides.h
     game/bioshock2r/aim.cpp
@@ -210,6 +221,7 @@ target_link_libraries(bioshockvr PRIVATE
 )
 if(BIOSHOCKVR_WITH_OPENXR)
     # Static loader linked straight into the mod DLL (no extra DLL shipped).
+    target_sources(bioshockvr PRIVATE core/vr/image_status_quad.cpp core/vr/image_status_quad.h)
     target_link_libraries(bioshockvr PRIVATE openxr_loader)
     target_compile_definitions(bioshockvr PRIVATE BVR_WITH_OPENXR)
 endif()
@@ -220,6 +232,87 @@ endif()
 if(BIOSHOCKVR_WITH_OPENXR)
     add_executable(xr_hello32 tools/xr_hello32/main.cpp)
     target_link_libraries(xr_hello32 PRIVATE openxr_loader d3d11 dxgi)
+endif()
+
+# Pure launcher/HUD policy parity; no game, profiles, GPU or headset required.
+add_executable(image_controls_test tools/image_controls_test/main.cpp)
+target_include_directories(image_controls_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(stereo_recovery_test tools/image_controls_test/stereo_recovery_test.cpp)
+target_include_directories(stereo_recovery_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(image_controls_controller_test
+    tools/image_controls_test/controller_test.cpp core/gfx/image_controls.cpp)
+target_include_directories(image_controls_controller_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(graphics_options_test
+    tools/image_controls_test/graphics_test.cpp game/bioshock1r/graphics_options.cpp)
+target_include_directories(graphics_options_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(image_hud_layout_test tools/image_controls_test/hud_layout_test.cpp)
+target_include_directories(image_hud_layout_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(image_hud_layout_test PRIVATE openxr_loader gdi32)
+if(BVR_PERFORMANCE_PROBE)
+    target_compile_definitions(bioshockvr PRIVATE BVR_PERFORMANCE_PROBE=1)
+    target_compile_definitions(image_controls_test PRIVATE BVR_PERFORMANCE_PROBE=1)
+    target_compile_definitions(image_controls_controller_test PRIVATE BVR_PERFORMANCE_PROBE=1)
+endif()
+if(BVR_DLSS_OVERLAP)
+    target_compile_definitions(bioshockvr PRIVATE BVR_DLSS_OVERLAP=1)
+endif()
+if(BVR_DLSS_TAIL_OVERLAP)
+    target_compile_definitions(bioshockvr PRIVATE BVR_DLSS_TAIL_OVERLAP=1)
+endif()
+if(BVR_DLSS_EARLY_DELIVERY)
+    target_compile_definitions(bioshockvr PRIVATE BVR_DLSS_EARLY_DELIVERY=1)
+    target_sources(bioshockvr PRIVATE core/vr/delivery_probe.cpp core/vr/delivery_probe.h)
+endif()
+if(BVR_CRITICAL_PATH_PROBE)
+    target_compile_definitions(bioshockvr PRIVATE BVR_CRITICAL_PATH_PROBE=1)
+    target_sources(bioshockvr PRIVATE core/vr/critical_path_probe.cpp core/vr/critical_path_probe.h)
+endif()
+if(BVR_LATENCY_PROBE)
+    foreach(target bioshockvr image_controls_test image_controls_controller_test)
+        target_compile_definitions(${target} PRIVATE BVR_LATENCY_PROBE=1)
+    endforeach()
+endif()
+add_executable(dlss_sharpen_test32 tools/dlss_sharpen_test/main.cpp core/gfx/dlss_sharpen.cpp)
+target_include_directories(dlss_sharpen_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(dlss_sharpen_test32 PRIVATE d3d11 d3dcompiler)
+
+add_executable(eye_timeline_test32 tools/eye_timeline_test/main.cpp
+    game/bioshock1r/performance_probe.cpp)
+target_include_directories(eye_timeline_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(eye_timeline_test32 PRIVATE BVR_PERFORMANCE_PROBE=1)
+target_link_libraries(eye_timeline_test32 PRIVATE d3d11)
+
+# Real split client with local pipes and WARP fences; no NGX, game or runtime files.
+add_executable(dlss_overlap_test32 tools/dlss_overlap_test/main.cpp core/gfx/dlss_sharpen.cpp)
+target_include_directories(dlss_overlap_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(dlss_overlap_test32 PRIVATE d3d11 d3dcompiler)
+
+add_executable(latency_probe_test32 tools/latency_probe_test/main.cpp core/gfx/dlss_sharpen.cpp)
+target_include_directories(latency_probe_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(latency_probe_test32 PRIVATE BVR_LATENCY_PROBE=1)
+target_link_libraries(latency_probe_test32 PRIVATE d3d11 d3dcompiler)
+if(BVR_DLSS_TAIL_OVERLAP)
+    target_compile_definitions(dlss_overlap_test32 PRIVATE BVR_DLSS_TAIL_OVERLAP=1)
+    target_compile_definitions(latency_probe_test32 PRIVATE BVR_DLSS_TAIL_OVERLAP=1)
+endif()
+
+# Delivery ordering and observational hook; standalone, no game or OpenXR.
+add_executable(delivery_probe_test32 tools/delivery_probe_test/main.cpp core/vr/delivery_probe.cpp)
+target_include_directories(delivery_probe_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(delivery_probe_test32 PRIVATE BVR_DELIVERY_PROBE_TEST=1)
+target_link_libraries(delivery_probe_test32 PRIVATE minhook d3d11)
+
+# Pure timing/accounting checks, no game or profile access.
+add_executable(critical_path_probe_test32 tools/critical_path_probe_test/main.cpp core/vr/critical_path_probe.cpp)
+target_include_directories(critical_path_probe_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(critical_path_probe_test32 PRIVATE BVR_CRITICAL_PATH_PROBE=1 BVR_CRITICAL_PATH_PROBE_TEST=1)
+add_executable(input_wait_probe_test32 tools/input_wait_probe_test/main.cpp)
+target_include_directories(input_wait_probe_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+if(BVR_CRITICAL_PATH_PROBE)
+    foreach(target dlss_overlap_test32 latency_probe_test32)
+        target_compile_definitions(${target} PRIVATE BVR_CRITICAL_PATH_PROBE=1)
+        target_sources(${target} PRIVATE core/vr/critical_path_probe.cpp)
+    endforeach()
 endif()
 
 # --- spatial_upscaler_test32 - deterministic D3D11/WARP test -----------------
@@ -248,6 +341,10 @@ add_executable(temporal_guides_test32
 )
 target_include_directories(temporal_guides_test32 PRIVATE .)
 target_link_libraries(temporal_guides_test32 PRIVATE d3d11 d3dcompiler shell32)
+if(BVR_DEPTH_COPY_REUSE)
+    target_compile_definitions(bioshockvr PRIVATE BVR_DEPTH_COPY_REUSE=1)
+    target_compile_definitions(temporal_guides_test32 PRIVATE BVR_DEPTH_COPY_REUSE=1)
+endif()
 
 # --- bvr_xrsim32 - the simulated OpenXR runtime -------------------------------
 # A Quest-3-shaped 32-bit OpenXR runtime so an agent can test the mod with no

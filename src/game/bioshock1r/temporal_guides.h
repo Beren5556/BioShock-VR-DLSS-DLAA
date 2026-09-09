@@ -122,6 +122,7 @@ struct EyeDiagnostics {
 struct Diagnostics {
     EyeDiagnostics eyes[2];
     std::uint64_t depthCopies = 0;
+    std::uint64_t unchangedCopiesSkipped = 0;
     float nearPlane = 0.0f;
     float farPlane = 0.0f;
     bool depthInverted = false;
@@ -143,6 +144,16 @@ void on_draw_indexed(ID3D11DeviceContext* context);
 void on_clear_dsv(ID3D11DeviceContext* context, ID3D11DepthStencilView* dsv,
                   UINT clearFlags, FLOAT depth, UINT8 stencil);
 
+// perf2: do not alter DSV voting or when copies are selected. Reuse only a
+// same-interval, same-source capture with no intervening potential depth write.
+// The installer of the complete hook set must opt in; missing hooks leave the
+// old copy behavior intact. Context state taps run AFTER their real D3D call.
+void set_copy_tracking_available(bool available);
+void on_depth_state(ID3D11DeviceContext* context, ID3D11DepthStencilState* state);
+void on_untracked_draw(ID3D11DeviceContext* context); // no new votes
+void on_resource_write(ID3D11DeviceContext* context, ID3D11Resource* destination);
+void on_context_reset(ID3D11DeviceContext* context); // ClearState / ExecuteCommandList
+
 // Ends the current capture interval, converts the winning D24 depth to R32F,
 // and generates this eye's camera-only MV field. The diagnostic path fails
 // soft (returns false for spatial fallback) when the exact Build camera/tag is
@@ -155,6 +166,7 @@ bool generate_eye(ID3D11DeviceContext* context, int eye,
 // invalidate. The pointers follow the borrowed-lifetime rule above.
 bool get_eye(int eye, EyeGuides* out);
 void get_diagnostics(Diagnostics* out);
+void log_performance(); // sampled GPU queries, no forced flush or query waits
 const char* reject_reason_name(RejectReason reason);
 
 // Loads, teleports, FOV/projection changes and device-resize paths must reset

@@ -1,4 +1,5 @@
 #include "game/bioshock1r/temporal_guides.h"
+#include "core/gfx/sampled_gpu_timer.h"
 
 #include "core/util/log.h"
 #include "game/bioshock1r/camera.h"
@@ -162,6 +163,18 @@ Candidate* g_best = nullptr;
 unsigned g_bestDraws = 0;
 bool g_haveCapture = false;
 std::uint64_t g_depthCopies = 0;
+#ifdef BVR_DEPTH_COPY_REUSE
+constexpr bool kDepthCopyReuse = true;
+#else
+constexpr bool kDepthCopyReuse = false;
+#endif
+std::atomic<bool> g_copyTrackingAvailable{false}; // hook lifetime, survives prepare/shutdown
+bool g_depthWritesEnabled = true; // null/default D3D11 state writes depth
+uint64_t g_depthWriteSerial = 0, g_copiedWriteSerial = 0;
+uint64_t g_unchangedCopiesSkipped = 0, g_skippedWindow = 0;
+bvr::SampledGpuTimer g_depthCopyTimer;
+uint64_t g_copyWindowCount = 0;
+double g_copyCpuTotalMs = 0, g_copyCpuMaxMs = 0;
 CaptureMetadata g_captureMetadata{};
 Diagnostics g_diagnostics{};
 UINT g_width = 0;
@@ -211,6 +224,7 @@ void reset_interval() {
     g_best = nullptr;
     g_bestDraws = 0;
     g_haveCapture = false;
+    g_depthWriteSerial = g_copiedWriteSerial = 0;
     g_captureMetadata = {};
 }
 
@@ -314,14 +328,34 @@ void finish_current_pass(ID3D11DeviceContext* context) {
     // sub-pass updates the already-leading DSV. on_setrt is called after the
     // real bind, so a different/null next DSV has made this source safe to copy.
     if (g_current == g_best || g_current->draws > g_bestDraws) {
-        // D3D11 requires a whole-subresource copy (null box / zero offsets)
-        // whenever either resource carries BIND_DEPTH_STENCIL.
-        context->CopySubresourceRegion(g_depthCapture, 0, 0, 0, 0,
-                                       g_current->texture, 0, nullptr);
+        // Keep the original pass/winner policy. Only skip an identical source
+        // with no possible DEPTH write since its existing capture. Any depth-
+        // writing draw (even to another target), clear, command list or direct
+        // write to the selected resource dirties the serial conservatively.
+        // Stencil-only changes do not matter: conversion reads R24, not X8.
+        const bool unchanged = kDepthCopyReuse &&
+            g_copyTrackingAvailable.load(std::memory_order_acquire) &&
+            g_haveCapture && g_current == g_best &&
+            g_depthWriteSerial == g_copiedWriteSerial;
+        if (unchanged) {
+            ++g_unchangedCopiesSkipped; ++g_skippedWindow;
+        } else {
+            // Whole-subresource copy is required for BIND_DEPTH_STENCIL.
+            const double copyStarted = bvr::diagnostic_clock_ms();
+            g_depthCopyTimer.begin(context);
+            context->CopySubresourceRegion(g_depthCapture, 0, 0, 0, 0,
+                                           g_current->texture, 0, nullptr);
+            g_depthCopyTimer.end(context);
+            const double copyCpuMs = bvr::diagnostic_clock_ms() - copyStarted;
+            ++g_copyWindowCount; g_copyCpuTotalMs += copyCpuMs;
+            if (copyCpuMs > g_copyCpuMaxMs) g_copyCpuMaxMs = copyCpuMs;
+            ++g_depthCopies;
+            g_copiedWriteSerial = g_depthWriteSerial;
+        }
         g_best = g_current;
         g_bestDraws = g_current->draws;
         g_haveCapture = true;
-        g_captureMetadata.captureId = ++g_depthCopies;
+        g_captureMetadata.captureId = g_depthCopies;
         g_captureMetadata.textureIdentity =
             reinterpret_cast<std::uintptr_t>(g_current->texture);
         g_captureMetadata.dsvIdentity = g_current->dsvIdentity;
@@ -647,11 +681,64 @@ bool prepare(ID3D11Device* device, const PrepareDesc& desc) {
             g_farPlane > g_nearPlane ? "finite" : "infinite",
             g_depthInverted ? "reversed" : "normal");
     g_ready.store(true, std::memory_order_release);
+    on_context_reset(g_immediateContext); // capture real state; no per-draw Get* calls
+    BVR_LOG("[depth-reuse] enabled=%d tracking=%d same-source/unchanged-depth only",
+            kDepthCopyReuse?1:0, g_copyTrackingAvailable.load()?1:0);
+    g_depthCopyTimer.prepare(device);
     return true;
 }
 
 bool ready() {
     return g_ready.load(std::memory_order_acquire);
+}
+
+void log_performance() {
+    if (!ready()) return;
+    BVR_LOG("[depth-perf] size=%ux%u copyCalls=%llu copiedMiB=%.1f cpuSubmitAvgMs=%.4f "
+            "cpuSubmitMaxMs=%.3f gpuSamples=%llu gpuCopyAvgMs=%.3f gpuCopyMaxMs=%.3f "
+            "skippedUnchanged=%llu reuseActive=%d",
+            g_width, g_height, static_cast<unsigned long long>(g_copyWindowCount),
+            double(g_copyWindowCount) * double(g_width) * double(g_height) * 4.0 / 1048576.0,
+            g_copyWindowCount ? g_copyCpuTotalMs / double(g_copyWindowCount) : 0,
+            g_copyCpuMaxMs, static_cast<unsigned long long>(g_depthCopyTimer.samples()),
+            g_depthCopyTimer.average_ms(), g_depthCopyTimer.max_ms(),
+            static_cast<unsigned long long>(g_skippedWindow),
+            kDepthCopyReuse && g_copyTrackingAvailable.load() ? 1 : 0);
+    g_copyWindowCount = 0; g_copyCpuTotalMs = g_copyCpuMaxMs = 0;
+    g_skippedWindow = 0;
+    g_depthCopyTimer.clear_stats();
+}
+
+void set_copy_tracking_available(bool available) {
+    g_copyTrackingAvailable.store(available, std::memory_order_release);
+}
+
+void on_depth_state(ID3D11DeviceContext* context, ID3D11DepthStencilState* state) {
+    if (!kDepthCopyReuse || !ready() || context != g_immediateContext) return;
+    g_depthWritesEnabled = true;
+    if (state) {
+        D3D11_DEPTH_STENCIL_DESC desc{}; state->GetDesc(&desc);
+        g_depthWritesEnabled = desc.DepthEnable && desc.DepthWriteMask != D3D11_DEPTH_WRITE_MASK_ZERO;
+    }
+}
+
+void on_untracked_draw(ID3D11DeviceContext* context) {
+    if (kDepthCopyReuse && ready() && context == g_immediateContext && g_depthWritesEnabled)
+        ++g_depthWriteSerial; // no change to the original indexed-draw voting
+}
+
+void on_resource_write(ID3D11DeviceContext* context, ID3D11Resource* destination) {
+    if (kDepthCopyReuse && ready() && context == g_immediateContext && g_best &&
+        destination == static_cast<ID3D11Resource*>(g_best->texture))
+        ++g_depthWriteSerial;
+}
+
+void on_context_reset(ID3D11DeviceContext* context) {
+    if (!kDepthCopyReuse || !ready() || context != g_immediateContext) return;
+    ++g_depthWriteSerial; // command lists may have changed captured depth
+    ID3D11DepthStencilState* state = nullptr; UINT stencil = 0;
+    context->OMGetDepthStencilState(&state, &stencil);
+    on_depth_state(context, state); release_one(state);
 }
 
 void on_setrt(ID3D11DeviceContext* context, UINT, ID3D11RenderTargetView* const*,
@@ -665,7 +752,9 @@ void on_setrt(ID3D11DeviceContext* context, UINT, ID3D11RenderTargetView* const*
 }
 
 void on_draw_indexed(ID3D11DeviceContext* context) {
-    if (!ready() || context != g_immediateContext || !g_current) return;
+    if (!ready() || context != g_immediateContext) return;
+    if (kDepthCopyReuse && g_depthWritesEnabled) ++g_depthWriteSerial;
+    if (!g_current) return;
     ++g_current->draws;
     ++g_currentPassDraws;
 }
@@ -678,6 +767,7 @@ void on_clear_dsv(ID3D11DeviceContext* context, ID3D11DepthStencilView* dsv,
     }
     Candidate* candidate = candidate_for(dsv);
     if (!candidate) return;
+    if (kDepthCopyReuse) ++g_depthWriteSerial; // DSV clears bypass the depth-write mask
 
     // generate_eye() temporarily detaches and then restores the scene DSV
     // before reset_interval() forgets the previous interval.  BioShock may
@@ -882,6 +972,7 @@ bool get_eye(int eye, EyeGuides* out) {
 void get_diagnostics(Diagnostics* out) {
     if (!out) return;
     g_diagnostics.depthCopies = g_depthCopies;
+    g_diagnostics.unchangedCopiesSkipped = g_unchangedCopiesSkipped;
     g_diagnostics.nearPlane = g_nearPlane;
     g_diagnostics.farPlane = g_farPlane;
     g_diagnostics.depthInverted = g_depthInverted;
@@ -930,6 +1021,10 @@ void shutdown() {
     g_farPlane = 0.0f;
     g_depthInverted = false;
     g_depthCopies = 0;
+    g_unchangedCopiesSkipped = g_skippedWindow = 0;
+    g_depthWritesEnabled = true;
+    g_depthCopyTimer.release();
+    g_copyWindowCount = 0; g_copyCpuTotalMs = g_copyCpuMaxMs = 0;
     g_captureMetadata = {};
     g_diagnostics = {};
     g_loggedUnsupportedFormat = false;

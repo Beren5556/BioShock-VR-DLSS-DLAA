@@ -9,12 +9,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
-[assembly: AssemblyTitle("Instalador BioShock VR DLSS-DLAA Beta 0.2.3")]
-[assembly: AssemblyDescription("Instalador autonomo y reversible de BioShock VR DLSS-DLAA Beta 0.2.3")]
+[assembly: AssemblyTitle("Instalador BioShock VR DLSS-DLAA Beta 0.2.6")]
+[assembly: AssemblyDescription("Instalador autonomo y reversible de BioShock VR DLSS-DLAA Beta 0.2.6")]
 [assembly: AssemblyCompany("BioShock VR Community")]
 [assembly: AssemblyProduct("BioShock VR DLSS-DLAA Beta")]
-[assembly: AssemblyVersion("0.2.3.0")]
-[assembly: AssemblyFileVersion("0.2.3.0")]
+[assembly: AssemblyVersion("0.2.6.0")]
+[assembly: AssemblyFileVersion("0.2.6.0")]
 
 namespace BioshockVrDlss45Installer
 {
@@ -63,7 +63,7 @@ namespace BioshockVrDlss45Installer
 
     internal static class InstallerCore
     {
-        internal const string DisplayVersion = "Beta 0.2.3";
+        internal const string DisplayVersion = "Beta 0.2.6";
         internal const string ExpectedGameSha256 = "AEC21A0072CFDB15E4B525E2320C87256F14F16894F714272069270AD099A05B";
         internal const string RequiredReleaseUrl = "https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2";
         internal const string ProjectUrl = "https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr";
@@ -89,17 +89,17 @@ namespace BioshockVrDlss45Installer
         private static readonly Payload[] Payloads = new Payload[]
         {
             new Payload("xinput1_3.dll", "xinput1_3.dll", "441BF1728BB38A2EC2BA57605CF840D786122E862D47A6DFA642BFF484F8E191"),
-            new Payload("bioshockvr.dll", "bioshockvr.dll", "7107B2CEBE567913888CD2FE6F58F304F435438466C81FF5E002627F0B192C78"),
+            new Payload("bioshockvr.dll", "bioshockvr.dll", "781BF9095B2F0D807820D0C6945D327D93835AB447C7D431B9A93A7AFF652ACE"),
             new Payload("bvr_steamvr32.dll", "bvr_steamvr32.dll", "56537A2EA8F88FCE6A2928EAECDE11EEEEED9C4D04F36B39E466B4D03330B972"),
             new Payload("openvr_api.dll", "openvr_api.dll", "AB696E4F218A95B3E396BC310F9FE6485DF48C99C0969762083212B1E1F025A6"),
             new Payload("BioShockVR-DLSS45-Host64.exe", Path.Combine("host64", "BioShockVR-DLSS45-Host64.exe"), "480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453"),
             new Payload("nvngx_dlss.dll", Path.Combine("host64", "nvngx_dlss.dll"), "BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E"),
             new Payload("dlss-capabilities.ini", Path.Combine("host64", "dlss-capabilities.ini"), "7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77"),
-            new Payload("Lanzador BioShock VR DLSS-DLAA.exe", LauncherName, "403B43DA8980622C4B85FAFDC4574F0D369C8B707489955F0C1C414E8123740A"),
-            new Payload("LEEME-DLSS45.md", Path.Combine("BioShockVR-DLSS45", "LEEME-DLSS45.md"), "4B3D306C19BA1108C51E3304602DE09D295E978BACD4931A50D6F2AA9B7AE115"),
+            new Payload("Lanzador BioShock VR DLSS-DLAA.exe", LauncherName, "214CE0BFEC8A5CF364A98095D7E35CC951F5DAD9DBCD5B6B0DDB686AFA402A11"),
+            new Payload("LEEME-DLSS45.md", Path.Combine("BioShockVR-DLSS45", "LEEME-DLSS45.md"), "64A8C61F23DC706B1B6F6B6530451198E92D1D574D318B8330901573FC761666"),
             new Payload("NVIDIA-DLSS-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "NVIDIA-DLSS-LICENSE.txt"), "A3E28883672AB1B48187A0CC004EA468C76F6BEA15F33F0F38A970B7F7E04C64"),
-            new Payload("INFORMACION-DEL-PAQUETE.txt", Path.Combine("BioShockVR-DLSS45", "INFORMACION-DEL-PAQUETE.txt"), "8437CDAD3722489821787ADD90881DDBDC549E5490F81F4D2B0ADC32EEDEB9A6"),
-            new Payload("dlss.ini.example", Path.Combine("BioShockVR-DLSS45", "dlss.ini.example"), "2632EED19448D7D1C25A56DE33D3E5F69481140B8AD36BE2DD0891195D549CDE"),
+            new Payload("INFORMACION-DEL-PAQUETE.txt", Path.Combine("BioShockVR-DLSS45", "INFORMACION-DEL-PAQUETE.txt"), "2A8C6C77FE34DF9C278266073DEED2F36677BB984E738D05FA665A9DD5CD8F16"),
+            new Payload("dlss.ini.example", Path.Combine("BioShockVR-DLSS45", "dlss.ini.example"), "DE2825C895948FCBD58A3082802B0B50C1D99EEFA06A34FB513FC6E5F5E33009"),
             new Payload("BioShockVR-MIT-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "BioShockVR-MIT-LICENSE.txt"), "199384980B6925AA5DA072314C0C265BB097F41C7849A7AB0E6DE9294D3D8114"),
             new Payload("DLSS-Host-MIT-LICENSE.txt", Path.Combine("BioShockVR-DLSS45", "Licenses", "DLSS-Host-MIT-LICENSE.txt"), "1CE240E402901FB81EB82A60A6BAFD2FB913CD5746860B0A4EC52A5ACB49CED7"),
             new Payload("THIRD_PARTY_NOTICES.md", Path.Combine("BioShockVR-DLSS45", "Licenses", "THIRD_PARTY_NOTICES.md"), "56EB4D3AEF9087E47113609CE507856A0270A62B8C6E1734CDF0EE5A2B670C13"),
@@ -476,7 +476,7 @@ namespace BioshockVrDlss45Installer
                     throw new InvalidDataException("Falta en el manifiesto: " + payload.RelativePath);
                 record.InstalledSha256 = payload.Sha256;
             }
-            manifest.Version = "0.2.3";
+            manifest.Version = "0.2.6";
         }
 
         private static void CreateDesktopShortcut(string launcherPath)
@@ -492,7 +492,7 @@ namespace BioshockVrDlss45Installer
                 Type shortcutType = shortcut.GetType();
                 shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { launcherPath });
                 shortcutType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { Path.GetDirectoryName(launcherPath) });
-                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "BioShock VR DLSS-DLAA Beta 0.2.3" });
+                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "BioShock VR DLSS-DLAA Beta 0.2.6" });
                 shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { launcherPath + ",0" });
                 shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, null);
             }
@@ -707,7 +707,7 @@ namespace BioshockVrDlss45Installer
             string temp = ManifestPath + ".new-" + Guid.NewGuid().ToString("N");
             List<string> lines = new List<string>();
             lines.Add("Format=2");
-            lines.Add("Version=0.2.3");
+            lines.Add("Version=0.2.6");
             lines.Add("GameDirectory=" + Encode(manifest.GameDirectory));
             lines.Add("BackupDirectory=" + Encode(manifest.BackupDirectory));
             lines.Add("ShortcutPath=" + Encode(manifest.ShortcutPath));
@@ -728,7 +728,8 @@ namespace BioshockVrDlss45Installer
                 String.IsNullOrWhiteSpace(manifest.BackupDirectory))
                 throw new InvalidDataException("El manifiesto de instalacion esta incompleto.");
             if (manifest.Version != "0.2.0" && manifest.Version != "0.2.1" &&
-                manifest.Version != "0.2.2" && manifest.Version != "0.2.3")
+                manifest.Version != "0.2.2" && manifest.Version != "0.2.3" &&
+                manifest.Version != "0.2.4" && manifest.Version != "0.2.5" && manifest.Version != "0.2.6")
                 throw new InvalidDataException("La version del manifiesto no admite una actualizacion segura.");
             if (!IsInside(LocalRoot, manifest.BackupDirectory))
                 throw new InvalidDataException("La carpeta de copia del manifiesto no es segura.");
@@ -940,11 +941,12 @@ namespace BioshockVrDlss45Installer
         private readonly Button _install;
         private readonly Button _restore;
         private readonly Button _close;
+        private bool _busy;
         private readonly Label _status;
 
         internal MainForm()
         {
-            Text = "Instalador de BioShock VR · DLSS/DLAA Beta 0.2.3";
+            Text = "Instalador de BioShock VR · DLSS/DLAA Beta 0.2.6";
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
@@ -957,7 +959,7 @@ namespace BioshockVrDlss45Installer
             catch { }
 
             Label title = new Label();
-            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2.3";
+            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2.6";
             title.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
             title.ForeColor = SystemColors.ControlText;
             title.Location = new Point(20, 17);
@@ -1037,6 +1039,8 @@ namespace BioshockVrDlss45Installer
             _close.Text = "Cerrar";
             _close.FlatStyle = FlatStyle.System;
             _close.DialogResult = DialogResult.Cancel;
+            // Application.Run is modeless: DialogResult alone never closes it.
+            _close.Click += delegate { Close(); };
             _close.Location = new Point(527, 254);
             _close.Size = new Size(102, 32);
             Controls.Add(_close);
@@ -1068,6 +1072,7 @@ namespace BioshockVrDlss45Installer
 
         private void RefreshValidation()
         {
+            if (_busy) return;
             if (String.IsNullOrWhiteSpace(_path.Text))
             {
                 _status.Text = "Selecciona la carpeta Build\\Final de BioShock Remastered.";
@@ -1101,6 +1106,7 @@ namespace BioshockVrDlss45Installer
 
         private void SetBusy(bool busy, string text)
         {
+            _busy = busy;
             UseWaitCursor = busy;
             _browse.Enabled = !busy;
             _path.Enabled = !busy;
@@ -1110,6 +1116,19 @@ namespace BioshockVrDlss45Installer
             _restore.Enabled = !busy && File.Exists(InstallerCore.ManifestPath);
             if (!String.IsNullOrEmpty(text)) _status.Text = text;
             Application.DoEvents();
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Buttons and the title-bar X obey the same in-flight install rule.
+            if (_busy && e.CloseReason == CloseReason.UserClosing) e.Cancel = true;
+            base.OnFormClosing(e);
+        }
+
+        private void FinishLauncherStart(bool started)
+        {
+            // Failed launch leaves the installed path/error available to read.
+            if (started && !IsDisposed) Close();
         }
 
         private void InstallClicked(object sender, EventArgs e)
@@ -1134,11 +1153,12 @@ namespace BioshockVrDlss45Installer
             }
 
             DialogResult answer = MessageBox.Show(this,
-                "Se instalará BioShock VR DLSS/DLAA Beta 0.2.3 y se guardará una copia de los archivos sustituidos.\r\n\r\n¿Quieres continuar?",
+                "Se instalará BioShock VR DLSS/DLAA Beta 0.2.6 y se guardará una copia de los archivos sustituidos.\r\n\r\n¿Quieres continuar?",
                 "Confirmar instalación", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
             if (answer != DialogResult.OK) return;
 
             SetBusy(true, "Instalando BioShock VR...");
+            bool launcherStarted = false;
             try
             {
                 string gameDirectory = Path.GetFullPath(_path.Text.Trim().Trim('"'));
@@ -1146,7 +1166,7 @@ namespace BioshockVrDlss45Installer
                 _status.Text = "Instalación completada.";
                 _status.ForeColor = Color.FromArgb(0, 102, 0);
                 MessageBox.Show(this,
-                    "Instalación completada.\r\n\r\nEl lanzador se abrirá ahora y también queda disponible en el Escritorio.",
+                    "Instalación completada.\r\n\r\nEl lanzador se abrirá ahora y este instalador se cerrará. También queda disponible en el Escritorio.",
                     "BioShock VR instalado", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 try
                 {
@@ -1158,6 +1178,7 @@ namespace BioshockVrDlss45Installer
                     if (launched == null)
                         throw new InvalidOperationException("Windows no devolvió el proceso del lanzador.");
                     launched.Dispose();
+                    launcherStarted = true;
                 }
                 catch (Exception launchError)
                 {
@@ -1180,8 +1201,81 @@ namespace BioshockVrDlss45Installer
             finally
             {
                 SetBusy(false, String.Empty);
-                RefreshRestoreState();
+                if (!IsDisposed) RefreshRestoreState();
             }
+            FinishLauncherStart(launcherStarted);
+        }
+
+        internal static string RunCloseSelfTest()
+        {
+            // Exercise the REAL modeless message loop and button event. A
+            // modal ShowDialog test would conceal the original DialogResult bug.
+            string previousRoot = InstallerCore.TestLocalRootOverride;
+            InstallerCore.TestLocalRootOverride = Path.Combine(Path.GetTempPath(),
+                "BvrUiClose-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                for (int scenario = 0; scenario < 4; ++scenario)
+                {
+                    using (MainForm form = new MainForm())
+                    using (System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer())
+                    {
+                        form.ShowInTaskbar = false;
+                        form.Opacity = 0;
+                        bool closed = false, timedOut = false;
+                        Exception failure = null;
+                        int ticks = 0;
+                        form.FormClosed += delegate { closed = true; };
+                        timer.Interval = 100;
+                        timer.Tick += delegate
+                        {
+                            try
+                            {
+                                if (++ticks == 1)
+                                {
+                                    if (scenario == 0) form._close.PerformClick();
+                                    else if (scenario == 1) form.FinishLauncherStart(true);
+                                    else if (scenario == 2)
+                                    {
+                                        form.SetBusy(true, "Prueba");
+                                        form._close.PerformClick();
+                                        form.Close();
+                                        if (closed) throw new InvalidOperationException("Cierre durante instalación.");
+                                        form.SetBusy(false, String.Empty);
+                                        form._close.PerformClick();
+                                    }
+                                    else
+                                    {
+                                        form.FinishLauncherStart(false);
+                                        if (closed) throw new InvalidOperationException("Cierre tras fallo del lanzador.");
+                                        form._close.PerformClick();
+                                    }
+                                }
+                                else if (ticks >= 8)
+                                {
+                                    timedOut = true;
+                                    form._busy = false;
+                                    form.Close();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                failure = ex;
+                                form._busy = false;
+                                form.Close();
+                            }
+                        };
+                        form.Shown += delegate { timer.Start(); };
+                        Application.Run(form);
+                        timer.Stop();
+                        if (failure != null) throw failure;
+                        if (!closed || timedOut)
+                            throw new InvalidOperationException("Fallo del cierre de interfaz, caso " + scenario + ".");
+                    }
+                }
+                return "PASS: 4 cierres UI reales: Cerrar, lanzador abierto, ocupado y lanzamiento fallido; sin instalar ni iniciar el juego.";
+            }
+            finally { InstallerCore.TestLocalRootOverride = previousRoot; }
         }
 
         private void RestoreClicked(object sender, EventArgs e)
@@ -1234,7 +1328,7 @@ namespace BioshockVrDlss45Installer
             ShowInTaskbar = false;
 
             Label title = new Label();
-            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2.3";
+            title.Text = "BioShock VR · DLSS/DLAA Beta 0.2.6";
             title.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
             title.Location = new Point(20, 18);
             title.AutoSize = true;
@@ -1243,7 +1337,8 @@ namespace BioshockVrDlss45Installer
             Label description = new Label();
             description.Text =
                 "Fork beta basado en BioShock VR v0.8.2, con integración experimental\r\n" +
-                "de NORMAL, DLAA y DLSS 4.5. El instalador incluye el mod completo.\r\n\r\n" +
+                "de NORMAL, DLAA y DLSS 4.5. El instalador incluye el mod completo.\r\n" +
+                "En juego: F1 ajuste · F2/F3 cambiar · F6 modo/ocultar.\r\n\r\n" +
                 "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\r\n" +
                 "Creador del mod original y de la implementación VR fundamental.\r\n" +
                 "Sin su enorme trabajo, este fork no existiría.\r\n" +
@@ -1312,6 +1407,15 @@ namespace BioshockVrDlss45Installer
                         delegate(string message) { log.AppendLine(message); });
                     File.WriteAllText(args[3], "PASS: " + launcher + Environment.NewLine + log.ToString(),
                                       new UTF8Encoding(false));
+                    return 0;
+                }
+                if (args.Length > 0 && String.Equals(args[0], "--ui-close-self-test", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (args.Length > 1) failureOutput = args[1];
+                    Application.EnableVisualStyles();
+                    Application.SetCompatibleTextRenderingDefault(false);
+                    string result = MainForm.RunCloseSelfTest();
+                    if (args.Length > 1) File.WriteAllText(args[1], result + Environment.NewLine, new UTF8Encoding(false));
                     return 0;
                 }
                 if (args.Length >= 3 && String.Equals(args[0], "--integration-restore", StringComparison.OrdinalIgnoreCase))

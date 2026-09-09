@@ -369,6 +369,8 @@ bool finite_depth_case(ID3D11Device* device, ID3D11DeviceContext* context,
 
 } // namespace
 
+#include "depth_reuse_cases.h"
+
 int main() {
     constexpr UINT kWidth = 64;
     constexpr UINT kHeight = 48;
@@ -407,6 +409,7 @@ int main() {
     prepare.nearPlane = 10.0f;
     prepare.farPlane = 65536.0f;
     prepare.depthInverted = false;
+    bvr::b1r::temporal_guides::set_copy_tracking_available(true);
     ok = ok && bvr::b1r::temporal_guides::prepare(device, prepare);
 
     // Keep a sentinel CS constant buffer bound; generate_eye must restore it.
@@ -706,6 +709,12 @@ int main() {
         if (!ok) std::printf("FAIL: invalidate retained a generated eye\n");
     }
 
+#ifdef BVR_DEPTH_COPY_REUSE
+    // Last finite-depth case used reversed depth: reset to the production
+    // convention before comparing actual depth values in the reuse cases.
+    if (ok) ok = bvr::b1r::temporal_guides::prepare(device, prepare);
+    if (ok) ok = depth_reuse_cases(device, context, main, minor);
+#endif
     const bool d3dClean = debug_layer_clean(device, !ok);
     if (ok && !d3dClean) {
         std::printf("FAIL: D3D11 debug layer reported a warning/error\n");

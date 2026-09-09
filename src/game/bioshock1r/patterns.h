@@ -327,6 +327,17 @@ inline constexpr uint32_t kXInputSetStateIatRva = 0xBCF8DC;
 // forwards to its base chain (call 0x4E2790 at its tail). Exec is vtable
 // slot 65 (+0x104) on UWindowsClient; the seam calls the entries directly.
 inline constexpr uint32_t kViewportExecRva = 0x8525C0;
+// Live-resolution lane (0.2.4): unlike the UObject base returned by the
+// viewport resolver, this Exec entry expects the FExec subobject at +0x44.
+// Verified offline from the secondary vtable and its CompleteObjectLocator:
+// COL.offset == 0x44; its TypeDescriptor matches the primary viewport COL.
+// SETRES also checks [this-0x44] against kViewportVtableRva before dispatching
+// to the render device. The old base-pointer call explains the session-27
+// near-null fault before SETRES was reached. Runtime success still requires
+// a successful ResizeBuffers and matching live dimensions.
+inline constexpr uint32_t kViewportExecThisOffset = 0x44;
+inline constexpr uint32_t kViewportExecVtableRva = 0xE4E338;
+inline constexpr uint32_t kViewportExecLocatorRva = 0xE7EE08;
 inline constexpr uint32_t kClientExecRva = 0x850DE0;
 // UGameEngine::Exec (start via SEH-prologue walk from the SERVERTRAVEL /
 // SAVEGAME / GETMAXTICKRATE ParseCommand cluster 0x4C5D75..0x4C6324; common

@@ -9,6 +9,13 @@
 #include "core/util/diag.h"
 #include "core/util/log.h"
 #include "core/vr/openxr_runtime.h"
+#include "core/vr/critical_path_probe.h"
+#ifdef BVR_DLSS_EARLY_DELIVERY
+#include "core/vr/delivery_probe.h"
+#include "core/gfx/image_controls.h"
+#include "core/gfx/sampled_gpu_timer.h"
+#endif
+#include "game/bioshock1r/performance_probe.h"
 
 #include <windows.h>
 #include <d3d11.h>
@@ -58,6 +65,10 @@ void LogSwapchainInfo(IDXGISwapChain* swapchain) {
 }
 
 HRESULT WINAPI PresentDetour(IDXGISwapChain* swapchain, UINT syncInterval, UINT flags) {
+    namespace CP = bvr::critical_path_probe;
+    CP::Scope presentScope(CP::Stage::PresentSetup);
+    // Stop the scene interval before letterbox, xrWaitFrame, overlays and DLAA.
+    bvr::b1r::performance_probe::scene_end();
     const uint64_t presents = g_presentCount.fetch_add(1, std::memory_order_relaxed);
     g_lastPresentTid.store(GetCurrentThreadId(), std::memory_order_relaxed);
     // Cheap re-arm of our unhandled-exception filter (~every 10 s at 60 fps).
@@ -117,16 +128,26 @@ HRESULT WINAPI PresentDetour(IDXGISwapChain* swapchain, UINT syncInterval, UINT 
         }
     }
     vr::set_present_stage("vrBegin");
-    vr::on_present_begin(swapchain); // xrWaitFrame paces the game while a session runs
+    {
+        CP::Scope scope(CP::Stage::XrPrepare);
+        vr::on_present_begin(swapchain); // xrWaitFrame paces the game while a session runs
+    }
     vr::set_present_stage("overlay");
-    if (!diag::skip("overlay")) overlay::on_present(swapchain);
+    {
+        CP::Scope scope(CP::Stage::Overlay);
+        if (!diag::skip("overlay")) overlay::on_present(swapchain);
+    }
     vr::set_present_stage("vrEnd");
-    vr::on_present_end(swapchain);   // copies the finished frame (incl. overlay) to the quad
+    {
+        CP::Scope scope(CP::Stage::CaptureOther);
+        vr::on_present_end(swapchain);   // copies the finished frame (incl. overlay) to the quad
+    }
     vr::set_present_stage("hudPresent");
     // HUD capture rolls LAST: every consumer of the redirected HUD RT (eye
     // capture, window composite, quad copy - all inside on_present_end) has
     // run by now; this clears the RT and resets the interval classifier.
     {
+        CP::Scope scope(CP::Stage::HudRoll);
         ID3D11Device* device = nullptr;
         if (SUCCEEDED(swapchain->GetDevice(IID_PPV_ARGS(&device))) && device) {
             ID3D11DeviceContext* context = nullptr;
@@ -140,7 +161,19 @@ HRESULT WINAPI PresentDetour(IDXGISwapChain* swapchain, UINT syncInterval, UINT 
         }
     }
     vr::set_present_stage("gamePresent"); // the game's own Present - not our code
-    HRESULT hr = g_origPresent(swapchain, syncInterval, flags);
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    const bool deliveryEnabled = bvr::image_controls::enabled();
+    const double presentStart = deliveryEnabled ? bvr::diagnostic_clock_ms() : 0;
+#endif
+    HRESULT hr;
+    {
+        CP::Scope scope(CP::Stage::DesktopPresent);
+        hr = g_origPresent(swapchain, syncInterval, flags);
+    }
+#ifdef BVR_DLSS_EARLY_DELIVERY
+    if (deliveryEnabled)
+        bvr::delivery_probe::desktop_present(bvr::diagnostic_clock_ms()-presentStart, syncInterval);
+#endif
     vr::set_present_stage(nullptr);
     return hr;
 }
@@ -152,6 +185,7 @@ HRESULT WINAPI ResizeBuffersDetour(IDXGISwapChain* swapchain, UINT bufferCount,
     overlay::on_resize();
     hud::release_resources(); // recreated lazily at the new size
     HRESULT hr = g_origResizeBuffers(swapchain, bufferCount, width, height, format, swapchainFlags);
+    vr::on_resize_complete(SUCCEEDED(hr));
     BVR_LOG("ResizeBuffers: %ux%u format %u -> hr=0x%08X", width, height, format, hr);
     return hr;
 }

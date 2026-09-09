@@ -1,6 +1,7 @@
 #include "game/bioshock1r/bioshock1r_adapter.h"
 
 #include "core/util/log.h"
+#include "core/gfx/image_controls.h"
 #include "game/bioshock1r/aim.h"
 #include "game/bioshock1r/body.h"
 #include "game/bioshock1r/bones.h"
@@ -28,6 +29,7 @@ bool Bioshock1RAdapter::init(const bvr::pattern_scan::ProcessImage& image) {
     hands::init(image);        // M7 viewmodel; the actor is located lazily
     bones::init(image);        // M7-v2 skeleton drive; located lazily off the actor
     body::init(image);         // M7.5 body yaw transfer; default off, probe-gated
+    bvr::image_controls::set_enabled(true);
     BVR_LOG("[b1r] adapter ready, capabilities 0x%X", capabilities());
     return true;
 }

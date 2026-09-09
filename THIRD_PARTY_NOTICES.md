@@ -1,5 +1,15 @@
 # Third-party notices
 
+## Windows Installer
+
+The MSI uses unmodified WiX UI and DTF components from WiX Toolset 6.0.2,
+Copyright (c) .NET Foundation and contributors, under the Microsoft Reciprocal
+License (MS-RL). The matching license and full upstream source archive are
+included in `BioShockVR-DLSS45/Licenses/WiX-6.0.2-*` in the installation.
+Upstream source: https://github.com/wixtoolset/wix/tree/v6.0.2.
+The project's original installer actions remain separate source files under
+`installer/msi`; third-party code is not relicensed as this project's MIT code.
+
 ## Original project base
 
 This fork is based on **BioShock VR v0.8.2**, created by

@@ -28,6 +28,7 @@ if (-not (Test-Path -LiteralPath $compilerPath)) {
 
 $compilerArguments = @(
     '/nologo',
+    '/codepage:65001',
     '/target:winexe',
     '/optimize+',
     '/platform:anycpu',
@@ -37,7 +38,8 @@ $compilerArguments = @(
     '/reference:System.Core.dll',
     '/reference:System.Drawing.dll',
     '/reference:System.Windows.Forms.dll',
-    $compilerSource
+    $compilerSource,
+    (Join-Path $projectRoot 'src\ImageTab.cs')
 )
 try {
     & $compilerPath $compilerArguments

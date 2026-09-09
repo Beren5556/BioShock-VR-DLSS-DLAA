@@ -40,12 +40,26 @@ El SDK de desarrollo, sus cabeceras y bibliotecas de importación no se almacena
 
 - Adaptación de render, transporte y guías temporales para DLSS/DLAA.
 - Lanzador WinForms: apps/launcher.
-- Instalador WinForms y pruebas: installer.
+- Instalador MSI y pruebas: installer/msi. El instalador WinForms anterior
+  se conserva como código histórico en installer/src.
 - Scripts, documentación y manifiestos específicos de la versión.
 
 ## Otros terceros
 
 Las dependencias heredadas, sus revisiones y licencias están descritas en THIRD_PARTY_NOTICES.md y dentro de cada submódulo. El archivo del juego BioshockHD.exe y los recursos de BioShock Remastered no forman parte del repositorio ni de la Release.
+
+## Artefacto público v0.2.11
+
+- Archivo: BioShock-VR-DLSS-DLAA-0.2.11.msi
+- SHA-256: 2A5365E332DC311C0E010AD0BECEEAB34E905F66C6F40AB5CF44824EDAD9F660
+- Lanzador: D6340CD90684DE6733BB10B52019AC81E755C3F60A5BC442829F91A5B550BDDA
+- Mod x86: DADA33F07F38B3E617B63E0A1119D290F1D69C05E4C30A9E14970169EBA92BFB
+- Host x64: 480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453
+- Runtime NVIDIA: 310.7.0.0, sin cambios respecto a la distribución anterior.
+- Manifiesto completo: [release/manifest-v0.2.11.json](release/manifest-v0.2.11.json).
+
+Los artefactos anteriores se describen a continuación solo por trazabilidad;
+sus publicaciones se conservan como borradores.
 
 ## Artefacto v0.2.1-beta
 

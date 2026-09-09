@@ -1,4 +1,10 @@
-# Instalador autónomo
+# Instalador MSI 0.2.11
+
+La nueva distribución se construye con `msi/Build-Msi.ps1`. Véase
+[Windows Installer](msi/README.md). El instalador EXE descrito debajo se
+conserva como herramienta y referencia de versiones anteriores.
+
+## Instalador autónomo anterior
 
 El instalador WinForms contiene todo lo necesario para añadir el mod a una
 instalación compatible de BioShock Remastered. No presupone que BioShock VR
