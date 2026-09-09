@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.11',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.12',
     [switch]$SkipLauncherBuild,
     [ValidatePattern('^(|[a-f0-9]{32})$')][string]$TestFamily = ''
 )
@@ -196,6 +196,7 @@ $manifest = [ordered]@{
     installer = [IO.Path]::GetFileName($output)
     sha256 = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
     launcherAutoStart = $false
+    languages = @('es', 'en')
     desktopShortcut = 'BioShock VR DLSS-DLAA ' + $Version + '.lnk'
     baseMod = 'BioShock VR v0.8.2'
     modBuild = $buildId

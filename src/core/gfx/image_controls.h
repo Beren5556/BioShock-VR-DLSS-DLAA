@@ -17,4 +17,5 @@ void reject(const char* reason) noexcept;
 void report_effective(const Settings& effective, const char* reason,
                       bool spatialFallback = false) noexcept;
 void unavailable(const char* reason) noexcept;
+const char* text(const char* spanish, const char* english) noexcept;
 } // namespace bvr::image_controls

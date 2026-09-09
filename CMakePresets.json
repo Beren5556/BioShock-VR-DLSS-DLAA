@@ -11,8 +11,8 @@
     {
       "name": "stable-win32",
       "inherits": "win32",
-      "displayName": "0.2.11 - stereo recovery and MSI upgrade",
-      "binaryDir": "${sourceDir}/artifacts/stable-0.2.11/build",
+      "displayName": "0.2.12 - bilingual Spanish and English",
+      "binaryDir": "${sourceDir}/artifacts/stable-0.2.12/build",
       "cacheVariables": {
         "BVR_DLSS_OVERLAP": "ON",
         "BVR_DEPTH_COPY_REUSE": "ON",

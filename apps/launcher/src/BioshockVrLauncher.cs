@@ -13,8 +13,8 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("Complemento DLSS 4.5 para BioShock VR - Beren5556")]
 [assembly: AssemblyDescription("Lanzador y editor seguro con modos Normal, DLAA y DLSS 4.5")]
 [assembly: AssemblyProduct("Complemento DLSS 4.5 para BioShock VR")]
-[assembly: AssemblyVersion("0.2.11.0")]
-[assembly: AssemblyFileVersion("0.2.11.0")]
+[assembly: AssemblyVersion("0.2.12.0")]
+[assembly: AssemblyFileVersion("0.2.12.0")]
 
 namespace BioshockVrLauncher
 {
@@ -1751,10 +1751,12 @@ namespace BioshockVrLauncher
             _dlssConfigPath = Path.Combine(
                 isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "BioshockVR", "dlss.ini");
+            UiLanguage.Initialize(_dlssConfigPath);
             _gameIniPath = Path.Combine(
                 isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "BioshockHD", "Bioshock", "Bioshock.ini");
             _definitions = BuildDefinitions();
+            foreach (ParamDef definition in _definitions) UiLanguage.Localize(definition);
             _editors = new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase);
             _gameIniEntries = new List<IniEntry>();
             _toolTip = new ToolTip();
@@ -1762,7 +1764,7 @@ namespace BioshockVrLauncher
             _toolTip.InitialDelay = 350;
             _toolTip.ReshowDelay = 100;
 
-            Text = "BioShock VR · DLSS/DLAA 0.2.11";
+            Text = "BioShock VR · DLSS/DLAA 0.2.12";
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -1777,6 +1779,9 @@ namespace BioshockVrLauncher
 
             _loading = true;
             BuildInterface();
+            UiLanguage.Apply(this);
+            if (UiLanguage.IsEnglish)
+                Application.Idle += delegate { if (!IsDisposed) UiLanguage.Apply(this); };
             if (selfTest)
             {
                 _dlssBackendStatus = new DlssBackendStatus();
@@ -2084,14 +2089,14 @@ namespace BioshockVrLauncher
             _statusLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             footer.Controls.Add(_statusLabel);
             ContextMenuStrip fileMenu = new ContextMenuStrip();
-            fileMenu.Items.Add("Abrir vrpreset.ini", null, delegate { OpenConfigurationFile(); });
-            fileMenu.Items.Add("Abrir Bioshock.ini", null, delegate { OpenGameIniFile(); });
-            fileMenu.Items.Add("Ver copias de seguridad", null, delegate { OpenBackupFolder(); });
+            fileMenu.Items.Add(UiLanguage.Text("Abrir vrpreset.ini", "Open vrpreset.ini"), null, delegate { OpenConfigurationFile(); });
+            fileMenu.Items.Add(UiLanguage.Text("Abrir Bioshock.ini", "Open Bioshock.ini"), null, delegate { OpenGameIniFile(); });
+            fileMenu.Items.Add(UiLanguage.Text("Ver copias de seguridad", "View backups"), null, delegate { OpenBackupFolder(); });
             fileMenu.Items.Add(new ToolStripSeparator());
-            fileMenu.Items.Add("Créditos y licencias", null, delegate { ShowCreditsAndLicenses(); });
+            fileMenu.Items.Add(UiLanguage.Text("Créditos y licencias", "Credits and licenses"), null, delegate { ShowCreditsAndLicenses(); });
             if (!FinalDlssEdition)
-                fileMenu.Items.Add("Abrir upscaler.ini", null, delegate { OpenUpscalerConfigurationFile(); });
-            Button files = MakeButton("Archivos y ayuda ▾", SystemColors.Control, SystemColors.ControlText, 135);
+                fileMenu.Items.Add(UiLanguage.Text("Abrir upscaler.ini", "Open upscaler.ini"), null, delegate { OpenUpscalerConfigurationFile(); });
+            Button files = MakeButton(UiLanguage.Text("Archivos y ayuda ▾", "Files and help ▾"), SystemColors.Control, SystemColors.ControlText, 135);
             files.SetBounds(8, 23, 135, 26);
             files.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             files.ContextMenuStrip = fileMenu;
@@ -2793,7 +2798,7 @@ namespace BioshockVrLauncher
             _toolTip.SetToolTip(label, definition.Description);
             _toolTip.SetToolTip(editor, definition.Description);
             _toolTip.SetToolTip(description, definition.Description + Environment.NewLine +
-                                             "Parámetro interno: " + definition.Key);
+                                             UiLanguage.Text("Parámetro interno: ", "Internal parameter: ") + definition.Key);
             table.Controls.Add(label, 0, row);
             table.Controls.Add(editor, 1, row);
             table.Controls.Add(unit, 2, row);
@@ -3313,7 +3318,7 @@ namespace BioshockVrLauncher
             int renderWidth, renderHeight;
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se puede calcular el preset porque no hay una resolución de render válida en Bioshock.ini.",
                     "Preset de salida VR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -3326,7 +3331,7 @@ namespace BioshockVrLauncher
                                                                        scale, out outputWidth,
                                                                        out outputHeight))
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No cabe una salida un 10 % mayor dentro del límite seguro de 8192 píxeles por eje. " +
                     "Baja primero la resolución de render del juego.",
                     "Preset de salida VR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -3409,7 +3414,7 @@ namespace BioshockVrLauncher
             UpscalerSettings settings = CollectUpscalerSettings();
             string problem;
             if (TryValidateUpscalerSettings(settings, out problem)) return true;
-            MessageBox.Show(this,
+            LocalizedMessageBox.Show(this,
                 "No se puede guardar la configuración del reescalado espacial:\n\n" + problem +
                 "\n\nLa salida debe ser igual o mayor que la imagen del juego y conservar su proporción.",
                 "Revisar reescalado espacial", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -3760,7 +3765,7 @@ namespace BioshockVrLauncher
                 FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportX") == null ||
                 FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportY") == null)
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se puede aplicar el tramo porque faltan las cuatro claves únicas de resolución PC en Bioshock.ini.",
                     "Calidad DLSS SR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
@@ -3774,7 +3779,7 @@ namespace BioshockVrLauncher
                 !DlssQualityPolicy.TryCalculateRender(outputWidth, outputHeight,
                     numerator, denominator, out renderWidth, out renderHeight))
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se puede obtener una resolución interna par, entre 1024 y 8192 píxeles, " +
                     "que mantenga exactamente el aspecto de la salida " +
                     outputWidth.ToString(CultureInfo.CurrentCulture) + " × " +
@@ -3986,7 +3991,7 @@ namespace BioshockVrLauncher
             DlssSettings settings = CollectDlssSettings();
             string problem;
             if (TryValidateDlssSettings(settings, out problem)) return true;
-            MessageBox.Show(this,
+            LocalizedMessageBox.Show(this,
                 "No se puede guardar la configuración DLSS 4.5:\n\n" + problem +
                 "\n\nDLAA exige entrada=salida. DLSS SR exige una salida mayor y la misma proporción.",
                 "Revisar DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -4190,7 +4195,7 @@ namespace BioshockVrLauncher
                 !_dlssBackendStatus.Ready || _dlssBackendStatus.RuntimeMatches)
                 return;
             _runtimeWarningShown = true;
-            MessageBox.Show(this,
+            LocalizedMessageBox.Show(this,
                 "Se ha detectado una versión distinta de nvngx_dlss.dll: " +
                 (string.IsNullOrEmpty(_dlssBackendStatus.RuntimeVersion)
                     ? "no identificada" : _dlssBackendStatus.RuntimeVersion) + ".\r\n\r\n" +
@@ -4445,7 +4450,7 @@ namespace BioshockVrLauncher
         {
             if (initiatedByUser && _dirty)
             {
-                DialogResult answer = MessageBox.Show(
+                DialogResult answer = LocalizedMessageBox.Show(
                     this,
                     "Hay cambios sin guardar. ¿Quieres descartarlos y volver a leer los ficheros?",
                     "Recargar configuración",
@@ -4523,7 +4528,7 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se ha podido leer la configuración:\n\n" + ex.Message,
                     "Error al cargar", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("Error al leer vrpreset.ini.", Color.Firebrick);
@@ -4604,7 +4609,7 @@ namespace BioshockVrLauncher
         {
             if (NumericValue("swingRearm") >= NumericValue("swingThreshold"))
             {
-                DialogResult answer = MessageBox.Show(this,
+                DialogResult answer = LocalizedMessageBox.Show(this,
                     "La velocidad para rearmar el gesto es igual o superior a la velocidad necesaria para atacar. " +
                     "El mod la limitará internamente, pero el comportamiento será menos predecible.\n\n" +
                     "¿Quieres guardar de todos modos?",
@@ -4642,7 +4647,7 @@ namespace BioshockVrLauncher
                     : string.Empty;
                 if (expectedContent == (_loadedContent ?? string.Empty))
                     return true;
-                DialogResult answer = MessageBox.Show(this,
+                DialogResult answer = LocalizedMessageBox.Show(this,
                     "vrpreset.ini ha cambiado desde que abriste o recargaste el lanzador. " +
                     "Puede haber sido modificado por el juego u otra aplicación.\n\n" +
                     "¿Quieres aplicar sobre esa versión externa los valores que ves ahora?",
@@ -4652,7 +4657,7 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido comprobar vrpreset.ini:\n\n" + ex.Message,
+                LocalizedMessageBox.Show(this, "No se ha podido comprobar vrpreset.ini:\n\n" + ex.Message,
                     "Error al preparar el guardado", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
@@ -4668,7 +4673,7 @@ namespace BioshockVrLauncher
                     : string.Empty;
                 if (expectedContent == (_upscalerLoadedContent ?? string.Empty))
                     return true;
-                DialogResult answer = MessageBox.Show(this,
+                DialogResult answer = LocalizedMessageBox.Show(this,
                     "upscaler.ini ha cambiado desde que abriste o recargaste el lanzador. " +
                     "Puede haber sido modificado por el juego u otra aplicación.\n\n" +
                     "¿Quieres aplicar sobre esa versión externa los valores que ves ahora?",
@@ -4678,7 +4683,7 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido comprobar upscaler.ini:\n\n" + ex.Message,
+                LocalizedMessageBox.Show(this, "No se ha podido comprobar upscaler.ini:\n\n" + ex.Message,
                     "Error al preparar el reescalado", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
@@ -4694,7 +4699,7 @@ namespace BioshockVrLauncher
                     : string.Empty;
                 if (expectedContent == (_dlssLoadedContent ?? string.Empty))
                     return true;
-                DialogResult answer = MessageBox.Show(this,
+                DialogResult answer = LocalizedMessageBox.Show(this,
                     "dlss.ini ha cambiado desde que abriste o recargaste el lanzador. " +
                     "Puede haber sido modificado por el juego u otra aplicación.\n\n" +
                     "¿Quieres aplicar sobre esa versión externa los valores que ves ahora?",
@@ -4704,7 +4709,7 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido comprobar dlss.ini:\n\n" + ex.Message,
+                LocalizedMessageBox.Show(this, "No se ha podido comprobar dlss.ini:\n\n" + ex.Message,
                     "Error al preparar DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
@@ -4714,7 +4719,7 @@ namespace BioshockVrLauncher
         {
             if (IsGameRunning())
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "BioShock está abierto. Ciérralo antes de guardar para evitar que el juego vuelva a sobrescribir el fichero al salir.",
                     "Juego en ejecución", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
@@ -4731,7 +4736,7 @@ namespace BioshockVrLauncher
 
             if (!FinalDlssEdition && _upscalerEnabled.Checked && _dlssMode.SelectedIndex > 0)
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "DLSS 4.5 y el reescalado espacial no pueden estar activos a la vez. " +
                     "Selecciona solo uno de los dos métodos.",
                     "Métodos de imagen excluyentes", MessageBoxButtons.OK,
@@ -4892,7 +4897,7 @@ namespace BioshockVrLauncher
                 {
                     try { File.Delete(temporaryPath); } catch { }
                 }
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se ha podido guardar upscaler.ini:\n\n" + ex.Message,
                     "Error al guardar reescalado", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("upscaler.ini no se ha guardado.", Color.Firebrick);
@@ -4989,7 +4994,7 @@ namespace BioshockVrLauncher
                 {
                     try { File.Delete(temporaryPath); } catch { }
                 }
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se ha podido guardar dlss.ini:\n\n" + ex.Message,
                     "Error al guardar DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("dlss.ini no se ha guardado.", Color.Firebrick);
@@ -5060,7 +5065,7 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se han podido guardar los cambios:\n\n" + ex.Message,
                     "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("No se ha podido guardar la configuración.", Color.Firebrick);
@@ -5087,7 +5092,7 @@ namespace BioshockVrLauncher
                 list.AppendLine("• [" + sensitive[i].Section + "] " + sensitive[i].Key);
             if (sensitive.Count > shown)
                 list.AppendLine("• …y " + (sensitive.Count - shown) + " ajuste(s) más");
-            DialogResult answer = MessageBox.Show(this,
+            DialogResult answer = LocalizedMessageBox.Show(this,
                 "Has modificado ajustes internos, protegidos o especialmente sensibles para VR:\n\n" +
                 list.ToString() + "\nSe creará una copia de seguridad, pero un valor incorrecto puede impedir que el juego arranque o alterar el progreso. ¿Quieres continuar?",
                 "Confirmar cambios delicados", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -5167,7 +5172,7 @@ namespace BioshockVrLauncher
                 string currentContent = ReadGameIniText(_gameIniPath);
                 if (currentContent != (_gameIniLoadedContent ?? string.Empty))
                 {
-                    DialogResult answer = MessageBox.Show(this,
+                    DialogResult answer = LocalizedMessageBox.Show(this,
                         "Bioshock.ini ha cambiado desde que lo cargaste, probablemente porque el juego u otra aplicación lo ha escrito.\n\nRecarga el fichero antes de continuar para no perder esos cambios.",
                         "Bioshock.ini modificado externamente", MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
@@ -5235,7 +5240,7 @@ namespace BioshockVrLauncher
                     try { File.Delete(temporaryPath); } catch { }
                 }
                 _loading = false;
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se han podido guardar los cambios de Bioshock.ini:\n\n" + ex.Message,
                     "Error al guardar Bioshock.ini", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("Bioshock.ini no se ha guardado.", Color.Firebrick);
@@ -5263,7 +5268,7 @@ namespace BioshockVrLauncher
                 return;
             if (IsGameRunning())
             {
-                MessageBox.Show(this, "BioShock ya está ejecutándose.", "Juego en ejecución",
+                LocalizedMessageBox.Show(this, "BioShock ya está ejecutándose.", "Juego en ejecución",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
@@ -5321,7 +5326,7 @@ namespace BioshockVrLauncher
             StopLaunchWatch();
             _launchButton.Enabled = true;
             SetStatus("Steam no ha iniciado BioShock; el lanzador sigue abierto.", Warning);
-            DialogResult answer = MessageBox.Show(this,
+            DialogResult answer = LocalizedMessageBox.Show(this,
                 "Steam ha aceptado la orden, pero BioShock no se ha abierto en 30 segundos.\r\n\r\n" +
                 "El lanzador permanecerá abierto. ¿Quieres intentar iniciar BioshockHD.exe directamente?",
                 "BioShock no se ha iniciado", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
@@ -5366,7 +5371,7 @@ namespace BioshockVrLauncher
             catch (Exception ex)
             {
                 _launchButton.Enabled = true;
-                MessageBox.Show(this,
+                LocalizedMessageBox.Show(this,
                     "No se ha podido iniciar BioShock:\n\n" + ex.Message,
                     "Error al iniciar", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("No se ha podido iniciar el juego; el lanzador sigue abierto.", Color.Firebrick);
@@ -5472,19 +5477,19 @@ namespace BioshockVrLauncher
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this, "El fichero todavía no existe. Pulsa Guardar cambios para crearlo.",
+                    LocalizedMessageBox.Show(this, "El fichero todavía no existe. Pulsa Guardar cambios para crearlo.",
                                     "Configuración", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir el fichero",
+                LocalizedMessageBox.Show(this, ex.Message, "No se pudo abrir el fichero",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void ShowCreditsAndLicenses()
         {
-            MessageBox.Show(this,
+            LocalizedMessageBox.Show(this,
                 "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.6\n" +
                 "Integración DLSS/DLAA y lanzador: Beren5556\n\n" +
                 "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\n" +
@@ -5515,13 +5520,13 @@ namespace BioshockVrLauncher
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this,
+                    LocalizedMessageBox.Show(this,
                         "upscaler.ini todavía no existe. Cambia una opción del bloque experimental y pulsa Guardar para crearlo.",
                         "Reescalado espacial", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir upscaler.ini",
+                LocalizedMessageBox.Show(this, ex.Message, "No se pudo abrir upscaler.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5538,13 +5543,13 @@ namespace BioshockVrLauncher
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this,
+                    LocalizedMessageBox.Show(this,
                         "dlss.ini todavía no existe. Cambia una opción del bloque DLSS 4.5 y pulsa Guardar para crearlo. El archivo por sí solo no instala el backend.",
                         "DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir dlss.ini",
+                LocalizedMessageBox.Show(this, ex.Message, "No se pudo abrir dlss.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5560,12 +5565,12 @@ namespace BioshockVrLauncher
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this, "No se encuentra Bioshock.ini en:\n\n" + _gameIniPath,
+                    LocalizedMessageBox.Show(this, "No se encuentra Bioshock.ini en:\n\n" + _gameIniPath,
                                     "Bioshock.ini", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir Bioshock.ini",
+                LocalizedMessageBox.Show(this, ex.Message, "No se pudo abrir Bioshock.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5588,7 +5593,7 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir la carpeta",
+                LocalizedMessageBox.Show(this, ex.Message, "No se pudo abrir la carpeta",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5609,7 +5614,7 @@ namespace BioshockVrLauncher
         {
             if (_statusLabel == null)
                 return;
-            _statusLabel.Text = message;
+            _statusLabel.Text = UiLanguage.Translate(message);
             _statusLabel.ForeColor = color;
         }
 
@@ -5631,7 +5636,7 @@ namespace BioshockVrLauncher
         {
             if (!_dirty)
                 return;
-            DialogResult answer = MessageBox.Show(this,
+            DialogResult answer = LocalizedMessageBox.Show(this,
                 "Hay cambios sin guardar. ¿Quieres guardarlos antes de cerrar?",
                 "Cambios pendientes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
             if (answer == DialogResult.Cancel)
@@ -5654,14 +5659,15 @@ namespace BioshockVrLauncher
                        GameIniDocument.SelfTest() && MainForm.ImageControlsSelfTest() &&
                        MainForm.SimpleImageSelfTest() ? 0 : 2;
 
-            if (args != null && (args.Length == 2 || args.Length == 3) && args[0] == "--preview-image")
+            if (args != null && (args.Length == 2 || args.Length == 3) &&
+                (args[0] == "--preview-image" || args[0] == "--preview-image-en"))
             {
                 int tabIndex = 0;
                 if (args.Length == 3 && (!int.TryParse(args[2], out tabIndex) || tabIndex < 0 || tabIndex > 6))
                     return 2;
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                MainForm.WriteImagePreview(args[1], tabIndex);
+                MainForm.WriteImagePreview(args[1], tabIndex, args[0] == "--preview-image-en");
                 return 0;
             }
 

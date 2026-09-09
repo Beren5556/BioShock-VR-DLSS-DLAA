@@ -39,7 +39,8 @@ $compilerArguments = @(
     '/reference:System.Drawing.dll',
     '/reference:System.Windows.Forms.dll',
     $compilerSource,
-    (Join-Path $projectRoot 'src\ImageTab.cs')
+    (Join-Path $projectRoot 'src\ImageTab.cs'),
+    (Join-Path $projectRoot 'src\LauncherLocalization.cs')
 )
 try {
     & $compilerPath $compilerArguments

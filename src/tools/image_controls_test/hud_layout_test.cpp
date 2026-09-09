@@ -7,7 +7,7 @@ int wmain(int argc, wchar_t** argv) {
     namespace hud = bvr::imagehud;
     std::string text = "OPCIONES GRAFICAS\nF2 anterior | F3 siguiente | F4 cambiar | F1 cerrar\n";
     for (const auto& option : bvr::b1r::graphics_options::kOptions) {
-        text += "  "; text += option.label;
+        text += "  "; text += option.labelEs;
         if (option.impact) text += " *";
         text += ": Alto  [F4: cambiar / Reinicio]\n";
     }

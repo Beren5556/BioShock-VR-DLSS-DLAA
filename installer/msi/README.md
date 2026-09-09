@@ -1,4 +1,4 @@
-# Windows Installer — 0.2.11
+# Windows Installer — 0.2.12
 
 Paquete MSI por usuario para BioShock 1 Remastered. Instala el mod completo
 en `Build\Final`, registra su mantenimiento en Aplicaciones de Windows y crea
@@ -9,9 +9,9 @@ La pantalla final explica dónde y cómo abrirlo, con instrucciones diferentes
 según se haya creado el acceso. El texto del runtime solo muestra
 «Incluye NVIDIA DLSS 310.7.0.0.».
 
-La 0.2.11 incluye la corrección de recuperación del estéreo, pendiente de
-confirmación en visor. Lleva ProductCode y versión nuevos para actualizar
-0.2.10 sin el error 1638. El mismo archivo MSI admite reparación/reinstalación.
+La 0.2.12 añade selección de castellano o inglés para el instalador, el
+lanzador y el menú del visor. Conserva la recuperación del estéreo de 0.2.11
+y admite actualización directa o reparación con el mismo archivo MSI.
 
 La ruta se obtiene, en este orden, de la selección explícita, la instalación
 MSI registrada, el manifiesto del instalador anterior y las bibliotecas de
@@ -34,7 +34,7 @@ cmake --build --preset stable --parallel 4 --target bioshockvr
 ```
 
 El script verifica las cuatro optimizaciones, desactiva los tres modos de
-diagnóstico, compila el lanzador y crea `artifacts/stable-0.2.11/*.msi` con
+diagnóstico, compila el lanzador y crea `artifacts/stable-0.2.12/*.msi` con
 su manifiesto SHA-256. Incluye el host de distribución y NVIDIA 310.7.0.0.
 La primera ejecución descarga herramientas WiX fijadas a 6.0.2 de NuGet y
 el código fuente/licencia de ese tag oficial; se conservan sus avisos MS-RL.

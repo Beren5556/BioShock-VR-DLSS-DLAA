@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$GameExeSource,
-    [string]$Version = '0.2.11',
+    [string]$Version = '0.2.12',
     [string]$UpgradeMsi = '',
     [string]$ManifestPath = '',
     [string]$UpgradeManifestPath = '',
@@ -125,6 +125,10 @@ try {
         Assert ($newIni -match "(?m)^$key=$expected\r?$") "Predeterminado: $key=$expected"
     }
     Assert ($newIni.Contains('FluidSurfaceDetail=High') -and $newIni.Contains('KeepMe=123') -and $newIni.Contains('WindowedViewportY=1080')) 'Fluidos Alto sin cambiar ajustes ajenos ni resolución'
+    if ([version]$Version -ge [version]'0.2.12') {
+        Assert ((Get-Content -LiteralPath $dlss -Raw) -match '(?im)^language=es\r?$') 'Instalación silenciosa predeterminada guarda castellano'
+        Assert ((Get-ItemProperty -LiteralPath $registration).UiLanguage -eq 'es') 'Registro conserva el idioma castellano'
+    }
     $launched = @(Get-Process -Name 'Lanzador BioShock VR DLSS-DLAA','BioshockHD' -ErrorAction SilentlyContinue)
     Assert ($launched.Count -eq 0) 'No inicia el lanzador ni el juego al terminar'
     if ($ReproducePackageCollision) {
@@ -145,7 +149,7 @@ try {
     }
     $customIni = $newIni.Replace('RealTimeReflection=True', 'RealTimeReflection=False')
     [IO.File]::WriteAllText($ini, $customIni, $utf8)
-    [IO.File]::WriteAllText($dlss, "[DLSS]`r`nmode=dlaa`r`n# user preference`r`n", $utf8)
+    [IO.File]::WriteAllText($dlss, "[DLSS]`r`nmode=dlaa`r`n# user preference`r`n[ui]`r`nlanguage=es`r`n", $utf8)
     $iniHash = Hash $ini
     $dlssHash = Hash $dlss
     [IO.File]::WriteAllText((Join-Path $game 'host64\nvngx_dlss.dll'), 'TEST-ONLY alternative runtime', $utf8)
@@ -255,6 +259,15 @@ try {
     Check-Preserved
     $registrationAfter = Get-ItemProperty -LiteralPath $registration -ErrorAction SilentlyContinue
     Assert (-not $registrationAfter.GameDirectory) 'No queda un producto MSI de prueba registrado'
+    $languagePackage = if ($UpgradeMsi) { $UpgradeMsi } else { $msi }
+    $languageVersion = if ($upgradeManifest) { [version]$upgradeManifest.version } else { [version]$Version }
+    if ($languageVersion -ge [version]'0.2.12') {
+        Run-Msi '/i' '07b-install-english' 0 'BVR_LANGUAGE=en' $languagePackage
+        Assert ((Get-Content -LiteralPath $dlss -Raw) -match '(?im)^language=en\r?$') 'La instalación inglesa aplica el idioma al mod'
+        Assert ((Get-ItemProperty -LiteralPath $registration).UiLanguage -eq 'en') 'Registro conserva el idioma inglés'
+        Run-Msi '/x' '07c-uninstall-english' 0 '' $languagePackage
+        foreach ($path in $prior.Keys) { Assert ((Hash $path) -eq $prior[$path]) ("Desinstalar la prueba inglesa restaura el original: " + [IO.Path]::GetFileName($path)) }
+    }
     Run-Msi '/i' '08-invalid-folder' 1603 ("BVR_GAMEPATH=`"" + (Join-Path $fixture 'MissingGame') + '"')
     Check-Preserved
 }

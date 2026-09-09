@@ -63,16 +63,24 @@ namespace BioShockMsi
                 File.Exists(Path.Combine(root, @"Build\Final\BioshockHD.exe"))) root = Path.Combine(root, @"Build\Final");
             return root;
         }
-        private static string Problem(string game, bool installing)
+        private static bool English(Session session)
         {
-            if (string.IsNullOrWhiteSpace(game)) return "Selecciona la carpeta de BioShock Remastered.";
-            if (Full(game) == Path.GetPathRoot(Full(game)).TrimEnd('\\')) return "Selecciona la carpeta del juego, no una unidad completa.";
+            return string.Equals(session["BVR_LANGUAGE"], "en", StringComparison.OrdinalIgnoreCase);
+        }
+        private static string L(Session session, string spanish, string english)
+        {
+            return English(session) ? english : spanish;
+        }
+        private static string Problem(Session session, string game, bool installing)
+        {
+            if (string.IsNullOrWhiteSpace(game)) return L(session, "Selecciona la carpeta de BioShock Remastered.", "Select the BioShock Remastered folder.");
+            if (Full(game) == Path.GetPathRoot(Full(game)).TrimEnd('\\')) return L(session, "Selecciona la carpeta del juego, no una unidad completa.", "Select the game folder, not an entire drive.");
             if (installing)
             {
                 string exe = Path.Combine(game, "BioshockHD.exe");
-                if (!File.Exists(exe)) return "No se encuentra BioshockHD.exe. Selecciona la carpeta Build\\Final del juego.";
+                if (!File.Exists(exe)) return L(session, "No se encuentra BioshockHD.exe. Selecciona la carpeta Build\\Final del juego.", "BioshockHD.exe was not found. Select the game's Build\\Final folder.");
                 if (!string.Equals(Hash(exe), GameHash, StringComparison.OrdinalIgnoreCase))
-                    return "Esta copia de BioShock Remastered no coincide con la versión Steam compatible.";
+                    return L(session, "Esta copia de BioShock Remastered no coincide con la versión Steam compatible.", "This BioShock Remastered copy does not match the supported Steam version.");
             }
             foreach (Process process in Process.GetProcesses())
             {
@@ -82,7 +90,7 @@ namespace BioShockMsi
                     if (name.Equals("BioshockHD", StringComparison.OrdinalIgnoreCase) ||
                         name.StartsWith("BioShockVR-DLSS45-Host64", StringComparison.OrdinalIgnoreCase) ||
                         name.Equals("Lanzador BioShock VR DLSS-DLAA", StringComparison.OrdinalIgnoreCase))
-                        return "Cierra BioShock, el lanzador y los procesos del mod antes de continuar.";
+                        return L(session, "Cierra BioShock, el lanzador y los procesos del mod antes de continuar.", "Close BioShock, the launcher and the mod processes before continuing.");
                 }
             }
             return string.Empty;
@@ -126,11 +134,76 @@ namespace BioShockMsi
             return string.IsNullOrEmpty(choice) || choice == "1" ? "1" : "0";
         }
 
+        internal static string NormalizeLanguage(string requested, string saved, string iniPath)
+        {
+            string language = requested;
+            if (string.IsNullOrWhiteSpace(language)) language = saved;
+            if (string.IsNullOrWhiteSpace(language) && File.Exists(iniPath))
+            {
+                string current = string.Empty;
+                foreach (string raw in File.ReadAllLines(iniPath))
+                {
+                    string line = raw.Trim();
+                    if (line.StartsWith("[") && line.EndsWith("]")) current = line.Substring(1, line.Length - 2).Trim();
+                    else if (current.Equals("ui", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int equals = line.IndexOf('=');
+                        if (equals > 0 && line.Substring(0, equals).Trim().Equals("language", StringComparison.OrdinalIgnoreCase))
+                            language = line.Substring(equals + 1).Trim();
+                    }
+                }
+            }
+            return string.Equals(language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "es";
+        }
+
+        private static void ApplyLanguage(Session session)
+        {
+            bool en = English(session);
+            Action<string, string, string> set = delegate(string key, string es, string english) { session[key] = en ? english : es; };
+            set("ARPCOMMENTS", "Fork de BioShock VR v0.8.2 de Mohamad Balouza. DLSS/DLAA, optimizaciones y lanzador de Beren5556.", "Fork of BioShock VR v0.8.2 by Mohamad Balouza. DLSS/DLAA, optimizations and launcher by Beren5556.");
+            set("BVR_INSTALL_DESCRIPTION", "Instala el mod completo para BioShock Remastered. Confirma la carpeta del juego o selecciónala con Explorar.", "Installs the complete mod for BioShock Remastered. Confirm the game folder or select it with Browse.");
+            set("BVR_FOLDER_LABEL", "Carpeta de instalación del juego", "Game installation folder");
+            set("BVR_BROWSE", "Explorar…", "Browse…");
+            set("BVR_FIRST_RUN", "Antes de instalar, abre el juego una vez desde Steam y ciérralo para que se cree su configuración.", "Before installing, run the game once from Steam and close it so its configuration is created.");
+            set("BVR_CREDITS", "Basado en BioShock VR v0.8.2 de Mohamad Balouza, creador de la adaptación a VR. Fork DLSS/DLAA de Beren5556. Créditos y licencias incluidos.", "Based on BioShock VR v0.8.2 by Mohamad Balouza, creator of the VR adaptation. DLSS/DLAA fork by Beren5556. Credits and licenses included.");
+            set("BVR_RUNTIME_TEXT", "Incluye NVIDIA DLSS 310.7.0.0.", "Includes NVIDIA DLSS 310.7.0.0.");
+            set("BVR_SHORTCUT_TEXT", "Crear acceso directo en tu escritorio", "Create a desktop shortcut");
+            set("BVR_NEXT", "Siguiente", "Next"); set("BVR_CANCEL", "Cancelar", "Cancel");
+            set("BVR_PROGRESS", "Espera mientras Windows aplica los cambios.", "Please wait while Windows applies the changes.");
+            set("BVR_STATUS", "Estado de la instalación:", "Installation status:");
+            set("BVR_COMPLETE", "Operación completada", "Operation completed");
+            set("BVR_SHORTCUT_HELP", "Para abrir el lanzador, haz doble clic en el acceso «BioShock VR DLSS-DLAA [ProductVersion]» de tu escritorio. También está disponible en la carpeta del juego:", "To open the launcher, double-click the “BioShock VR DLSS-DLAA [ProductVersion]” desktop shortcut. It is also available in the game folder:");
+            set("BVR_FOLDER_HELP", "Para abrir el lanzador, haz doble clic en «Lanzador BioShock VR DLSS-DLAA.exe», dentro de esta carpeta:", "To open the launcher, double-click “Lanzador BioShock VR DLSS-DLAA.exe” in this folder:");
+            set("BVR_REMOVED", "Se ha completado la desinstalación. Puedes cerrar este asistente.", "Uninstallation is complete. You can close this wizard.");
+            set("BVR_FINISH", "Finalizar", "Finish"); set("BVR_OK", "Aceptar", "OK");
+            set("BVR_ERROR_TITLE", "Carpeta del juego", "Game folder");
+            set("BVR_BROWSE_TITLE", "Seleccionar carpeta del juego", "Select game folder");
+            set("BVR_LOOK_IN", "Buscar en:", "Look in:"); set("BVR_FOLDER_NAME", "Nombre de carpeta:", "Folder name:");
+            set("BVR_UP_TOOLTIP", "Subir un nivel", "Up one level"); set("BVR_NEW_TOOLTIP", "Crear una carpeta", "Create a folder");
+            set("BVR_MAINT_TITLE", "Mantenimiento de BioShock VR", "BioShock VR maintenance");
+            set("BVR_MAINT_DESC", "Repara la instalación actual o elimina el mod y recupera los archivos anteriores.", "Repair the current installation or remove the mod and restore the previous files.");
+            set("BVR_REPAIR", "Reparar", "Repair"); set("BVR_REMOVE", "Desinstalar", "Uninstall");
+            set("BVR_CANCEL_QUESTION", "¿Seguro que quieres cancelar?", "Are you sure you want to cancel?");
+            set("BVR_YES", "Sí", "Yes"); set("BVR_NO", "No", "No");
+        }
+
+        [CustomAction]
+        public static ActionResult SetLanguage(Session session)
+        {
+            session["BVR_LANGUAGE"] = NormalizeLanguage(session["BVR_LANGUAGE"], string.Empty, string.Empty);
+            ApplyLanguage(session);
+            return ActionResult.Success;
+        }
+
         [CustomAction]
         public static ActionResult DetectGame(Session session)
         {
             try
             {
+                string localDlss = Path.Combine(session["LocalAppDataFolder"], @"BioshockVR\dlss.ini");
+                session["BVR_LANGUAGE"] = NormalizeLanguage(session["BVR_LANGUAGE"],
+                    RegistryValue(RegistryPath, "UiLanguage"), localDlss);
+                ApplyLanguage(session);
                 // Our recoverable replacement retires the selected .lnk too.
                 // A file-only repair (/fa) must therefore also schedule its
                 // recreation; otherwise MSI can succeed with the shortcut gone.
@@ -200,11 +273,11 @@ namespace BioShockMsi
             try
             {
                 string game = GameDirectory(session["BVR_GAMEPATH"]);
-                string problem = Problem(game, true);
+                string problem = Problem(session, game, true);
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
                 if (problem.Length == 0 && registered.Length > 0 &&
                     !string.Equals(Full(registered), game, StringComparison.OrdinalIgnoreCase))
-                    problem = "Ya hay una instalación MSI en otra carpeta. Desinstálala antes de cambiar de ubicación.";
+                    problem = L(session, "Ya hay una instalación MSI en otra carpeta. Desinstálala antes de cambiar de ubicación.", "An MSI installation already exists in another folder. Uninstall it before changing location.");
                 session["BVR_ERROR"] = problem;
                 session["BVR_VALID"] = problem.Length == 0 ? "1" : "0";
                 if (problem.Length == 0)
@@ -240,11 +313,11 @@ namespace BioShockMsi
                         shortcutFeature.RequestState = requestedShortcut;
                 }
                 string game = GameDirectory(session["GAMEDIR"]);
-                string problem = Problem(game, !removing);
+                string problem = Problem(session, game, !removing);
                 if (problem.Length > 0) throw new InvalidOperationException(problem);
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
                 if (registered.Length > 0 && !string.Equals(Full(registered), game, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Ya hay una instalación MSI en otra carpeta. Desinstálala antes de cambiar de ubicación.");
+                    throw new InvalidOperationException(L(session, "Ya hay una instalación MSI en otra carpeta. Desinstálala antes de cambiar de ubicación.", "An MSI installation already exists in another folder. Uninstall it before changing location."));
                 string testRoot = session["BVR_TESTROOT"];
                 string local = session["LocalAppDataFolder"];
                 string roaming = session["AppDataFolder"];
@@ -273,6 +346,7 @@ namespace BioShockMsi
                 data["Desktop"] = Path.GetDirectoryName(shortcut);
                 data["Ini"] = Path.Combine(roaming, @"BioshockHD\Bioshock\Bioshock.ini");
                 data["Dlss"] = Path.Combine(local, @"BioshockVR\dlss.ini");
+                data["Language"] = NormalizeLanguage(session["BVR_LANGUAGE"], string.Empty, string.Empty);
                 data["Removing"] = removing ? "1" : "0";
                 data["PreviousVersion"] = RegistryValue(RegistryPath, "Version");
                 data["FailTest"] = !string.IsNullOrWhiteSpace(testRoot) ? session["BVR_TESTFAIL"] : string.Empty;

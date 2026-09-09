@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$Version = '0.2.11')
+param([string]$Version = '0.2.12')
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $release = Join-Path $repo ('artifacts\stable-' + $Version)
@@ -33,6 +33,17 @@ try {
     } finally { $view.Dispose() }
     Assert ($controls.Count -gt 0) 'El MSI contiene el diálogo de progreso propio'
     Assert (-not $controls.ContainsKey('NoLaunch')) 'Progreso sin el texto sobre no abrir el lanzador'
+    Assert (-not $controls.ContainsKey('ActionText')) 'La acción variable no puede sobrescribirse sobre la barra'
+    $view = $database.OpenView('SELECT `Control`, `Text` FROM `Control` WHERE `Dialog_` = ''LanguageDlg''')
+    $languageControls = @{}
+    try {
+        $view.Execute()
+        while ($record = $view.Fetch()) {
+            try { $languageControls[$record.GetString(1)] = $record.GetString(2) }
+            finally { $record.Dispose() }
+        }
+    } finally { $view.Dispose() }
+    Assert ($languageControls.Spanish -eq 'Castellano' -and $languageControls.English -eq 'English') 'Primera pantalla permite elegir castellano o inglés'
     $view = $database.OpenView('SELECT `Control`, `Property`, `Text` FROM `Control` WHERE `Dialog_` = ''GameFolderDlg''')
     $folderControls = @{}
     try {
@@ -43,8 +54,8 @@ try {
         }
     } finally { $view.Dispose() }
     Assert (-not $folderControls.ContainsKey('NoLaunch')) 'Carpeta sin el texto sobre no abrir el lanzador'
-    Assert ($folderControls.Runtime.Text -eq 'Incluye NVIDIA DLSS 310.7.0.0.') 'NVIDIA sin el comentario entre paréntesis'
-    Assert ($folderControls.DesktopShortcut.Text -eq 'Crear acceso directo en tu escritorio' -and $folderControls.DesktopShortcut.Property -eq 'BVR_DESKTOPSHORTCUT') 'Casilla de acceso enlazada a la elección real'
+    Assert ($folderControls.Runtime.Text -eq '[BVR_RUNTIME_TEXT]') 'Texto NVIDIA procede del idioma seleccionado'
+    Assert ($folderControls.DesktopShortcut.Text -eq '[BVR_SHORTCUT_TEXT]' -and $folderControls.DesktopShortcut.Property -eq 'BVR_DESKTOPSHORTCUT') 'Casilla de acceso localizada y enlazada a la elección real'
     $view = $database.OpenView('SELECT `Control`, `Text` FROM `Control` WHERE `Dialog_` = ''BioShockExitDlg''')
     $exitControls = @{}
     try {
@@ -54,9 +65,9 @@ try {
             finally { $record.Dispose() }
         }
     } finally { $view.Dispose() }
-    Assert ($exitControls.ShortcutHelp.Contains('[ProductVersion]') -and $exitControls.ShortcutHelp.Contains('doble clic')) 'Final explica cómo abrir el acceso versionado'
-    Assert ($exitControls.FolderHelp.Contains('Lanzador BioShock VR DLSS-DLAA.exe') -and $exitControls.GamePath -eq '[GAMEDIR]') 'Final alternativo indica el ejecutable y la carpeta elegida'
-    Assert ($exitControls.Removed.Contains('desinstalación')) 'Desinstalar tiene un mensaje final propio'
+    Assert ($exitControls.ShortcutHelp -eq '[BVR_SHORTCUT_HELP]') 'Final localizado explica cómo abrir el acceso versionado'
+    Assert ($exitControls.FolderHelp -eq '[BVR_FOLDER_HELP]' -and $exitControls.GamePath -eq '[GAMEDIR]') 'Final alternativo localizado indica el ejecutable y la carpeta elegida'
+    Assert ($exitControls.Removed -eq '[BVR_REMOVED]') 'Desinstalar tiene un mensaje final localizado'
     $view = $database.OpenView('SELECT `Sequence`, `Condition` FROM `InstallUISequence` WHERE `Action` = ''BioShockExitDlg''')
     try {
         $view.Execute(); $record = $view.Fetch()
@@ -75,9 +86,7 @@ try {
         try { Assert ($record.GetString(1) -eq 'DesktopShortcut') 'Acceso como característica MSI independiente del mod' }
         finally { $record.Dispose() }
     } finally { $view.Dispose() }
-    Assert ($controls.ActionText.Height -ge 38) 'El texto de estado tiene espacio para varias líneas'
-    Assert (($controls.ActionText.Y + $controls.ActionText.Height + 10) -le $controls.ProgressBar.Y) 'Texto de estado separado de la barra por al menos 10 unidades'
-    foreach ($name in @('Title','Description','StatusLabel','ActionText')) {
+    foreach ($name in @('Title','Description','StatusLabel')) {
         Assert (($controls[$name].Y + $controls[$name].Height) -lt $controls.ProgressBar.Y) ('No solapa con la barra: ' + $name)
     }
     $view = $database.OpenView('SELECT `Name`, `Target`, `Component_` FROM `Shortcut` WHERE `Shortcut` = ''DesktopLauncher''')
@@ -104,6 +113,10 @@ $choice = $assembly.GetType('BioShockMsi.Actions').GetMethod('DesktopShortcutCho
 foreach ($case in @(@('','','1'), @('','0','0'), @('','1','1'), @('0','1','0'), @('1','0','1'))) {
     Assert ([string]$choice.Invoke($null, @($case[0],$case[1])) -eq $case[2]) ('Acceso predeterminado/preferencia: solicitado=' + $case[0] + ', guardado=' + $case[1] + ', resultado=' + $case[2])
 }
+$normalizeLanguage = $assembly.GetType('BioShockMsi.Actions').GetMethod('NormalizeLanguage', [Reflection.BindingFlags]'Static,NonPublic')
+Assert ([string]$normalizeLanguage.Invoke($null, @('en','','')) -eq 'en') 'La elección English se normaliza como en'
+Assert ([string]$normalizeLanguage.Invoke($null, @('es','en','')) -eq 'es') 'La elección explícita de castellano prevalece'
+Assert ([string]$normalizeLanguage.Invoke($null, @('','EN','')) -eq 'en') 'Una reparación conserva el idioma guardado'
 $destination = $assembly.GetType('BioShockMsi.Actions').GetMethod('Destination', [Reflection.BindingFlags]'Static,NonPublic')
 $data = New-Object WixToolset.Dtf.WindowsInstaller.CustomActionData
 $data['Desktop'] = Join-Path $repo 'artifacts\presentation-test\Desktop'
@@ -131,6 +144,12 @@ Assert ($updated.StartsWith("[WinDrv.WindowsClient]`r`nWindowedViewportX=3072`r`
 Assert ([string]$defaults.Invoke($null, @($updated)) -eq $updated) 'Aplicar predeterminados dos veces produce el mismo resultado'
 $withoutSection = "[Unrelated]`r`nKey=Value`r`n"
 Assert ([string]$defaults.Invoke($null, @($withoutSection)) -eq $withoutSection) 'No inventa una sección gráfica si falta el INI inicial del juego'
+$uiLanguage = $assembly.GetType('BioShockMsi.Actions').GetMethod('ApplyUiLanguage', [Reflection.BindingFlags]'Static,NonPublic')
+$englishIni = [string]$uiLanguage.Invoke($null, @("[DLSS]`r`nmode=dlaa`r`n", 'en'))
+Assert ($englishIni -match '(?im)^\[ui\]\r?$' -and $englishIni -match '(?im)^language=en\r?$') 'El idioma inglés se guarda en dlss.ini'
+$spanishIni = [string]$uiLanguage.Invoke($null, @($englishIni, 'es'))
+Assert ($spanishIni -match '(?im)^language=es\r?$' -and $spanishIni -notmatch '(?im)^language=en\r?$') 'Cambiar a castellano actualiza la misma clave sin duplicarla'
+Assert ([string]$uiLanguage.Invoke($null, @($spanishIni, 'es')) -eq $spanishIni) 'Guardar dos veces el idioma es idempotente'
 $launcherVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $release "msi-build-$Version\payload\Lanzador BioShock VR DLSS-DLAA.exe")).FileVersion
 Assert ($launcherVersion -eq ($Version + '.0')) 'La versión del ejecutable coincide con el acceso y el MSI'
 $output = Join-Path $release "presentation-test-$Version.json"

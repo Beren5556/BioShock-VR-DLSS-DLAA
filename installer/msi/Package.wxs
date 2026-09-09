@@ -4,7 +4,7 @@
            Version="$(Version)" ProductCode="$(ProductCode)" UpgradeCode="$(UpgradeCode)"
            Language="3082" Codepage="1252" Scope="perUser" InstallerVersion="500">
     <SummaryInformation Description="BioShock 1 VR · DLSS/DLAA · $(Version)" />
-    <MajorUpgrade DowngradeErrorMessage="Ya tienes instalada una versión más reciente de BioShock VR DLSS-DLAA."
+    <MajorUpgrade DowngradeErrorMessage="A newer version of BioShock VR DLSS-DLAA is already installed."
                   Schedule="afterInstallExecute" />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Property Id="ARPCOMMENTS" Value="Fork de BioShock VR v0.8.2 de Mohamad Balouza. DLSS/DLAA, optimizaciones y lanzador de Beren5556." />
@@ -16,10 +16,11 @@
     <Property Id="GAMEDIR" Secure="yes" />
     <Property Id="BVR_DESKTOPSHORTCUT" Secure="yes" />
     <Property Id="BVR_SHORTCUTINITIALIZED" Secure="yes" />
+    <Property Id="BVR_LANGUAGE" Secure="yes" />
     <Property Id="BVR_TESTROOT" Secure="yes" />
     <Property Id="BVR_TESTFAIL" Secure="yes" />
     <Property Id="BVR_VALID" Value="0" />
-    <Launch Condition="VersionNT64" Message="Este paquete necesita Windows de 64 bits." />
+    <Launch Condition="VersionNT64" Message="This package requires 64-bit Windows. / Este paquete necesita Windows de 64 bits." />
 
     <StandardDirectory Id="TARGETDIR">
       <Directory Id="GAMEDIR" Name="BioShockVRGame" />
@@ -32,6 +33,7 @@
           <RegistryValue Name="Version" Value="[ProductVersion]" Type="string" />
           <RegistryValue Name="TestRoot" Value="[BVR_TESTROOT]" Type="string" />
           <RegistryValue Name="DesktopShortcut" Value="[BVR_DESKTOPSHORTCUT]" Type="string" />
+          <RegistryValue Name="UiLanguage" Value="[BVR_LANGUAGE]" Type="string" />
         </RegistryKey>
         <RemoveFile Id="RetireUnversionedShortcut" Directory="DesktopFolder" Name="BioShock VR DLSS-DLAA.lnk" On="install" />
       </Component>
@@ -54,6 +56,7 @@
     <Binary Id="ManagedActions" SourceFile="$(ActionsDll)" />
     <CustomAction Id="DetectGame" BinaryRef="ManagedActions" DllEntry="DetectGame" Execute="immediate" Return="check" />
     <CustomAction Id="ValidateGame" BinaryRef="ManagedActions" DllEntry="ValidateGame" Execute="immediate" Return="check" />
+    <CustomAction Id="SetLanguage" BinaryRef="ManagedActions" DllEntry="SetLanguage" Execute="immediate" Return="check" />
     <CustomAction Id="Prepare" BinaryRef="ManagedActions" DllEntry="Prepare" Execute="immediate" Return="check" />
     <CustomAction Id="RollbackFiles" BinaryRef="ManagedActions" DllEntry="RollbackFiles" Execute="rollback" Impersonate="yes" Return="check" />
     <CustomAction Id="BackupFiles" BinaryRef="ManagedActions" DllEntry="BackupFiles" Execute="deferred" Impersonate="yes" Return="check" />

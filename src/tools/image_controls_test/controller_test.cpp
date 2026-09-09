@@ -46,9 +46,10 @@ bool write_viewport(uint32_t w, uint32_t h) {
     ++viewportWrites; viewport={w,h,w,h,false,true}; return true;
 }
 }
-int main() {
+int main(int argc, char** argv) {
     namespace c = bvr::image_controls;
     using c::RenderMode; using c::Settings;
+    const bool english = argc == 2 && std::string(argv[1]) == "--english";
     wchar_t temp[MAX_PATH]{}, suffix[40]{}; GUID guid{};
     DWORD size=GetTempPathW(MAX_PATH,temp);
     if (!size || size>=MAX_PATH || FAILED(CoCreateGuid(&guid)) || !StringFromGUID2(guid,suffix,40)) return 2;
@@ -58,6 +59,7 @@ int main() {
     WritePrivateProfileStringW(L"fixture",L"untouched",L"keep",ini.c_str());
     WritePrivateProfileStringW(L"dlss",L"srScaleNumerator",L"2",ini.c_str());
     WritePrivateProfileStringW(L"dlss",L"srScaleDenominator",L"3",ini.c_str());
+    WritePrivateProfileStringW(L"ui",L"language",english ? L"en" : L"es",ini.c_str());
     std::printf("Private fixture retained: %ls\n",ini.c_str());
     Settings applied{}, requested{}, previous{};
     applied.mode=RenderMode::Dlss; applied.outputWidth=applied.outputHeight=4096;
@@ -71,10 +73,13 @@ int main() {
     expect(c::panel_status().empty(),"starts hidden");
     c::on_key(VK_F3);c::on_key(VK_F2);c::on_key(VK_F6);
     expect(!take(),"hidden +/- and legacy F6 cannot change settings");
-    const char* labels[]={"MODO DE RENDERIZADO","RESOLUCION POR OJO","CALIDAD DLSS","SHARPNESS DLSS","OPCIONES GRAFICAS"};
-    for(auto label:labels){
+    const char* labelsEs[]={"MODO DE RENDERIZADO","RESOLUCION POR OJO","CALIDAD DLSS","SHARPNESS DLSS","OPCIONES GRAFICAS"};
+    const char* labelsEn[]={"RENDERING MODE","RESOLUTION PER EYE","DLSS QUALITY","DLSS SHARPNESS","GRAPHICS OPTIONS"};
+    const char** labels = english ? labelsEn : labelsEs;
+    for(int labelIndex = 0; labelIndex < 5; ++labelIndex){
+        const char* label = labels[labelIndex];
         c::on_key(VK_F1);expect(has(c::panel_status(),label),label);
-        if (!has(label, "OPCIONES GRAFICAS")) {
+        if (!has(label, english ? "GRAPHICS OPTIONS" : "OPCIONES GRAFICAS")) {
             const auto before = c::panel_status(); c::on_key(VK_F4);
             expect(!take() && graphicsWrites == 0 && c::panel_status() == before,
                    "F4 inert outside graphics, existing value unchanged");
@@ -90,7 +95,7 @@ int main() {
     expect(!take()&&has(c::panel_status(),"DLSS  |"),"busy ignores new changes and shows applied mode");
     c::on_key(VK_F1);c::on_key(VK_F1);
     c::confirm(normal);applied=normal;
-    expect(has(c::panel_status(),"NORMAL  |  RESOLUCION POR OJO"),"F1 usable while busy, native confirm removes quality panel");
+    expect(has(c::panel_status(),english ? "NORMAL  |  RESOLUTION PER EYE" : "NORMAL  |  RESOLUCION POR OJO"),"F1 usable while busy, native confirm removes quality panel");
     c::on_key(VK_F3);expect(!take()&&viewportWrites==0,"unpersisted confirmation cannot race another request");
     c::game_tick();
     wchar_t kept[16]{}, mode[16]{};
@@ -99,61 +104,62 @@ int main() {
     expect(std::wstring(kept)==L"keep"&&std::wstring(mode)==L"off"&&saved(L"srScaleNumerator")==2&&
            saved(L"srScaleDenominator")==3,"only confirmed settings persisted, unknown INI keys retained");
     expect(viewportWrites==0,"unchanged viewport is not rewritten");
-    c::on_key(VK_F1);expect(has(c::panel_status(),"OPCIONES GRAFICAS"),"NORMAL includes graphics after resolution");
+    c::on_key(VK_F1);expect(has(c::panel_status(),english ? "GRAPHICS OPTIONS" : "OPCIONES GRAFICAS"),"NORMAL includes graphics after resolution");
     c::on_key(VK_F1);expect(c::panel_status().empty(),"NORMAL graphics ends wheel");
     c::on_key(VK_F1);c::on_key(VK_F3);
     if(!expect(take()&&requested.mode==RenderMode::Dlss&&requested.renderWidth==2730&&requested.outputWidth==4096,
                "F3 increases NORMAL to original DLSS 2/3"))return 1;
     accept();
-    expect(select("CALIDAD DLSS"),"select existing quality option");c::on_key(VK_F3);
+    expect(select(english ? "DLSS QUALITY" : "CALIDAD DLSS"),"select existing quality option");c::on_key(VK_F3);
     if(!expect(take()&&requested.srScale.numerator==7&&requested.srScale.denominator==10&&requested.renderWidth==2868,
                "F3 quality selects unchanged 70% step"))return 1;
     accept();
-    expect(select("SHARPNESS DLSS"),"select nitidez");c::on_key(VK_F3);
+    expect(select(english ? "DLSS SHARPNESS" : "SHARPNESS DLSS"),"select nitidez");c::on_key(VK_F3);
     if(!expect(take()&&requested.sharpnessPercent==5&&c::same_render_path(requested,previous),
                "nitidez modifies no geometry or ratio"))return 1;
     unsigned writes=viewportWrites;accept();
     expect(saved(L"sharpnessPercent")==5&&viewportWrites==writes,"nitidez saved without rewriting viewport");
-    select("MODO DE RENDERIZADO");c::on_key(VK_F3);
+    select(english ? "RENDERING MODE" : "MODO DE RENDERIZADO");c::on_key(VK_F3);
     if(!expect(take()&&requested.mode==RenderMode::Dlaa&&requested.renderWidth==4096&&requested.sharpnessPercent==5,
                "F3 DLSS to DLAA retains nitidez preference"))return 1;
     accept();c::on_key(VK_F1);
-    expect(has(c::panel_status(),"RESOLUCION POR OJO"),"DLAA mode then resolution");
-    c::on_key(VK_F1);expect(has(c::panel_status(),"OPCIONES GRAFICAS"),"DLAA graphics omits quality and nitidez");
+    expect(has(c::panel_status(),english ? "RESOLUTION PER EYE" : "RESOLUCION POR OJO"),"DLAA mode then resolution");
+    c::on_key(VK_F1);expect(has(c::panel_status(),english ? "GRAPHICS OPTIONS" : "OPCIONES GRAFICAS"),"DLAA graphics omits quality and nitidez");
     c::on_key(VK_F1);expect(c::panel_status().empty(),"DLAA graphics ends wheel");
     c::on_key(VK_F3);c::on_key(VK_F2);expect(!take(),"hidden remains inert after DLAA");
-    select("MODO DE RENDERIZADO");c::on_key(VK_F3);
+    select(english ? "RENDERING MODE" : "MODO DE RENDERIZADO");c::on_key(VK_F3);
     if(!expect(take()&&requested.mode==RenderMode::Normal,"F3 wraps DLAA to NORMAL"))return 1;
     accept();c::on_key(VK_F3);
     if(!expect(take()&&requested.mode==RenderMode::Dlss&&requested.renderWidth==2868&&requested.sharpnessPercent==5,
                "return DLSS restores exact quality and nitidez"))return 1;
-    accept();select("CALIDAD DLSS");c::on_key(VK_F2);
+    accept();select(english ? "DLSS QUALITY" : "CALIDAD DLSS");c::on_key(VK_F2);
     if(!expect(take()&&requested.srScale.numerator==13&&requested.srScale.denominator==20&&has(c::panel_status(),"70.0%"),
                "F2 selects 65% while panel still shows applied 70%"))return 1;
     writes=viewportWrites;c::reject("Test rejection");c::game_tick();
     expect(!take()&&saved(L"srScaleNumerator")==7&&viewportWrites==writes,"rejected setting cannot be persisted");
-    select("RESOLUCION POR OJO");c::on_key(VK_F3);
+    select(english ? "RESOLUTION PER EYE" : "RESOLUCION POR OJO");c::on_key(VK_F3);
     if(!expect(take()&&requested.outputWidth==4196&&requested.renderWidth==2938&&requested.srScale.numerator==7,
                "F3 resolution adds 100px, unchanged SR fraction"))return 1;
     c::reject("End fixture");
-    expect(select("OPCIONES GRAFICAS"), "graphics page reachable");
+    expect(select(english ? "GRAPHICS OPTIONS" : "OPCIONES GRAFICAS"), "graphics page reachable");
     c::game_tick();
     const std::string beforeGraphicsIni = bytes(ini);
     unsigned beforeGraphicsViewport = viewportWrites;
-    expect(has(c::panel_status(), "> Shaders de alto detalle: Si") &&
-           has(c::panel_status(), "Reflejos *: No") && has(c::panel_status(), "Ondulaciones del agua *: No") &&
-           has(c::panel_status(), "F4: cambiar"), "nine-option panel exposes defaults and F4 hint");
+    expect(has(c::panel_status(), english ? "> High-detail shaders: Yes" : "> Shaders de alto detalle: Si") &&
+           has(c::panel_status(), english ? "Reflections *: No" : "Reflejos *: No") &&
+           has(c::panel_status(), english ? "Water ripples *: No" : "Ondulaciones del agua *: No") &&
+           has(c::panel_status(), english ? "F4: change" : "F4: cambiar"), "nine-option panel exposes defaults and F4 hint");
     c::on_key(VK_F2);
-    expect(has(c::panel_status(), "> Detalle de fluidos:"), "F2 wraps to previous graphic option");
+    expect(has(c::panel_status(), english ? "> Fluid detail:" : "> Detalle de fluidos:"), "F2 wraps to previous graphic option");
     c::on_key(VK_F3); c::on_key(VK_F4);
     expect(graphicsWrites == 0 && !take(), "F4 queues game-thread work without rendering reconfiguration");
     c::game_tick();
-    expect(graphicsWrites == 1 && has(c::panel_status(), "> Shaders de alto detalle: No") &&
+    expect(graphicsWrites == 1 && has(c::panel_status(), english ? "> High-detail shaders: No" : "> Shaders de alto detalle: No") &&
            bytes(ini) == beforeGraphicsIni && viewportWrites == beforeGraphicsViewport,
            "confirmed graphics switch leaves DLSS geometry and preferences untouched");
     graphicsUnavailable = true; c::on_key(VK_F4); c::game_tick();
-    expect(graphicsWrites == 1 && has(c::panel_status(), "No disponible en caliente") &&
-           has(c::panel_status(), "> Shaders de alto detalle: No"), "unsupported hot change is not reported as applied");
+    expect(graphicsWrites == 1 && has(c::panel_status(), english ? "Not available live" : "No disponible en caliente") &&
+           has(c::panel_status(), english ? "> High-detail shaders: No" : "> Shaders de alto detalle: No"), "unsupported hot change is not reported as applied");
     graphicsUnavailable = false;
     c::on_key(VK_F1); expect(c::panel_status().empty(), "F1 closes graphics page");
     c::set_enabled(false);c::on_key(VK_F3);expect(!take()&&c::panel_status().empty(),"disabled controller inert");
@@ -186,7 +192,7 @@ int main() {
                "leaving the diagnostic does not persist temporary values");
         c::on_key(VK_F4);expect(take(),"diagnostic can start again");
         c::reject("Probe unavailable");c::game_tick();
-        expect(bytes(ini)==iniBefore && !has(c::panel_status(),"PRUEBA:"),
+        expect(bytes(ini)==iniBefore && !has(c::panel_status(),english ? "TEST:" : "PRUEBA:"),
                "failed diagnostic entry leaves original mode and INI intact");
     } else {
         c::on_key(VK_F4);expect(!take(),"F4 is inert outside a diagnostic build");

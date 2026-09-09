@@ -96,7 +96,9 @@ namespace BioshockVrLauncher
             _dlssOutputWidth.Dock = DockStyle.Fill;
             _dlssOutputWidth.Margin = new Padding(0, 0, 8, 0);
             fields.Controls.Add(_dlssOutputWidth, 0, 1);
-            _toolTip.SetToolTip(_dlssOutputWidth, "Píxeles por lado y por ojo. Se aplica el mismo valor a la anchura y la altura.");
+            _toolTip.SetToolTip(_dlssOutputWidth, UiLanguage.Text(
+                "Píxeles por lado y por ojo. Se aplica el mismo valor a la anchura y la altura.",
+                "Pixels per side and per eye. The same value is applied to width and height."));
 
             // Keep existing mode indices so the proven persistence logic is unchanged.
             _dlssMode.Items.Clear();
@@ -111,7 +113,9 @@ namespace BioshockVrLauncher
             _imageQuality.Margin = new Padding(0, 0, 8, 0);
             _imageQuality.SelectedIndexChanged += ImageQualityChanged;
             fields.Controls.Add(_imageQuality, 2, 1);
-            _toolTip.SetToolTip(_imageQuality, "Cada tramo cambia 100 píxeles de resolución interna por lado. El porcentaje se calcula respecto a la salida del visor.");
+            _toolTip.SetToolTip(_imageQuality, UiLanguage.Text(
+                "Cada tramo cambia 100 píxeles de resolución interna por lado. El porcentaje se calcula respecto a la salida del visor.",
+                "Each step changes the internal resolution by 100 pixels per side. The percentage is calculated against the headset output."));
 
             _imageInternalResolution = new TextBox();
             _imageInternalResolution.ReadOnly = true;
@@ -323,8 +327,9 @@ namespace BioshockVrLauncher
                     }
                     pair.Value.SelectedIndex = selected;
                     pair.Value.Enabled = valid;
-                    _toolTip.SetToolTip(pair.Value, valid ? string.Empty :
-                        "Ajuste no disponible en la configuración actual; no se modifica automáticamente.");
+                    _toolTip.SetToolTip(pair.Value, valid ? string.Empty : UiLanguage.Text(
+                        "Ajuste no disponible en la configuración actual; no se modifica automáticamente.",
+                        "This setting is unavailable in the current configuration and will not be changed automatically."));
                 }
             }
             finally { _loadingGraphics = false; }
@@ -453,26 +458,31 @@ namespace BioshockVrLauncher
             }
         }
 
-        internal static void WriteImagePreview(string path, int tabIndex)
+        internal static void WriteImagePreview(string path, int tabIndex, bool english)
         {
-            using (MainForm form = new MainForm(true))
+            UiLanguage.SetForTest(english);
+            try
             {
-                form.InitializeImageFixture();
-                form._configStateLabel.Text = "Configuración de ejemplo · no modifica archivos del juego";
-                form._gameStateLabel.Text = "BioShock Remastered";
-                form.SetStatus("Vista previa · 0.2.11 · sin modificar archivos del juego", SystemColors.ControlText);
-                form.ShowInTaskbar = false;
-                form.Opacity = 0;
-                form.Show();
-                form._tabs.SelectedIndex = tabIndex;
-                Application.DoEvents();
-                form.PerformLayout();
-                using (Bitmap bitmap = new Bitmap(form.Width, form.Height))
+                using (MainForm form = new MainForm(true))
                 {
-                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
-                    bitmap.Save(Path.GetFullPath(path), System.Drawing.Imaging.ImageFormat.Png);
+                    form.InitializeImageFixture();
+                    form._configStateLabel.Text = UiLanguage.Text("Configuración de ejemplo · no modifica archivos del juego", "Sample configuration · does not modify game files");
+                    form._gameStateLabel.Text = "BioShock Remastered";
+                    form.SetStatus(UiLanguage.Text("Vista previa · 0.2.12 · sin modificar archivos del juego", "Preview · 0.2.12 · game files unchanged"), SystemColors.ControlText);
+                    form.ShowInTaskbar = false;
+                    form.Opacity = 0;
+                    form.Show();
+                    form._tabs.SelectedIndex = tabIndex;
+                    Application.DoEvents();
+                    form.PerformLayout();
+                    using (Bitmap bitmap = new Bitmap(form.Width, form.Height))
+                    {
+                        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                        bitmap.Save(Path.GetFullPath(path), System.Drawing.Imaging.ImageFormat.Png);
+                    }
                 }
             }
+            finally { UiLanguage.ClearTestLanguage(); }
         }
     }
 }

@@ -48,8 +48,10 @@ try {
         'release/manifest-v0.2.11.json',
         'docs/releases/v0.2.11.md',
         'docs/releases/v0.2.11-public.md',
+        'docs/releases/v0.2.12.md',
         'apps/launcher/src/BioshockVrLauncher.cs',
         'apps/launcher/src/ImageTab.cs',
+        'apps/launcher/src/LauncherLocalization.cs',
         'installer/msi/Build-Msi.ps1',
         'installer/msi/Package.wxs',
         'installer/msi/Interface.wxs',
@@ -99,11 +101,12 @@ try {
     }
 
     $cmake = Read-Utf8 'CMakeLists.txt'
-    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.11")')) 'CMake distribution version is not 0.2.11.'
+    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.12")')) 'CMake distribution version is not 0.2.12.'
     Assert-True ($cmake.Contains('project(BioshockVR VERSION 0.8.2')) 'The upstream base must remain v0.8.2.'
 
     $launcher = Read-Utf8 'apps/launcher/src/BioshockVrLauncher.cs'
-    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.11.0")]')) 'Launcher version is not 0.2.11.0.'
+    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.12.0")]')) 'Launcher version is not 0.2.12.0.'
+    Assert-True ($launcher.Contains('UiLanguage.Initialize(_dlssConfigPath)')) 'Launcher language selection is not loaded from dlss.ini.'
     Assert-True ($launcher.Contains('private const bool FinalDlssEdition = true;')) 'Final launcher policy is not enabled.'
     Assert-True ($launcher.Contains('InitializeHiddenIniEditor();')) 'Hidden INI infrastructure is missing.'
     Assert-True ($launcher.Contains('fxaaGroup.Visible = !FinalDlssEdition;')) 'FXAA visibility guard is missing.'

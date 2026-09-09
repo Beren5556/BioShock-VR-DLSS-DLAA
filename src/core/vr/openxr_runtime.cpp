@@ -2260,7 +2260,8 @@ void teardown_session(const char* why) {
         bvr::b1r::camera::cancel_pending_resolution();
         g_liveImage.active = false;
         g_imageReconfigure.end();
-        bvr::image_controls::unavailable("Cambio interrumpido al cerrar la sesion VR");
+        bvr::image_controls::unavailable(bvr::image_controls::text(
+            "Cambio interrumpido al cerrar la sesion VR", "Change interrupted while closing the VR session"));
     }
     BVR_LOG("xr: session teardown (%s)", why);
     input_on_session_teardown(); // action spaces are session children
@@ -2649,7 +2650,8 @@ bool create_swapchains(IDXGISwapChain* swapchain) {
         if (!g_liveImage.active)
             bvr::image_controls::report_effective(effective_image_settings(),
                 g_dlss45Requested && !g_dlss45Active
-                    ? "DLSS/DLAA no disponible; usando NORMAL nativo" : nullptr);
+                    ? bvr::image_controls::text("DLSS/DLAA no disponible; usando NORMAL nativo",
+                                                "DLSS/DLAA unavailable; using native NORMAL") : nullptr);
     }
     return true;
 }
@@ -2705,7 +2707,8 @@ void finish_image_failure(IDXGISwapChain* swapchain, const char* reason) {
     if (!image_backbuffer(swapchain, desc)) {
         g_liveImage.active = false;
         g_imageReconfigure.end();
-        bvr::image_controls::unavailable("No se pudo recuperar el render; reinicia el juego");
+        bvr::image_controls::unavailable(bvr::image_controls::text(
+            "No se pudo recuperar el render; reinicia el juego", "Could not recover rendering; restart the game"));
         return;
     }
     g_imageSettings = g_liveImage.previous;
@@ -2719,7 +2722,8 @@ void finish_image_failure(IDXGISwapChain* swapchain, const char* reason) {
     if (create_swapchains(swapchain))
         bvr::image_controls::report_effective(g_imageSettings, reason);
     else
-        bvr::image_controls::unavailable("No se pudo reconstruir VR; reinicia el juego");
+        bvr::image_controls::unavailable(bvr::image_controls::text(
+            "No se pudo reconstruir VR; reinicia el juego", "Could not rebuild VR; restart the game"));
     g_imageReconfigure.end();
 }
 
@@ -2730,7 +2734,9 @@ void restore_image_change(IDXGISwapChain* swapchain, const char* reason) {
     g_liveImage.target = g_liveImage.previous;
     destroy_swapchains(); // A failed XR allocation can still own live helpers/guides.
     if (!queue_image_engine(swapchain))
-        finish_image_failure(swapchain, "No se pudo restaurar. NORMAL temporal; reinicia el juego.");
+        finish_image_failure(swapchain, bvr::image_controls::text(
+            "No se pudo restaurar. NORMAL temporal; reinicia el juego.",
+            "Could not restore. Temporary NORMAL; restart the game."));
 }
 
 // True means the frame loop must wait for the game-thread engine command.
@@ -2748,7 +2754,8 @@ bool service_image_change(IDXGISwapChain* swapchain) {
                 bvr::dlss45::set_sharpness(requested.sharpnessPercent)) {
                 g_imageSettings = requested;
                 bvr::image_controls::confirm(requested);
-            } else bvr::image_controls::reject("No se pudo aplicar nitidez; se conserva la anterior");
+            } else bvr::image_controls::reject(bvr::image_controls::text(
+                "No se pudo aplicar nitidez; se conserva la anterior", "Could not apply sharpness; previous value retained"));
             g_imageReconfigure.end();
             return false;
         }
@@ -2762,7 +2769,8 @@ bool service_image_change(IDXGISwapChain* swapchain) {
         if (XR_SUCCEEDED(xrGetSystemProperties(g_instance, g_system, &properties)) &&
             (requested.outputWidth > properties.graphicsProperties.maxSwapchainImageWidth ||
              requested.outputHeight > properties.graphicsProperties.maxSwapchainImageHeight)) {
-            bvr::image_controls::reject("El visor no admite esa resolucion; se conserva la anterior");
+            bvr::image_controls::reject(bvr::image_controls::text(
+                "El visor no admite esa resolucion; se conserva la anterior", "The headset does not support that resolution; previous value retained"));
             return false;
         }
         // Retirement itself may legitimately wait up to two seconds. Arm
@@ -2771,7 +2779,8 @@ bool service_image_change(IDXGISwapChain* swapchain) {
         g_imageReconfigure.begin(GetTickCount64());
         if (!retire_image_gpu()) {
             g_imageReconfigure.end();
-            bvr::image_controls::reject("Cambio cancelado: GPU ocupada. Se conserva el ajuste anterior");
+            bvr::image_controls::reject(bvr::image_controls::text(
+                "Cambio cancelado: GPU ocupada. Se conserva el ajuste anterior", "Change cancelled: GPU busy. Previous setting retained"));
             return false;
         }
         g_liveImage = {};
@@ -2782,7 +2791,9 @@ bool service_image_change(IDXGISwapChain* swapchain) {
                 requested.outputWidth, requested.outputHeight, int(requested.mode));
         destroy_swapchains();
         if (!queue_image_engine(swapchain))
-            restore_image_change(swapchain, "El motor no acepto el cambio; restaurado el ajuste anterior");
+            restore_image_change(swapchain, bvr::image_controls::text(
+                "El motor no acepto el cambio; restaurado el ajuste anterior",
+                "The engine rejected the change; previous setting restored"));
     }
     if (!g_liveImage.active) return false;
 
@@ -2804,9 +2815,13 @@ bool service_image_change(IDXGISwapChain* swapchain) {
         if (!resized) {
             if (status == Status::Dispatched && !expired) return true;
             if (g_liveImage.restoring)
-                finish_image_failure(swapchain, "No se pudo restaurar. NORMAL temporal; reinicia el juego.");
+                finish_image_failure(swapchain, bvr::image_controls::text(
+                    "No se pudo restaurar. NORMAL temporal; reinicia el juego.",
+                    "Could not restore. Temporary NORMAL; restart the game."));
             else
-                restore_image_change(swapchain, "El motor no cambio la resolucion; se restaura la anterior");
+                restore_image_change(swapchain, bvr::image_controls::text(
+                    "El motor no cambio la resolucion; se restaura la anterior",
+                    "The engine did not change resolution; restoring the previous one"));
             return true;
         }
     }
@@ -2824,9 +2839,13 @@ bool service_image_change(IDXGISwapChain* swapchain) {
         g_dlss45Mode == dlss_mode(g_imageSettings.mode);
     if (!matched) {
         if (g_liveImage.restoring)
-            finish_image_failure(swapchain, "Puente no disponible. NORMAL temporal; reinicia el juego.");
+            finish_image_failure(swapchain, bvr::image_controls::text(
+                "Puente no disponible. NORMAL temporal; reinicia el juego.",
+                "Bridge unavailable. Temporary NORMAL; restart the game."));
         else
-            restore_image_change(swapchain, "No se pudo aplicar DLSS/DLAA; se restaura el ajuste anterior");
+            restore_image_change(swapchain, bvr::image_controls::text(
+                "No se pudo aplicar DLSS/DLAA; se restaura el ajuste anterior",
+                "Could not apply DLSS/DLAA; restoring the previous setting"));
         return true;
     }
     if (g_liveImage.restoring) bvr::image_controls::reject(g_liveImage.reason.c_str());
@@ -4358,7 +4377,9 @@ CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
                 bvr::dlss45::release();
                 g_dlss45Status = "fallo del host; reinicia el juego para reintentar";
                 bvr::image_controls::report_effective(effective_image_settings(),
-                    "Fallo de DLSS/DLAA; respaldo temporal. Reinicia para recuperar.",
+                    bvr::image_controls::text(
+                        "Fallo de DLSS/DLAA; respaldo temporal. Reinicia para recuperar.",
+                        "DLSS/DLAA failure; temporary fallback. Restart to recover."),
                     g_dlss45SpatialFallback);
             }
         } else {
@@ -4387,7 +4408,8 @@ CaptureResult capture_frame(ID3D11Texture2D* dst, ID3D11Texture2D* backbuffer,
             g_dlss45Active = false;
             g_dlss45Faulted = true;
             g_dlss45Status = "fallo del respaldo espacial; reconstruccion pendiente";
-            bvr::image_controls::unavailable("Reconstruyendo VR tras un fallo de imagen...");
+            bvr::image_controls::unavailable(bvr::image_controls::text(
+                "Reconstruyendo VR tras un fallo de imagen...", "Rebuilding VR after an image failure..."));
         }
         g_resizePending.store(true, std::memory_order_release);
         BVR_LOG("[dlss45] internal spatial fallback failed - queued native rebuild");

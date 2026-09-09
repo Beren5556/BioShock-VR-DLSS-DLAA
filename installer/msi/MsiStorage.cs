@@ -215,6 +215,49 @@ namespace BioShockMsi
             return content.Substring(0, start) + values + content.Substring(start + length);
         }
 
+        internal static string ApplyUiLanguage(string content, string language)
+        {
+            language = string.Equals(language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "es";
+            if (content == null) content = string.Empty;
+            Match section = Regex.Match(content, @"(?im)^\[ui\][^\r\n]*(?:\r?\n|$)");
+            if (!section.Success)
+            {
+                string separator = content.Length == 0 || content.EndsWith("\n", StringComparison.Ordinal) ? string.Empty : Environment.NewLine;
+                return content + separator + "[ui]" + Environment.NewLine + "language=" + language + Environment.NewLine;
+            }
+            int start = section.Index + section.Length;
+            Match next = Regex.Match(content.Substring(start), @"(?m)^\[");
+            int length = next.Success ? next.Index : content.Length - start;
+            string values = content.Substring(start, length);
+            Regex setting = new Regex(@"(?im)^(language\s*=\s*)[^\r\n]*");
+            int count = setting.Matches(values).Count;
+            if (count > 1) throw new InvalidDataException("Duplicate UI language setting.");
+            if (count == 1) values = setting.Replace(values, delegate(Match m) { return m.Groups[1].Value + language; });
+            else values = values.TrimEnd('\r', '\n') + Environment.NewLine + "language=" + language + Environment.NewLine;
+            return content.Substring(0, start) + values + content.Substring(start + length);
+        }
+
+        private static void SaveUiLanguage(string path, string language)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            string content = File.Exists(path) ? File.ReadAllText(path, Encoding.Default) : string.Empty;
+            string updated = ApplyUiLanguage(content, language);
+            if (updated == content) return;
+            Encoding encoding = new UTF8Encoding(false);
+            if (File.Exists(path))
+            {
+                using (StreamReader reader = new StreamReader(path, Encoding.Default, true))
+                {
+                    reader.Peek();
+                    encoding = reader.CurrentEncoding;
+                }
+            }
+            string temporary = path + ".language-" + Guid.NewGuid().ToString("N");
+            File.WriteAllText(temporary, updated, encoding);
+            if (File.Exists(path)) File.Replace(temporary, path, null);
+            else File.Move(temporary, path);
+        }
+
         [CustomAction]
         public static ActionResult FinishFiles(Session session)
         {
@@ -273,6 +316,7 @@ namespace BioShockMsi
                     string archived = Child(data["Transaction"], "Original-before-uninstall.xml");
                     File.Move(original, archived);
                 }
+                if (data["Removing"] != "1") SaveUiLanguage(data["Dlss"], data["Language"]);
                 // Recovery snapshots are intentionally retained. User preferences remain in place.
                 session.Log("Operación completada. Copias conservadas en " + data["Root"]);
                 return ActionResult.Success;
