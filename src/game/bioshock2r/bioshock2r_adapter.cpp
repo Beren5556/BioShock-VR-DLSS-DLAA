@@ -1,11 +1,13 @@
 #include "game/bioshock2r/bioshock2r_adapter.h"
 
 #include "core/gfx/hud_capture.h"
+#include "core/gfx/image_controls.h"
 #include "core/util/log.h"
 #include "core/vr/openxr_runtime.h"
 #include "game/bioshock2r/aim.h"
 #include "game/bioshock2r/body.h"
 #include "game/bioshock2r/camera.h"
+#include "game/bioshock2r/exit_guard.h"
 #include "game/bioshock2r/hands.h"
 #include "game/bioshock2r/patterns.h"
 #include "game/bioshock2r/scenedraw.h"
@@ -31,6 +33,9 @@ uint32_t Bioshock2RAdapter::capabilities() const {
 }
 
 bool Bioshock2RAdapter::init(const bvr::pattern_scan::ProcessImage& image) {
+    // Independent fail-soft verification: a camera seam mismatch must not
+    // prevent the BS2-native no-viewport exit-order guard from installing.
+    exit_guard::install(image);
     patterns::Symbols symbols{};
     if (!patterns::resolve(image, symbols)) return false; // resolve() logged why
     camera::init_image(image); // vtable-RVA identity checks need the bounds
@@ -58,7 +63,11 @@ bool Bioshock2RAdapter::init(const bvr::pattern_scan::ProcessImage& image) {
     // fingerprint is underived (circular), but the in-headset run proved the
     // LETTERBOX PIXEL WATCH trips inside real cutscenes - arm the dump on
     // THAT edge instead. One-shot, self-disarms; ~0.5 s hitch once per run.
+    // Discovery capture caused an intentional half-second hitch. Keep it out
+    // of the candidate; the explicit debug command remains available.
+#ifdef BVR_CRITICAL_PATH_PROBE
     bvr::hud::set_dump_on_edge(3 /* letterbox pixel-watch rising */, 2);
+#endif
     // Session 42 deviation from BS1 (ARCHITECTURE decision log): BS1 falls
     // back to the SIZE-ONLY post-FX rule during cutscenes (its cine shots
     // carry no HUD art, and the bind test cost a visible floating screen).
@@ -88,6 +97,7 @@ bool Bioshock2RAdapter::init(const bvr::pattern_scan::ProcessImage& image) {
     // itself lands after the probe's live verdict). Needs the installed
     // FindFunctionChecked/ProcessEvent detours, so after camera::install.
     aim::init(image, symbols);
+    bvr::image_controls::set_enabled(true);
     BVR_LOG("[b2r] adapter ready, capabilities 0x%X", capabilities());
     return true;
 }

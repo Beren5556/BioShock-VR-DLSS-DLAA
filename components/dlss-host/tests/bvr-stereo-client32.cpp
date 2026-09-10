@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "../src/feed_ipc.h"
+#include "../../../src/core/gfx/image_control_policy.h"
 
 static_assert(sizeof(void *) == 4, "bvr-stereo-client32 must be compiled as x86");
 
@@ -132,13 +133,14 @@ struct Options
 {
     bool sr = false;
     UINT frames = 300;
+    UINT square_output = 0;
     std::wstring runtime_root;
 };
 
 void Usage()
 {
     std::printf(
-        "usage: bvr-stereo-client32 --mode dlaa|sr --runtime-root <folder> [--frames 300]\n"
+        "usage: bvr-stereo-client32 --mode dlaa|sr --runtime-root <folder> [--frames 300] [--square-output 2950]\n"
         "  <folder> must contain eye0\\ and eye1\\, each with the packaged x64 host,\n"
         "  official nvngx_dlss.dll, and dlss-capabilities.ini.  This client launches both hosts.\n");
 }
@@ -156,6 +158,13 @@ bool ParseOptions(int argc, wchar_t **argv, Options &o)
         }
         else if (wcscmp(argv[i], L"--runtime-root") == 0 && i + 1 < argc)
             o.runtime_root = AbsolutePath(argv[++i]);
+        else if (wcscmp(argv[i], L"--square-output") == 0 && i + 1 < argc)
+        {
+            wchar_t* end = nullptr;
+            const unsigned long v = wcstoul(argv[++i], &end, 10);
+            if (!end || *end || v < 1024 || v > 8192 || (v & 1u)) return false;
+            o.square_output = static_cast<UINT>(v);
+        }
         else if (wcscmp(argv[i], L"--frames") == 0 && i + 1 < argc)
         {
             const unsigned long v = wcstoul(argv[++i], nullptr, 10);
@@ -749,10 +758,25 @@ int wmain(int argc, wchar_t **argv)
         return 2;
     }
 
-    const UINT work_w = options.sr ? 960u : 640u;
-    const UINT work_h = options.sr ? 540u : 360u;
-    const UINT output_w = options.sr ? 1920u : work_w;
-    const UINT output_h = options.sr ? 1080u : work_h;
+    UINT work_w = options.sr ? 960u : 640u;
+    UINT work_h = options.sr ? 540u : 360u;
+    UINT output_w = options.sr ? 1920u : work_w;
+    UINT output_h = options.sr ? 1080u : work_h;
+    if (options.square_output)
+    {
+        bvr::image_controls::Settings geometry{};
+        geometry.mode = options.sr ? bvr::image_controls::RenderMode::Dlss
+                                  : bvr::image_controls::RenderMode::Dlaa;
+        geometry.outputWidth = geometry.outputHeight = options.square_output;
+        geometry.srScale = {1, 2};
+        if (!bvr::image_controls::geometry(geometry))
+        {
+            std::printf("FAIL: production image policy rejects the requested square output\n");
+            return 2;
+        }
+        work_w = geometry.renderWidth; work_h = geometry.renderHeight;
+        output_w = geometry.outputWidth; output_h = geometry.outputHeight;
+    }
     const DWORD client_pid = GetCurrentProcessId();
     std::printf("BioShock VR stereo bridge test: x86 client pid=%lu, IPC v%u, mode=%s, %u frames/eye\n",
                 static_cast<unsigned long>(client_pid), FEED_IPC_VERSION,

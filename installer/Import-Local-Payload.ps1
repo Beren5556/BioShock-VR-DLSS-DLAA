@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$PayloadDirectory
@@ -11,8 +11,8 @@ $destinationRoot = [IO.Path]::GetFullPath((Join-Path $installerRoot 'Payload'))
 $manifestPath = Join-Path $installerRoot 'payload-manifest.json'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-if ($manifest.schemaVersion -ne 1 -or @($manifest.payload).Count -ne 8) {
-    throw 'El manifiesto de payload no tiene el formato esperado.'
+if ($manifest.schemaVersion -ne 2 -or $manifest.gameId -ne 'bs2' -or $manifest.release -ne 'v0.1.1-beta' -or @($manifest.payload).Count -ne 8) {
+    throw 'Se requiere el manifiesto de payload de BioShock 2 v0.1.1-beta.'
 }
 if (-not (Test-Path -LiteralPath $sourceRoot -PathType Container)) {
     throw "No existe la carpeta de payload: $sourceRoot"

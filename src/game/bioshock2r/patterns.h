@@ -12,6 +12,32 @@
 
 namespace bvr::b2r::patterns {
 
+// Offline audit of Steam Bioshock2HD.exe SHA256 C2A31FB67B285C136203A4A6E7395451
+// 77BE5753D972E6AEA0F44C65DDF22F8C, 2026-09-08. The finite projection builder
+// (this=16-float destination, six float args, ret 0x18) writes m10=f/(f-n),
+// m14=-nf/(f-n), m11=1. Its thunk at 0x855D has exactly two static callers:
+// 0x5C435F builds the primary scene projection; 0x5C43AA builds its secondary
+// lens. Both pass near from global 0x14977E4 and far from getter 0x5BE510
+// (1024 special branch, else global 0x1499FE8, initially 65536). Read actual
+// arguments AND validate the returned matrix instead of assuming either far.
+// WORLD identity is independent of matching foreground tangents: the normal
+// UGameEngine::Draw caller at 0x4EF44C constructs FPlayerSceneNode through the
+// 0x5C95 thunk -> 0x5BBD40 (ret 0x2C). RTTI identifies its final vtable as
+// FPlayerSceneNode (0x10CF750). That constructor calls UpdateMatrices 0x5C34A0
+// at 0x5BBEB7. The first builder above fills node+0x1D0 using the world option
+// times lensA (0x5C41F9..0x5C4214); the second fills node+0x380 from lensB.
+// Scope capture to THIS root Draw constructor, excluding reflection/auxiliary
+// nodes even if they happen to have the same FOV. The two other static callers
+// of this constructor thunk (0x4F9A6B/0x68330A) are deliberately not eligible.
+constexpr uint32_t kTemporalProjectionBuilderRva = 0x5BBC00;
+constexpr uint32_t kTemporalWorldProjectionReturnRva = 0x5C4364;
+constexpr uint32_t kTemporalPlayerNodeThunkRva = 0x5C95;
+constexpr uint32_t kTemporalPlayerNodeConstructorRva = 0x5BBD40;
+constexpr uint32_t kTemporalDrawPlayerNodeReturnRva = 0x4EF451;
+constexpr uint8_t kTemporalProjectionPrologue[] = {
+    0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x10, 0xD9, 0x45, 0x18,
+    0xD9, 0x45, 0x1C, 0xD9, 0xC0, 0xD8, 0xCA, 0xD9, 0xC2, 0xD8, 0xE2};
+
 // MSVC RTTI walk (TypeDescriptor ".?AVClass@@" -> CompleteObjectLocator ->
 // vtable), run offline against Bioshock2HD.exe on 2026-07-29; the method was
 // validated by reproducing all of BS1's known-good vtable RVAs exactly.
@@ -614,6 +640,57 @@ constexpr uint32_t kClientUseControllerOffset = 0xDC; // BOOL (documented, unrea
 constexpr uint32_t kXInputGetStateIatRva = 0x1C0DBFC; // XINPUT1_3 ordinal 2 slot
 constexpr uint32_t kXInputSetStateIatRva = 0x1C0DBF8; // ordinal 3 - untouched
 constexpr uint32_t kPadConnectedFlagRva = 0x14977A0;  // documented, never written
+
+// --- no-viewport exit ordering (2026-09-08, Steam exe hash above) -----------
+// Tick(float), not just a display helper: vtable+0xF4 -> stub 0x174E ->
+// body 0x4FF0D0, ret 4. Its head reads Client->Viewports[0] before its own
+// later empty-array guard. The guard at 0x4FF33C checks Client != null and
+// Viewports.Num()==0, calls RequestExit(0,0), and returns. Moving THAT branch
+// before the invalid access avoids the observed +0x4FF0FE null read without
+// inventing a shutdown policy or skipping a caught exception. See the exit
+// investigation notes for derivation and live acceptance status.
+// RequestExit is cdecl(int force, int status), stub 0x9345 -> 0xB60C00.
+// force==0 skips ExitProcess, posts WM_QUIT, sets the main-loop exit flag and
+// records status. These signatures verify the actual branch and its callee,
+// including relocated operands, before any hook/call is allowed.
+constexpr uint32_t kExitTickRva = 0x4FF0D0;
+constexpr uint32_t kExitTickThunkRva = 0x174E;
+constexpr uint32_t kExitTickVtblOffset = 0xF4;
+constexpr uint32_t kExitNativeEmptyBranchRva = 0x4FF33C;
+constexpr uint32_t kExitRequestThunkRva = 0x9345;
+constexpr uint32_t kExitRequestRva = 0xB60C00;
+
+struct ExitCodeOperand {
+    uint32_t offset;
+    uint32_t targetRva;
+    bool relative;
+};
+constexpr uint8_t kExitTickHead[] = {
+    0x55, 0x8B, 0xEC, 0x64, 0xA1, 0, 0, 0, 0, 0x6A, 0xFF, 0x68,
+    0, 0, 0, 0, 0x50, 0x64, 0x89, 0x25, 0, 0, 0, 0,
+    0x81, 0xEC, 0x24, 0x01, 0, 0, 0xA1, 0, 0, 0, 0,
+    0x53, 0x8B, 0x40, 0x4C, 0x56, 0x57, 0x8B, 0xF9,
+    0x8B, 0x40, 0x44, 0x8B, 0x08, 0x8B, 0x01, 0xFF, 0x90, 0x28, 0x01, 0, 0};
+constexpr ExitCodeOperand kExitTickHeadOperands[] = {
+    {12, 0xFCF4CB, false}, {31, kGameEnginePtrRva, false}};
+constexpr uint8_t kExitNativeEmptyBranch[] = {
+    0x8B, 0x47, 0x4C, 0x85, 0xC0, 0x74, 0x25,
+    0x83, 0x78, 0x48, 0, 0x75, 0x1F, 0x6A, 0, 0x6A, 0,
+    0xE8, 0, 0, 0, 0, 0x83, 0xC4, 0x08, 0x8B, 0x4D, 0xF4,
+    0x64, 0x89, 0x0D, 0, 0, 0, 0, 0x5F, 0x5E, 0x5B,
+    0x8B, 0xE5, 0x5D, 0xC2, 0x04, 0};
+constexpr ExitCodeOperand kExitNativeEmptyBranchOperands[] = {
+    {18, kExitRequestThunkRva, true}};
+constexpr uint8_t kExitRequestBody[] = {
+    0x55, 0x8B, 0xEC, 0x83, 0x7D, 0x08, 0, 0x74, 0x08, 0x6A, 0x01,
+    0xFF, 0x15, 0, 0, 0, 0, 0x6A, 0, 0xFF, 0x15, 0, 0, 0, 0,
+    0x8B, 0x45, 0x0C, 0xC7, 0x05, 0, 0, 0, 0, 0x01, 0, 0, 0,
+    0xA3, 0, 0, 0, 0, 0x5D, 0xC3};
+constexpr ExitCodeOperand kExitRequestBodyOperands[] = {
+    {13, 0x1C0D2E0, false}, // ExitProcess IAT; force=0 does not call it
+    {21, 0x1C0D9A4, false}, // PostQuitMessage IAT
+    {30, 0x1A66218, false}, // flag consumed by main loop +0x30CE19
+    {39, 0x1A6621C, false}}; // exit status
 
 // --- heap scan for vtable-identified objects (session 25) -------------------
 // BS2 shape of BS1's scanner (bioshock1r/patterns.cpp - duplicated per the

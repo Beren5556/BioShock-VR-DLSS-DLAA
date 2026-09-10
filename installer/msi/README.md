@@ -1,4 +1,17 @@
-# Windows Installer — 0.2.11
+# Windows Installer por juego — integración 0.2.13
+
+> Referencia histórica y código compartido de acciones. La distribución vigente
+> utiliza `../single-game/Build-Msi.ps1`: [cierre 0.2.16](../../docs/RELEASE-0.2.16.md).
+> No construir el antiguo EXE contenedor para una entrega nueva.
+
+Build-Msi.ps1 -GameId bs2 exige BasePayloadDirectory (23 archivos aceptados de
+0.2.11) y herramientas WiX verificadas. Build-Bundle.ps1 incorpora después
+ese candidato y el MSI BS1 exacto. Test-Msi exige ManifestPath de una familia
+aislada; Test-LegacyMigration cubre las betas BS2 Format=3 / 0.1.0 y 0.1.1.
+Las copias BS2 viven en BioshockVR\bs2\WindowsInstaller y su registro/familia
+no comparten identidad con BS1. [Guía vigente](../../docs/INTEGRATION-0.2.13.md).
+
+## Referencia histórica del MSI BS1 0.2.11
 
 Paquete MSI por usuario para BioShock 1 Remastered. Instala el mod completo
 en `Build\Final`, registra su mantenimiento en Aplicaciones de Windows y crea

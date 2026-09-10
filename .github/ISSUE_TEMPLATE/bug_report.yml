@@ -5,12 +5,12 @@ labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: No adjuntes BioshockHD.exe, archivos del juego, credenciales ni volcados sin revisar.
+      value: BioShock 2 DLSS/DLAA. No adjuntes Bioshock2HD.exe, archivos del juego, credenciales ni volcados sin revisar.
   - type: input
     id: version
     attributes:
       label: Versión y SHA-256
-      placeholder: v0.2.0-beta · 08EEE09B...
+      placeholder: BS2 v0.1.0-beta · SHA-256 del instalador
     validations:
       required: true
   - type: textarea

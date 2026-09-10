@@ -1,0 +1,224 @@
+{
+  "kind": "native-single-game-msi",
+  "version": "0.2.16",
+  "installer": "BioShock-1-2-VR-DLSS-DLAA-0.2.16.msi",
+  "sha256": "1C881F0A27416198FC25A068A79044BEED7FCC37160F38E7AFE2AE09CE9A2371",
+  "productCode": "4A08E42D-E3D1-35FE-E19D-C3D866B1DF29",
+  "upgradeCode": "38EFE58B-DE4E-CA21-48D5-4AD8F3102E42",
+  "testFamily": "",
+  "games": {
+    "bs1": {
+      "registration": "HKCU:\\Software\\Beren5556\\BioShockVRDLSSDLAA",
+      "legacyUpgradeCode": "4C28DEFC-3BB8-48C0-BB6E-4D5108119CE7",
+      "sourceVersion": "0.2.16",
+      "launcher": "Lanzador BioShock VR DLSS-DLAA.exe",
+      "modVersion": "0.2.13",
+      "modBuild": "beren5556-bs12-v0.2.13-candidate2-sr-range-audit",
+      "runtime": "310.7.0.0",
+      "productCode": "D8FF6BAF-9EC2-98D4-5FB1-5A2364A3B8C9",
+      "files": [
+        {
+          "path": "xinput1_3.dll",
+          "sha256": "441BF1728BB38A2EC2BA57605CF840D786122E862D47A6DFA642BFF484F8E191"
+        },
+        {
+          "path": "bioshockvr.dll",
+          "sha256": "FE50CB1FBD8B6D0A72E1BF1B80D84D3D13E0955F1BC147B78580DE79E6B282DB"
+        },
+        {
+          "path": "bvr_steamvr32.dll",
+          "sha256": "56537A2EA8F88FCE6A2928EAECDE11EEEEED9C4D04F36B39E466B4D03330B972"
+        },
+        {
+          "path": "openvr_api.dll",
+          "sha256": "AB696E4F218A95B3E396BC310F9FE6485DF48C99C0969762083212B1E1F025A6"
+        },
+        {
+          "path": "host64\\BioShockVR-DLSS45-Host64.exe",
+          "sha256": "480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453"
+        },
+        {
+          "path": "host64\\nvngx_dlss.dll",
+          "sha256": "BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E"
+        },
+        {
+          "path": "host64\\dlss-capabilities.ini",
+          "sha256": "7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77"
+        },
+        {
+          "path": "Lanzador BioShock VR DLSS-DLAA.exe",
+          "sha256": "8B074DD5D181DAE2E543648CF15F582178B5FDF475E1DE3DC4D4C453FB1FA4AB"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\LEEME-DLSS45.md",
+          "sha256": "0DCBC8A681847E82CE5D6CF2DF47714738E90D55F938D76AD13BA2405884F073"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\RENDIMIENTO.md",
+          "sha256": "04BA09EBD031276BE886829D73C88F5C5E382CD630EB484FBFA8FF90BDB8FA5C"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\NVIDIA-DLSS-LICENSE.txt",
+          "sha256": "A3E28883672AB1B48187A0CC004EA468C76F6BEA15F33F0F38A970B7F7E04C64"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\dlss.ini.example",
+          "sha256": "DE2825C895948FCBD58A3082802B0B50C1D99EEFA06A34FB513FC6E5F5E33009"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\BioShockVR-MIT-LICENSE.txt",
+          "sha256": "199384980B6925AA5DA072314C0C265BB097F41C7849A7AB0E6DE9294D3D8114"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\DLSS-Host-MIT-LICENSE.txt",
+          "sha256": "1CE240E402901FB81EB82A60A6BAFD2FB913CD5746860B0A4EC52A5ACB49CED7"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\THIRD_PARTY_NOTICES.md",
+          "sha256": "1E98DC371DDDF8EC14EDA4EC64A1CA4BC0C790B76BACF1615F4933536401BB89"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\ACKNOWLEDGEMENTS.md",
+          "sha256": "907AA7122C38913064E2E8B6EF585F4C7ED1B04A33C5529BC0D7E2250CCF13F6"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\MinHook-LICENSE.txt",
+          "sha256": "4F21F857550D7BE854DA6EA5F2DA4E6775CA4E3FBB535E4F3D961C47D0BF3335"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\Dear-ImGui-LICENSE.txt",
+          "sha256": "F20418B409E53C8C9F4E90917FF395554A60320D4DFBF833DA89B339CAD8628A"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\OpenVR-LICENSE.txt",
+          "sha256": "9E6D1480FB68E86CEAFED312F7E67DADCDC2A99B350B710D624B8F0F0F1A2329"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\OpenXR-LICENSE.txt",
+          "sha256": "3DDF9BE5C28FE27DAD143A5DC76EEA25222AD1DD68934A047064E56ED2FA40C5"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\OpenXR-COPYING.adoc",
+          "sha256": "1B0FF1CFEADAE317A54457E4407EA1AE026AB71555CAF9A20294C492F2514273"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\WiX-6.0.2-LICENSE.txt",
+          "sha256": "DFDF2048787635215A6BAF3B9D461DEE89A2904D246787258A44F072A98D4786"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\WiX-6.0.2-source.zip",
+          "sha256": "4FC4140C87891E05E5A9A47A652B4644F94E35CD5AC698B7A0F05C9563090283"
+        }
+      ]
+    },
+    "bs2": {
+      "registration": "HKCU:\\Software\\Beren5556\\BioShock2VRDLSSDLAA",
+      "legacyUpgradeCode": "174DBE9E-AE9D-E499-167B-0727E63CA74F",
+      "sourceVersion": "0.2.16",
+      "launcher": "Lanzador BioShock 2 VR DLSS-DLAA.exe",
+      "modVersion": "0.2.13",
+      "modBuild": "beren5556-bs12-v0.2.13-candidate2-sr-range-audit",
+      "runtime": "310.7.0.0",
+      "productCode": "B3FAAA68-A27E-A76C-53C5-61F7F3BFAA80",
+      "files": [
+        {
+          "path": "xinput1_3.dll",
+          "sha256": "79812CAAA21DC5EC902F59DD54A8A92B3F9B31F915631A667CB96EFA9EBF8950"
+        },
+        {
+          "path": "bioshockvr.dll",
+          "sha256": "FE50CB1FBD8B6D0A72E1BF1B80D84D3D13E0955F1BC147B78580DE79E6B282DB"
+        },
+        {
+          "path": "bvr_steamvr32.dll",
+          "sha256": "56537A2EA8F88FCE6A2928EAECDE11EEEEED9C4D04F36B39E466B4D03330B972"
+        },
+        {
+          "path": "openvr_api.dll",
+          "sha256": "AB696E4F218A95B3E396BC310F9FE6485DF48C99C0969762083212B1E1F025A6"
+        },
+        {
+          "path": "host64\\BioShockVR-DLSS45-Host64.exe",
+          "sha256": "480D4A931C0CA5669B11061EFB28239BE6A041D1452BA50EACC30E0B26291453"
+        },
+        {
+          "path": "host64\\nvngx_dlss.dll",
+          "sha256": "BE6E434A94CA32499515EB62CA0E6C274526055D568D0426E4C652DCDFB6EE6E"
+        },
+        {
+          "path": "host64\\dlss-capabilities.ini",
+          "sha256": "FCB20488F19FB39851FF1683E0C4DA4B4AA71D25B9BE12634AD95BC5AAD5508C"
+        },
+        {
+          "path": "Lanzador BioShock 2 VR DLSS-DLAA.exe",
+          "sha256": "0445AEACED5272485D33904080BEE32CCD0B0C6DA246ADDE4371570861AA9942"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\LEEME-DLSS45.md",
+          "sha256": "0DCBC8A681847E82CE5D6CF2DF47714738E90D55F938D76AD13BA2405884F073"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\RENDIMIENTO.md",
+          "sha256": "04BA09EBD031276BE886829D73C88F5C5E382CD630EB484FBFA8FF90BDB8FA5C"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\NVIDIA-DLSS-LICENSE.txt",
+          "sha256": "A3E28883672AB1B48187A0CC004EA468C76F6BEA15F33F0F38A970B7F7E04C64"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\dlss.ini.example",
+          "sha256": "DE2825C895948FCBD58A3082802B0B50C1D99EEFA06A34FB513FC6E5F5E33009"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\BioShockVR-MIT-LICENSE.txt",
+          "sha256": "199384980B6925AA5DA072314C0C265BB097F41C7849A7AB0E6DE9294D3D8114"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\DLSS-Host-MIT-LICENSE.txt",
+          "sha256": "1CE240E402901FB81EB82A60A6BAFD2FB913CD5746860B0A4EC52A5ACB49CED7"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\THIRD_PARTY_NOTICES.md",
+          "sha256": "1E98DC371DDDF8EC14EDA4EC64A1CA4BC0C790B76BACF1615F4933536401BB89"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\ACKNOWLEDGEMENTS.md",
+          "sha256": "907AA7122C38913064E2E8B6EF585F4C7ED1B04A33C5529BC0D7E2250CCF13F6"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\MinHook-LICENSE.txt",
+          "sha256": "4F21F857550D7BE854DA6EA5F2DA4E6775CA4E3FBB535E4F3D961C47D0BF3335"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\Dear-ImGui-LICENSE.txt",
+          "sha256": "F20418B409E53C8C9F4E90917FF395554A60320D4DFBF833DA89B339CAD8628A"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\OpenVR-LICENSE.txt",
+          "sha256": "9E6D1480FB68E86CEAFED312F7E67DADCDC2A99B350B710D624B8F0F0F1A2329"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\OpenXR-LICENSE.txt",
+          "sha256": "3DDF9BE5C28FE27DAD143A5DC76EEA25222AD1DD68934A047064E56ED2FA40C5"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\OpenXR-COPYING.adoc",
+          "sha256": "1B0FF1CFEADAE317A54457E4407EA1AE026AB71555CAF9A20294C492F2514273"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\WiX-6.0.2-LICENSE.txt",
+          "sha256": "DFDF2048787635215A6BAF3B9D461DEE89A2904D246787258A44F072A98D4786"
+        },
+        {
+          "path": "BioShockVR-DLSS45\\Licenses\\WiX-6.0.2-source.zip",
+          "sha256": "4FC4140C87891E05E5A9A47A652B4644F94E35CD5AC698B7A0F05C9563090283"
+        }
+      ]
+    }
+  },
+  "launcherAutoStart": false,
+  "releaseReady": true,
+  "installScope": "perUser",
+  "elevation": "required-capable",
+  "summaryNoElevationBit": false
+}

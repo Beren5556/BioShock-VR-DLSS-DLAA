@@ -1,5 +1,6 @@
 # Build output
 build/
+build-bs2-test/
 out/
 .vs/
 .vscode/
@@ -46,8 +47,12 @@ desktop.ini
 # Proprietary/local inputs: publish only inside an authorized Release asset
 nvngx_dlss.dll
 BioshockHD.exe
+Bioshock2HD.exe
 
 # Local credentials and environment files
 .env
 .env.*
 !.env.example
+
+# Machine-specific recovery helper (contains local paths and account identity)
+/installer/combined/Recover-TestInstallations.ps1

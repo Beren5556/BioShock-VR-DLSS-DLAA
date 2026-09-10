@@ -1,8 +1,7 @@
 // Exercises the shipping controller with only a private TEMP/GUID ini.
 #include "core/gfx/image_controls.h"
 #include "core/util/log.h"
-#include "game/bioshock1r/game_ini.h"
-#include "game/bioshock1r/graphics_options.h"
+#include "game/shared/image_adapter.h"
 #include <windows.h>
 #include <objbase.h>
 #include <cstdio>
@@ -12,7 +11,7 @@ namespace {
 unsigned checks=0, failures=0, viewportWrites=0;
 unsigned graphicsWrites = 0;
 bool graphicsUnavailable = false;
-bvr::b1r::game_ini::Viewport viewport{4096,4096,4096,4096,false,true};
+bvr::active_image::Viewport viewport{4096,4096,4096,4096,false,true};
 bool expect(bool ok, const char* name) {
     ++checks; if (!ok) ++failures;
     std::printf("%s %u: %s\n", ok ? "PASS" : "FAIL", checks, name); return ok;
@@ -27,7 +26,7 @@ std::string bytes(const std::wstring& path) {
 }
 }
 namespace bvr::log { void write(const char*, ...) {} }
-namespace bvr::b1r::graphics_options {
+namespace bvr::active_image::graphics {
 Values fixture{};
 Values read() {
     static bool first = true;
@@ -40,10 +39,16 @@ Change toggle(size_t index, Value& observed) {
     observed = fixture[index]; return Change::Applied;
 }
 }
-namespace bvr::b1r::game_ini {
+namespace bvr::active_image {
 Viewport read_viewport() { return viewport; }
 bool write_viewport(uint32_t w, uint32_t h) {
     ++viewportWrites; viewport={w,h,w,h,false,true}; return true;
+}
+bool save_configuration(uint32_t w, uint32_t h, const std::wstring& ini,
+                        const std::wstring& staged, const std::string&, bool) {
+    if (!viewport.valid || viewport.windowedW != w || viewport.windowedH != h ||
+        viewport.fullscreenW != w || viewport.fullscreenH != h) write_viewport(w, h);
+    return MoveFileExW(staged.c_str(), ini.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
 }
 }
 int main() {

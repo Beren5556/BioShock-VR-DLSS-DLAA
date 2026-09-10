@@ -1,4 +1,12 @@
-# Instalador MSI 0.2.11
+# Instalador común BioShock 1–2 · 0.2.16
+
+Entrada vigente: `single-game/Prepare-Release.ps1` y `single-game/Build-Msi.ps1`.
+Un MSI nativo contiene ambos mods validados y permite seleccionar un juego por
+ejecución, con productos independientes y sin arranque automático. No es un
+EXE contenedor. Ver [construcción, migración y pruebas](../docs/RELEASE-0.2.16.md).
+El contenido inferior y `unified/` son referencias históricas.
+
+## Referencia histórica MSI 0.2.11
 
 La nueva distribución se construye con `msi/Build-Msi.ps1`. Véase
 [Windows Installer](msi/README.md). El instalador EXE descrito debajo se

@@ -54,6 +54,10 @@ bool hook_live();
 // the cached base, +IPD/2); AlternateEye is suppressed.
 bool stereo_active();
 
+// Thread-local exact Draw id issued by the core Present-tag queue. Never
+// attribute an unrelated callback or a nested Draw to an outer eye.
+bool current_eye_build(int* eyeOut, uint64_t* buildIdOut);
+
 // ProcessEvent-seam head check: true when the current thread is executing
 // the SECOND (re-entry) Draw call. The camera dispatch handler must then
 // run ONLY the replay (second_pass_replay) - none of its normal body.

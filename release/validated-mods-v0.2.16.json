@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.16",
+  "modVersion": "0.2.13",
+  "modBuild": "beren5556-bs12-v0.2.13-candidate2-sr-range-audit",
+  "runtime": "310.7.0.0",
+  "acceptedOn": "2026-09-10",
+  "acceptance": "Funcionamiento confirmado por el usuario en ambos juegos; conservar estos binarios sin recompilar. No equivale a validación en otros equipos.",
+  "games": {
+    "bs1": {
+      "files": [
+        { "path": "bioshockvr.dll", "sha256": "FE50CB1FBD8B6D0A72E1BF1B80D84D3D13E0955F1BC147B78580DE79E6B282DB" },
+        { "path": "Lanzador BioShock VR DLSS-DLAA.exe", "sha256": "8B074DD5D181DAE2E543648CF15F582178B5FDF475E1DE3DC4D4C453FB1FA4AB" }
+      ]
+    },
+    "bs2": {
+      "files": [
+        { "path": "bioshockvr.dll", "sha256": "FE50CB1FBD8B6D0A72E1BF1B80D84D3D13E0955F1BC147B78580DE79E6B282DB" },
+        { "path": "Lanzador BioShock 2 VR DLSS-DLAA.exe", "sha256": "0445AEACED5272485D33904080BEE32CCD0B0C6DA246ADDE4371570861AA9942" },
+        { "path": "xinput1_3.dll", "sha256": "79812CAAA21DC5EC902F59DD54A8A92B3F9B31F915631A667CB96EFA9EBF8950" },
+        { "path": "host64/dlss-capabilities.ini", "sha256": "FCB20488F19FB39851FF1683E0C4DA4B4AA71D25B9BE12634AD95BC5AAD5508C" }
+      ]
+    }
+  }
+}

@@ -87,6 +87,36 @@ void bounds_and_invalid_pairs() {
     expect(!geometry(shortAspect), "minimum is checked on both rectangular axes");
 }
 
+void ngx_half_scale_boundary() {
+    // Real NGX 310.7.0 range recorded in BOTH games on 2026-09-10:
+    // Performance at 2950x2950 accepts 1475..2950, not the old 1474 tie.
+    // Preserve even/exact-aspect geometry, but round to the valid side.
+    Settings incident = settings(RenderMode::Dlss, 2950, {1, 2});
+    expect(geometry(incident) && incident.renderWidth == 1476 && incident.renderHeight == 1476,
+           "2950 at Performance rounds above NGX's odd 1475 minimum");
+    bool allHalfScales = true;
+    for (uint32_t output = 2048; output <= kMaximum; output += 2) {
+        Settings s = settings(RenderMode::Dlss, output, {1, 2});
+        allHalfScales &= geometry(s) && s.renderWidth * 2 >= output &&
+            s.renderHeight * 2 >= output && s.renderWidth <= output / 2 + 1 &&
+            !(s.renderWidth & 1u) && !(s.renderHeight & 1u) &&
+            fraction_is(s.srScale, 1, 2);
+    }
+    expect(allHalfScales, "all even output sizes keep Performance inside the half-resolution lower bound");
+    Settings rectangular = settings(RenderMode::Dlss, 4310, {1, 2});
+    rectangular.outputHeight = 2586;
+    expect(geometry(rectangular) && rectangular.renderWidth * 2 >= 4310 &&
+           rectangular.renderHeight * 2 >= 2586 &&
+           rectangular.renderWidth * 2586 == rectangular.renderHeight * 4310,
+           "rectangular Performance respects both lower bounds without changing aspect");
+    Settings cycle = settings(RenderMode::Dlaa, 2950, {1, 2});
+    expect(geometry(cycle) && step_mode(cycle, 1) && cycle.mode == RenderMode::Normal &&
+           step_mode(cycle, 1) && cycle.mode == RenderMode::Dlss && cycle.renderWidth == 1476 &&
+           step_mode(cycle, 1) && cycle.mode == RenderMode::Dlaa && cycle.renderWidth == 2950 &&
+           fraction_is(cycle.srScale, 1, 2),
+           "DLAA-NORMAL-DLSS-DLAA cycle keeps valid dimensions and the original preference");
+}
+
 void resolution_steps() {
     for (RenderMode mode : {RenderMode::Normal, RenderMode::Dlss, RenderMode::Dlaa}) {
         Settings s = settings(mode, 4096, {7, 10});
@@ -220,6 +250,7 @@ int main() {
     expect(!window.begin(UINT64_MAX - 5), "overflow never creates an unbounded window");
     geometry_and_launcher_parity();
     bounds_and_invalid_pairs();
+    ngx_half_scale_boundary();
     resolution_steps();
     quality_steps_and_panels();
     std::printf("Image control policy: %u/%u checks passed\n", checks - failures, checks);

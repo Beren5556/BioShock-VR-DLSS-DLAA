@@ -5,11 +5,14 @@
 #include <stdexcept>
 
 namespace bvr::log {
+const wchar_t* data_dir() { return L""; } // no personal profile fallback in tests
 void write(const char* format, ...) {
     va_list args; va_start(args,format); std::vprintf(format,args); va_end(args); std::puts("");
 }
 }
+namespace bvr::game { HostGame detect_host_game() { return HostGame::Bioshock1; } }
 namespace {
+// These transport fixtures exercise the shared path, never a running game.
 unsigned checks = 0, failures = 0;
 void expect(bool ok, const char* label) {
     ++checks; if (!ok) ++failures;

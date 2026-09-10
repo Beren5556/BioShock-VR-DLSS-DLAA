@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+throw 'Disabled in the BS2 DLSS/DLAA fork. Use Restore in the standalone BS2 installer to preserve prior files, user changes and recovery copies.'
 
 if (-not $GamePath) {
     switch ($Game) {

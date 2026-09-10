@@ -12,6 +12,9 @@
 
 #include <windows.h>
 #include <mutex>
+#ifdef BVR_BS2_TEST_ISOLATION
+#include "lab_profile_redirect.h"
+#endif
 
 namespace {
 
@@ -159,6 +162,9 @@ void WINAPI BVR_SetPostGetStateHook(PostGetStateHook hook) {
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
+#ifdef BVR_BS2_TEST_ISOLATION
+        if (!bvr_lab_profile::install()) return FALSE;
+#endif
         DisableThreadLibraryCalls(instance);
         // LoadLibrary is illegal under loader lock; do the real work on a
         // thread that starts once the loader releases it. Exports that get

@@ -11,6 +11,8 @@
 #include "core/debug/value_scan.h"
 #include "core/gfx/frame_inspector.h"
 #include "core/gfx/hud_capture.h"
+#include "core/gfx/image_controls.h"
+#include "core/util/game_exit_gate.h"
 #include "core/input/xinput_bridge.h"
 #include "core/ui/overlay.h"
 #include "core/util/crash.h"
@@ -24,6 +26,7 @@
 #include "game/bioshock2r/hands.h"
 #include "game/bioshock2r/input_drive.h"
 #include "game/bioshock2r/scenedraw.h"
+#include "game/bioshock2r/temporal_contract.h"
 #include "game/shared/ue_math.h"
 
 #include <windows.h>
@@ -37,6 +40,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iterator>
+#include <intrin.h>
 #include <share.h>
 
 namespace bvr::b2r::camera {
@@ -300,6 +304,177 @@ SimHead g_simHead;
 uint64_t g_lastCmdPollMs = 0;
 FILETIME g_lastCmdWrite{};
 
+// A pose and its projection can arrive in either order inside one Draw.
+// Keep both under the same exact id; repeated publications stay visible and
+// are rejected by the temporal consumer rather than silently overwritten.
+constexpr uint32_t kTemporalHistory = 16;
+DrivenEyeCamera g_temporalHistory[2][kTemporalHistory]{};
+uint64_t g_temporalEpoch = 1;
+SRWLOCK g_temporalLock = SRWLOCK_INIT;
+using TemporalProjectionFn = void*(__thiscall*)(void*, float, float, float, float,
+                                               float, float);
+TemporalProjectionFn g_originalTemporalProjection = nullptr;
+// The x86 constructor has 44 stack-argument bytes, verified from its ret 0x2C.
+// Observing only the primary matrix of Draw's root FPlayerSceneNode avoids
+// mistaking a mirror/portal/foreground lens for the eye's world projection.
+using TemporalPlayerNodeFn = void*(__thiscall*)(void*, void*, void*, void*,
+                                               FVector, FRotator, float, float);
+TemporalPlayerNodeFn g_originalTemporalPlayerNode = nullptr;
+struct TemporalRootScene {
+    int eye = -1;
+    uint64_t buildId = 0;
+    float location[3]{};
+    int32_t rotation[3]{};
+};
+thread_local TemporalRootScene t_temporalRootScene;
+
+void* __fastcall TemporalPlayerNodeDetour(void* destination, void*, void* arg1,
+                                         void* arg2, void* arg3, FVector location,
+                                         FRotator rotation, float lensA, float lensB) {
+    const auto caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    struct RestoreScope {
+        TemporalRootScene saved = t_temporalRootScene;
+        ~RestoreScope() { t_temporalRootScene = saved; }
+    } restore;
+    t_temporalRootScene = {};
+    int eye = -1;
+    uint64_t buildId = 0;
+    if (caller - g_imageBase == patterns::kTemporalDrawPlayerNodeReturnRva &&
+        scenedraw::current_eye_build(&eye, &buildId)) {
+        t_temporalRootScene.eye = eye;
+        t_temporalRootScene.buildId = buildId;
+        t_temporalRootScene.location[0] = location.x;
+        t_temporalRootScene.location[1] = location.y;
+        t_temporalRootScene.location[2] = location.z;
+        t_temporalRootScene.rotation[0] = rotation.pitch;
+        t_temporalRootScene.rotation[1] = rotation.yaw;
+        t_temporalRootScene.rotation[2] = rotation.roll;
+    }
+    return g_originalTemporalPlayerNode(destination, arg1, arg2, arg3,
+                                         location, rotation, lensA, lensB);
+}
+
+DrivenEyeCamera& temporal_slot(int eye, uint64_t buildId) {
+    auto& sample = g_temporalHistory[eye][buildId & (kTemporalHistory - 1)];
+    if (sample.buildId != buildId || sample.historyEpoch != g_temporalEpoch) {
+        sample = {};
+        sample.buildId = buildId;
+        sample.historyEpoch = g_temporalEpoch;
+    }
+    return sample;
+}
+
+void publish_temporal_camera(int eye, const FVector& loc, const FRotator& rot,
+                             uint64_t now) {
+    int buildEye = -1;
+    uint64_t buildId = 0;
+    if (!scenedraw::current_eye_build(&buildEye, &buildId) || buildEye != eye)
+        return;
+    AcquireSRWLockExclusive(&g_temporalLock);
+    auto& sample = temporal_slot(eye, buildId);
+    sample.location[0] = loc.x;
+    sample.location[1] = loc.y;
+    sample.location[2] = loc.z;
+    sample.rotation[0] = rot.pitch;
+    sample.rotation[1] = rot.yaw;
+    sample.rotation[2] = rot.roll;
+    sample.stampMs = now;
+    ++sample.publications;
+    ReleaseSRWLockExclusive(&g_temporalLock);
+}
+
+void* __fastcall TemporalProjectionDetour(void* destination, void*, float angleX,
+                                         float angleY, float scaleX, float scaleY,
+                                         float nearPlane, float farPlane) {
+    const uintptr_t caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    void* result = g_originalTemporalProjection(destination, angleX, angleY, scaleX,
+                                                 scaleY, nearPlane, farPlane);
+    int eye = -1;
+    uint64_t buildId = 0;
+    if (caller - g_imageBase != patterns::kTemporalWorldProjectionReturnRva ||
+        !scenedraw::current_eye_build(&eye, &buildId) ||
+        eye != t_temporalRootScene.eye || buildId != t_temporalRootScene.buildId)
+        return result;
+    float tanX = 0, tanY = 0;
+    const bool valid = result == destination &&
+        bvr::pattern_scan::is_memory_valid(destination, 16 * sizeof(float)) &&
+        temporal_contract::finite_projection(static_cast<const float*>(destination),
+                                               nearPlane, farPlane, &tanX, &tanY);
+    AcquireSRWLockExclusive(&g_temporalLock);
+    auto& sample = temporal_slot(eye, buildId);
+    const bool samePose = sample.publications == 1 &&
+        temporal_contract::same_pose(sample.location, sample.rotation,
+                                      t_temporalRootScene.location,
+                                      t_temporalRootScene.rotation);
+    ++sample.projectionPublications;
+    sample.projectionValid = valid && samePose;
+    sample.nearPlane = nearPlane;
+    sample.farPlane = farPlane;
+    sample.tanHalfFovX = tanX;
+    sample.tanHalfFovY = tanY;
+    ReleaseSRWLockExclusive(&g_temporalLock);
+    static std::atomic<unsigned> loggedEyes{0};
+    const unsigned bit = 1u << eye;
+    if ((loggedEyes.fetch_or(bit, std::memory_order_relaxed) & bit) == 0)
+        BVR_LOG("[bs2-dlss45] projection eye=%d build=%llu near=%.6f far=%.3f tan=%.6f/%.6f finite=%d rootWorld=1 samePose=%d",
+                eye, static_cast<unsigned long long>(buildId), nearPlane, farPlane,
+                tanX, tanY, valid ? 1 : 0, samePose ? 1 : 0);
+    return result;
+}
+
+void install_temporal_projection() {
+    if (g_originalTemporalProjection) return;
+    const auto rva = patterns::kTemporalProjectionBuilderRva;
+    const auto& signature = patterns::kTemporalProjectionPrologue;
+    if (!g_imageBase || rva + sizeof(signature) > g_imageSize ||
+        std::memcmp(reinterpret_cast<const void*>(g_imageBase + rva), signature,
+                    sizeof(signature)) != 0) {
+        BVR_LOG("[bs2-dlss45] finite projection builder mismatch; temporal path unavailable");
+        return;
+    }
+    // Match the root Draw CALL and constructor JMP by their resolved targets;
+    // both are relative branches and remain valid under ASLR. Hook the thunk
+    // rather than rewriting the constructor's SEH-bearing prologue.
+    const auto thunkRva = patterns::kTemporalPlayerNodeThunkRva;
+    const auto drawReturnRva = patterns::kTemporalDrawPlayerNodeReturnRva;
+    auto branchTargets = [](uintptr_t at, uint8_t opcode, uintptr_t target) {
+        if (!bvr::pattern_scan::is_memory_valid(reinterpret_cast<void*>(at), 5))
+            return false;
+        const auto* bytes = reinterpret_cast<const uint8_t*>(at);
+        int32_t displacement = 0;
+        std::memcpy(&displacement, bytes + 1, sizeof(displacement));
+        return bytes[0] == opcode && at + 5 + displacement == target;
+    };
+    if (thunkRva + 5 > g_imageSize || drawReturnRva > g_imageSize ||
+        !branchTargets(g_imageBase + thunkRva, 0xE9,
+                        g_imageBase + patterns::kTemporalPlayerNodeConstructorRva) ||
+        !branchTargets(g_imageBase + drawReturnRva - 5, 0xE8,
+                        g_imageBase + thunkRva)) {
+        BVR_LOG("[bs2-dlss45] root player scene identity mismatch; temporal path unavailable");
+        return;
+    }
+    void* target = reinterpret_cast<void*>(g_imageBase + rva);
+    void* nodeTarget = reinterpret_cast<void*>(g_imageBase + thunkRva);
+    MH_STATUS status = MH_CreateHook(target,
+        reinterpret_cast<void*>(&TemporalProjectionDetour),
+        reinterpret_cast<void**>(&g_originalTemporalProjection));
+    if (status == MH_OK) status = MH_CreateHook(nodeTarget,
+        reinterpret_cast<void*>(&TemporalPlayerNodeDetour),
+        reinterpret_cast<void**>(&g_originalTemporalPlayerNode));
+    if (status == MH_OK) status = MH_EnableHook(nodeTarget);
+    if (status == MH_OK) status = MH_EnableHook(target);
+    if (status != MH_OK) {
+        MH_DisableHook(nodeTarget);
+        MH_RemoveHook(nodeTarget);
+        MH_RemoveHook(target);
+        g_originalTemporalProjection = nullptr;
+        g_originalTemporalPlayerNode = nullptr;
+        BVR_LOG("[bs2-dlss45] projection observation hook failed: %s", MH_StatusToString(status));
+        return;
+    }
+    BVR_LOG("[bs2-dlss45] exact-build root WORLD finite projection observation ready (near/far from engine)");
+}
+
 // --- gameplay-view predicate -------------------------------------------------
 // Strict form (BS1's body.cpp predicate): the view actor's vtable must be
 // AShockPlayer's. Deliberately no `viewActor == pc` escape hatch (that hatch
@@ -554,6 +729,7 @@ LONG g_savedWindowStyle = 0;      // original chrome, for `vrres restore`
 RECT g_savedWindowRect = {};      // original rect, for `vrres restore`
 bool g_windowSaved = false;       // game thread only
 std::atomic<bool> g_windowRestorePending{false}; // overlay -> game thread
+bvr::game::ResolutionMailbox g_liveResolution;
 // After an apply: re-verify the ini once the engine settles, because the
 // engine PERSISTS ITS LIVE SIZE INTO Shared.ini ON RESIZE, one step behind
 // (measured: it recorded the previous size mid-transition). Game thread only.
@@ -1803,6 +1979,23 @@ void calcview_tail(void* self, CalcViewParams* p) {
     bool strictGameplay = is_gameplay_view_rva(vtblRva);
     bvr::vr::publish_gameplay_view(strictGameplay);
 
+    // World/view/mode edges invalidate on the CPU; render-thread guide state
+    // observes the epoch without touching GPU resources from this thread.
+    {
+        static void* previousView = nullptr;
+        static bool previousGameplay = false, previousCine = false, previousMode = false;
+        const bool cine = bvr::vr::cinematic_active();
+        const bool mode = bvr::vr::vr_camera_mode();
+        if (previousView != va || previousGameplay != strictGameplay ||
+            previousCine != cine || previousMode != mode) {
+            invalidate_temporal_camera();
+            previousView = va;
+            previousGameplay = strictGameplay;
+            previousCine = cine;
+            previousMode = mode;
+        }
+    }
+
     {
         static uint32_t s_lastLoggedRva = 0xFFFFFFFFu; // game thread only
         if (vtblRva != s_lastLoggedRva) {
@@ -1897,6 +2090,7 @@ void calcview_tail(void* self, CalcViewParams* p) {
     if (driveHead) {
         UeAngles a = ue_angles_from_xr_quat(hp.qx, hp.qy, hp.qz, hp.qw);
         if (g_recenterRequested.exchange(false, std::memory_order_relaxed) || !g_haveRecenter) {
+            invalidate_temporal_camera();
             g_recenterPose = hp;
             g_recenterYawUnits = static_cast<int32_t>(lroundf(a.yawRad * kRotUnitsPerRadian));
             g_haveRecenter = true;
@@ -2219,6 +2413,7 @@ void calcview_tail(void* self, CalcViewParams* p) {
             apply_eye_offset(loc, *rot, -1);
             g_srEyeLoc[0] = *loc;
             g_srEyeStampMs[0] = now;
+            publish_temporal_camera(0, *loc, *rot, now);
         }
     } else {
         g_srBaseValid = false;
@@ -2330,6 +2525,7 @@ void second_pass_replay(CalcViewParams* p, float yawDeg) {
             apply_eye_offset(&p->loc, p->rot, +1);
             g_srEyeLoc[1] = p->loc;
             g_srEyeStampMs[1] = now;
+            publish_temporal_camera(1, p->loc, p->rot, now);
         }
     } else {
         // Flat double-render probe: a visibly yawed second frame is the
@@ -2403,6 +2599,25 @@ void __fastcall ProcessEventDetour(void* self, void* edx, void* fn, void* parms,
                 // game thread outside hooked calls. Also the MENU-arming
                 // path - BS2's menu never runs PlayerCalcView.
                 scenedraw::apply_pending_vrstereo();
+                // Render has retired the GPU resources and closed the XR pair.
+                // Resize only on the window owner, outside both eye builds and
+                // without holding the mailbox. DXGI readback confirms success.
+                if (bvr::image_controls::enabled() && !bvr::crash::teardown_seen()) {
+                    HWND imageWindow = game_window();
+                    if (imageWindow && GetWindowThreadProcessId(imageWindow, nullptr) == GetCurrentThreadId()) {
+                        bvr::game_exit::Scope imageScope(true);
+                        if (imageScope) {
+                            if (uint64_t imageRequest = g_liveResolution.take()) {
+                                g_resConfirmVal = 0;
+                                g_resHealHoldUntilMs = GetTickCount64() + 6000;
+                                g_liveResolution.complete(enforce_client_size(
+                                    uint32_t(imageRequest >> 32), uint32_t(imageRequest)));
+                            }
+                            // Only renderer-confirmed settings can be saved.
+                            bvr::image_controls::game_tick();
+                        }
+                    }
+                }
                 // Overlay/command-posted resolution apply (session 37): live
                 // window resize + ini persistence, on the game thread, and it
                 // works from the main menu for the same reason vrstereo
@@ -2545,6 +2760,7 @@ bool install(const patterns::Symbols& symbols) {
         return false;
     }
 
+    install_temporal_projection();
     load_vr_preset_values(); // tuned sliders, before anything reads them
     // Session 41, the profile ordering contract (BS1 camera.cpp:934-936
     // parity): the just-loaded preset values become the per-weapon BASELINE -
@@ -2576,6 +2792,31 @@ bool install(const patterns::Symbols& symbols) {
 
 bool hook_live() {
     return g_hookLive.load(std::memory_order_relaxed);
+}
+
+bool enqueue_resolution(uint32_t width, uint32_t height) {
+    return hook_live() && !bvr::crash::teardown_seen() && g_liveResolution.offer(width, height);
+}
+ResolutionRequestStatus resolution_request_status() { return g_liveResolution.status(); }
+bool cancel_pending_resolution() { return g_liveResolution.cancel(); }
+
+bool driven_eye_cam_for_build(int eye, uint64_t buildId, DrivenEyeCamera* out) {
+    if (out) *out = {};
+    if (!out || eye < 0 || eye > 1 || !buildId) return false;
+    AcquireSRWLockShared(&g_temporalLock);
+    const auto& sample = g_temporalHistory[eye][buildId & (kTemporalHistory - 1)];
+    if (sample.buildId == buildId && sample.historyEpoch == g_temporalEpoch)
+        *out = sample;
+    ReleaseSRWLockShared(&g_temporalLock);
+    const uint64_t now = GetTickCount64();
+    return out->buildId == buildId && out->stampMs && now >= out->stampMs &&
+           now - out->stampMs <= 200;
+}
+
+void invalidate_temporal_camera() {
+    AcquireSRWLockExclusive(&g_temporalLock);
+    ++g_temporalEpoch;
+    ReleaseSRWLockExclusive(&g_temporalLock);
 }
 
 void set_fov_override(float hfovDeg) {

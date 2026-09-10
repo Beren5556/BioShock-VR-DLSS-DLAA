@@ -14,6 +14,7 @@
 
 #include "core/hooks/pattern_scan.h"
 #include "game/bioshock2r/patterns.h"
+#include "game/shared/resolution_mailbox.h"
 
 namespace bvr::b2r::camera {
 
@@ -26,6 +27,31 @@ void init_image(const bvr::pattern_scan::ProcessImage& image);
 bool install(const patterns::Symbols& symbols);
 
 bool hook_live();
+using ResolutionRequestStatus = bvr::game::ResolutionStatus;
+bool enqueue_resolution(uint32_t width, uint32_t height);
+ResolutionRequestStatus resolution_request_status();
+bool cancel_pending_resolution();
+
+// Exact Draw publication, keyed by the same id carried to Present. Camera
+// and projection are captured independently during that Draw; both must be
+// unique before DLSS consumes them. No merely-latest pose fallback exists.
+struct DrivenEyeCamera {
+    float location[3] = {};
+    int32_t rotation[3] = {};
+    uint64_t buildId = 0;
+    uint64_t stampMs = 0;
+    uint32_t publications = 0;
+    uint64_t historyEpoch = 0;
+    float nearPlane = 0.0f;
+    float farPlane = 0.0f;
+    float tanHalfFovX = 0.0f;
+    float tanHalfFovY = 0.0f;
+    uint32_t projectionPublications = 0;
+    bool projectionValid = false;
+};
+bool driven_eye_cam_for_build(int eye, uint64_t buildId, DrivenEyeCamera* out);
+// CPU-only invalidation, safe on either thread; GPU history observes epoch.
+void invalidate_temporal_camera();
 
 // IGameAdapter::setFov funnel: > 0 arms the manual game-FOV write at that
 // value (strict gameplay only, save/restore-gated), <= 0 disarms it.

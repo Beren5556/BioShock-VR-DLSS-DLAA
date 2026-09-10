@@ -22,6 +22,7 @@ namespace BioShockMsi
     public sealed class Snapshot
     {
         public string Game;
+        public string GameId;
         public bool NewOriginal;
         public bool FreshMod;
         public string GameIni;
@@ -32,9 +33,54 @@ namespace BioShockMsi
 
     public static partial class Actions
     {
-        internal const string GameHash = "AEC21A0072CFDB15E4B525E2320C87256F14F16894F714272069270AD099A05B";
+        internal const string GameHash = GamePackage.GameHash;
         internal const string RegistryPath = PayloadPlan.RegistryPath;
-        internal const string ShortcutName = "BioShock VR DLSS-DLAA.lnk";
+        internal const string ShortcutName = GamePackage.ShortcutBase + ".lnk";
+
+
+        // The same recovery code is compiled separately for each game in the
+        // combined MSI. Only session names differ; snapshots stay per-game.
+        private static string Property(string name)
+        {
+#if COMBINED_MSI
+            if (name == "GAMEDIR") return GamePackage.Id.ToUpperInvariant() + "DIR";
+            if (name.StartsWith("BVR_", StringComparison.Ordinal))
+                return "BVR_" + GamePackage.Id.ToUpperInvariant() + "_" + name.Substring(4);
+#endif
+            return name;
+        }
+        private static string Feature(string name)
+        {
+#if COMBINED_MSI
+            return "Desktop_" + GamePackage.Id;
+#else
+            return name;
+#endif
+        }
+        private static string ActionName(string name)
+        {
+#if COMBINED_MSI
+            return name + "_" + GamePackage.Id;
+#else
+            return name;
+#endif
+        }
+        private static string TestGameRelative()
+        {
+#if COMBINED_MSI
+            return GamePackage.Id + @"\Game\Build\Final";
+#else
+            return @"Game\Build\Final";
+#endif
+        }
+        private static bool IsRemoving(Session session)
+        {
+#if COMBINED_MSI
+            return session[Property("BVR_REMOVING")] == "1";
+#else
+            return session["REMOVE"].Equals("ALL", StringComparison.OrdinalIgnoreCase);
+#endif
+        }
 
         private static string Full(string path)
         {
@@ -57,31 +103,32 @@ namespace BioShockMsi
         {
             if (string.IsNullOrWhiteSpace(candidate)) return string.Empty;
             string root = Full(candidate);
-            if (File.Exists(root) && string.Equals(Path.GetFileName(root), "BioshockHD.exe", StringComparison.OrdinalIgnoreCase))
+            if (File.Exists(root) && string.Equals(Path.GetFileName(root), GamePackage.ExeName, StringComparison.OrdinalIgnoreCase))
                 root = Path.GetDirectoryName(root);
-            if (!File.Exists(Path.Combine(root, "BioshockHD.exe")) &&
-                File.Exists(Path.Combine(root, @"Build\Final\BioshockHD.exe"))) root = Path.Combine(root, @"Build\Final");
+            if (!File.Exists(Path.Combine(root, GamePackage.ExeName)) &&
+                File.Exists(Path.Combine(root, Path.Combine(@"Build\Final", GamePackage.ExeName)))) root = Path.Combine(root, @"Build\Final");
             return root;
         }
         private static string Problem(string game, bool installing)
         {
-            if (string.IsNullOrWhiteSpace(game)) return "Selecciona la carpeta de BioShock Remastered.";
+            if (string.IsNullOrWhiteSpace(game)) return "Selecciona la carpeta de " + GamePackage.Name + " Remastered.";
             if (Full(game) == Path.GetPathRoot(Full(game)).TrimEnd('\\')) return "Selecciona la carpeta del juego, no una unidad completa.";
             if (installing)
             {
-                string exe = Path.Combine(game, "BioshockHD.exe");
-                if (!File.Exists(exe)) return "No se encuentra BioshockHD.exe. Selecciona la carpeta Build\\Final del juego.";
+                string exe = Path.Combine(game, GamePackage.ExeName);
+                if (!File.Exists(exe)) return "No se encuentra " + GamePackage.ExeName + ". Selecciona la carpeta Build\\Final del juego.";
                 if (!string.Equals(Hash(exe), GameHash, StringComparison.OrdinalIgnoreCase))
-                    return "Esta copia de BioShock Remastered no coincide con la versión Steam compatible.";
+                    return "Esta copia de " + GamePackage.Name + " Remastered no coincide con la versión Steam compatible.";
             }
             foreach (Process process in Process.GetProcesses())
             {
                 using (process)
                 {
                     string name = process.ProcessName;
-                    if (name.Equals("BioshockHD", StringComparison.OrdinalIgnoreCase) ||
+                    if (name.Equals(Path.GetFileNameWithoutExtension(GamePackage.ExeName), StringComparison.OrdinalIgnoreCase) ||
                         name.StartsWith("BioShockVR-DLSS45-Host64", StringComparison.OrdinalIgnoreCase) ||
-                        name.Equals("Lanzador BioShock VR DLSS-DLAA", StringComparison.OrdinalIgnoreCase))
+                        name.Equals(Path.GetFileNameWithoutExtension(GamePackage.LauncherName), StringComparison.OrdinalIgnoreCase) ||
+                        (GamePackage.Id == "bs2" && name.StartsWith("Instalador BioShock 2 VR", StringComparison.OrdinalIgnoreCase)))
                         return "Cierra BioShock, el lanzador y los procesos del mod antes de continuar.";
                 }
             }
@@ -105,15 +152,15 @@ namespace BioShockMsi
             foreach (string library in libraries)
             {
                 string common = Path.Combine(library, @"steamapps\common");
-                string installName = "BioShock Remastered";
-                string manifest = Path.Combine(library, @"steamapps\appmanifest_409710.acf");
+                string installName = GamePackage.SteamFolder;
+                string manifest = Path.Combine(library, Path.Combine("steamapps", "appmanifest_" + GamePackage.AppId + ".acf"));
                 if (File.Exists(manifest))
                 {
                     Match match = Regex.Match(File.ReadAllText(manifest), "\"installdir\"\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
                     if (match.Success) installName = match.Groups[1].Value;
                 }
                 string candidate = Child(common, Path.Combine(installName, @"Build\Final"));
-                if (File.Exists(Path.Combine(candidate, "BioshockHD.exe"))) games.Add(candidate);
+                if (File.Exists(Path.Combine(candidate, GamePackage.ExeName))) games.Add(candidate);
             }
             return games;
         }
@@ -140,29 +187,32 @@ namespace BioShockMsi
                     if (repairMode.IndexOf("s", StringComparison.OrdinalIgnoreCase) < 0)
                         session["REINSTALLMODE"] = repairMode + "s";
                 }
-                if (session["BVR_SHORTCUTINITIALIZED"] != "1")
+                if (session[Property("BVR_SHORTCUTINITIALIZED")] != "1")
                 {
                     string choice = DesktopShortcutChoice(
-                        session["BVR_DESKTOPSHORTCUT"], RegistryValue(RegistryPath, "DesktopShortcut"));
-                    session["BVR_DESKTOPSHORTCUT"] = choice == "1" ? "1" : string.Empty;
+                        session[Property("BVR_DESKTOPSHORTCUT")], RegistryValue(RegistryPath, "DesktopShortcut"));
+                    session[Property("BVR_DESKTOPSHORTCUT")] = choice == "1" ? "1" : string.Empty;
                     // An unchecked MSI checkbox clears its property. Do not
                     // mistake that choice for a missing default in execute UI.
-                    session["BVR_SHORTCUTINITIALIZED"] = "1";
+                    session[Property("BVR_SHORTCUTINITIALIZED")] = "1";
                 }
-                string selected = session["BVR_GAMEPATH"];
-                if (string.IsNullOrWhiteSpace(selected)) selected = session["GAMEDIR"];
+                string selected = session[Property("BVR_GAMEPATH")];
+                if (string.IsNullOrWhiteSpace(selected)) selected = session[Property("GAMEDIR")];
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
                 if (string.IsNullOrWhiteSpace(selected)) selected = registered;
+                if (string.IsNullOrWhiteSpace(selected) && PayloadPlan.TestFamily.Length > 0 &&
+                    !string.IsNullOrWhiteSpace(session["BVR_TESTROOT"]))
+                    selected = Child(session["BVR_TESTROOT"], TestGameRelative());
                 if (string.IsNullOrWhiteSpace(selected))
                 {
                     string legacy = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        @"BioshockVR\Installer-DLSS-DLAA-Beta-0.2\install.manifest");
+                        GamePackage.LegacyRelative);
                     if (File.Exists(legacy))
                         foreach (string line in File.ReadAllLines(legacy))
                             if (line.StartsWith("GameDirectory=", StringComparison.Ordinal))
                             {
                                 string previous = GameDirectory(Encoding.UTF8.GetString(Convert.FromBase64String(line.Substring(14))));
-                                string executable = Path.Combine(previous, "BioshockHD.exe");
+                                string executable = Path.Combine(previous, GamePackage.ExeName);
                                 if (File.Exists(executable) && Hash(executable) == GameHash) selected = previous;
                             }
                 }
@@ -171,14 +221,14 @@ namespace BioShockMsi
                     List<string> candidates = SteamCandidates(RegistryValue(@"Software\Valve\Steam", "SteamPath"));
                     List<string> compatible = new List<string>();
                     foreach (string candidate in candidates)
-                        if (Hash(Path.Combine(candidate, "BioshockHD.exe")) == GameHash) compatible.Add(candidate);
+                        if (Hash(Path.Combine(candidate, GamePackage.ExeName)) == GameHash) compatible.Add(candidate);
                     // Multiple compatible copies require an explicit user choice.
                     if (compatible.Count == 1) selected = compatible[0];
                 }
                 if (!string.IsNullOrWhiteSpace(selected))
                 {
-                    session["BVR_GAMEPATH"] = GameDirectory(selected);
-                    session["GAMEDIR"] = session["BVR_GAMEPATH"] + "\\";
+                    session[Property("BVR_GAMEPATH")] = GameDirectory(selected);
+                    session[Property("GAMEDIR")] = session[Property("BVR_GAMEPATH")] + "\\";
                 }
                 string testRoot = session["BVR_TESTROOT"];
                 if (string.IsNullOrWhiteSpace(testRoot)) testRoot = RegistryValue(RegistryPath, "TestRoot");
@@ -199,7 +249,7 @@ namespace BioShockMsi
         {
             try
             {
-                string game = GameDirectory(session["BVR_GAMEPATH"]);
+                string game = GameDirectory(session[Property("BVR_GAMEPATH")]);
                 string problem = Problem(game, true);
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
                 if (problem.Length == 0 && registered.Length > 0 &&
@@ -209,8 +259,8 @@ namespace BioShockMsi
                 session["BVR_VALID"] = problem.Length == 0 ? "1" : "0";
                 if (problem.Length == 0)
                 {
-                    session["BVR_GAMEPATH"] = game;
-                    session["GAMEDIR"] = game + "\\";
+                    session[Property("BVR_GAMEPATH")] = game;
+                    session[Property("GAMEDIR")] = game + "\\";
                 }
                 return ActionResult.Success;
             }
@@ -222,15 +272,15 @@ namespace BioShockMsi
         {
             try
             {
-                bool removing = session["REMOVE"].Equals("ALL", StringComparison.OrdinalIgnoreCase);
-                session["BVR_DESKTOPSHORTCUT"] = session["BVR_DESKTOPSHORTCUT"] == "1" ? "1" : "0";
+                bool removing = IsRemoving(session);
+                session[Property("BVR_DESKTOPSHORTCUT")] = session[Property("BVR_DESKTOPSHORTCUT")] == "1" ? "1" : "0";
                 if (!removing)
                 {
                     // Costing precedes the folder dialog. Set the feature's
                     // final request after the checkbox choice and before
                     // InstallValidate, for full UI and silent installs alike.
-                    FeatureInfo shortcutFeature = session.Features["DesktopShortcut"];
-                    InstallState requestedShortcut = session["BVR_DESKTOPSHORTCUT"] == "1" ? InstallState.Local : InstallState.Absent;
+                    FeatureInfo shortcutFeature = session.Features[Feature("DesktopShortcut")];
+                    InstallState requestedShortcut = session[Property("BVR_DESKTOPSHORTCUT")] == "1" ? InstallState.Local : InstallState.Absent;
                     // Reapplying Local to an already-local feature clears MSI's
                     // reinstall intent. BackupFiles retired the old .lnk, so
                     // that would prevent CreateShortcuts from replacing it.
@@ -239,7 +289,7 @@ namespace BioShockMsi
                     if (!keepInstalledSelection && shortcutFeature.RequestState != requestedShortcut)
                         shortcutFeature.RequestState = requestedShortcut;
                 }
-                string game = GameDirectory(session["GAMEDIR"]);
+                string game = GameDirectory(session[Property("GAMEDIR")]);
                 string problem = Problem(game, !removing);
                 if (problem.Length > 0) throw new InvalidOperationException(problem);
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
@@ -254,7 +304,7 @@ namespace BioShockMsi
                 if (PayloadPlan.TestFamily.Length > 0 &&
                     (string.IsNullOrWhiteSpace(testRoot) ||
                      !Path.GetFileName(Full(testRoot)).Equals("BvrMsiTest-" + PayloadPlan.TestFamily, StringComparison.OrdinalIgnoreCase) ||
-                     !game.Equals(Child(testRoot, @"Game\Build\Final"), StringComparison.OrdinalIgnoreCase)))
+                     !game.Equals(Child(testRoot, TestGameRelative()), StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidDataException("El paquete aislado requiere su carpeta privada de prueba.");
                 if (!string.IsNullOrWhiteSpace(testRoot))
                 {
@@ -264,20 +314,27 @@ namespace BioShockMsi
                     roaming = Child(testRoot, "Roaming");
                     shortcut = Child(testRoot, @"Desktop\" + ShortcutName);
                 }
-                string root = Path.Combine(local, @"BioshockVR\WindowsInstaller");
+                string root = Path.Combine(local, Path.Combine(GamePackage.LocalRelative, "WindowsInstaller"));
                 CustomActionData data = new CustomActionData();
+                data["Legacy"] = Path.Combine(local, GamePackage.LegacyRelative);
                 data["Game"] = game;
                 data["Root"] = root;
                 data["Transaction"] = Child(root, @"Transactions\" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
                 data["Shortcut"] = shortcut;
                 data["Desktop"] = Path.GetDirectoryName(shortcut);
-                data["Ini"] = Path.Combine(roaming, @"BioshockHD\Bioshock\Bioshock.ini");
-                data["Dlss"] = Path.Combine(local, @"BioshockVR\dlss.ini");
+                data["Ini"] = Path.Combine(roaming, GamePackage.IniRelative);
+                data["Dlss"] = Path.Combine(local, Path.Combine(GamePackage.LocalRelative, "dlss.ini"));
                 data["Removing"] = removing ? "1" : "0";
                 data["PreviousVersion"] = RegistryValue(RegistryPath, "Version");
-                data["FailTest"] = !string.IsNullOrWhiteSpace(testRoot) ? session["BVR_TESTFAIL"] : string.Empty;
+                data["FailTest"] = !string.IsNullOrWhiteSpace(testRoot) &&
+                    (session["BVR_TESTFAILGAME"].Length == 0 || session["BVR_TESTFAILGAME"] == GamePackage.Id)
+                    ? session["BVR_TESTFAIL"] : string.Empty;
+                // Validate a legacy migration before InstallInitialize and any
+                // component registration. BackupFiles repeats the read later
+                // so a changed manifest/backup cannot slip through preflight.
+                if (!removing && !File.Exists(Child(root, "Original.xml"))) ReadLegacy(data);
                 foreach (string action in new string[] { "BackupFiles", "RollbackFiles", "FinishFiles", "CommitFiles" })
-                    session[action] = data.ToString();
+                    session[ActionName(action)] = data.ToString();
                 return ActionResult.Success;
             }
             catch (Exception ex) { return Fail(session, ex); }

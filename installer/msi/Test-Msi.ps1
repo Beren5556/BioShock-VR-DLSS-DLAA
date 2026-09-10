@@ -7,6 +7,7 @@ param(
     [string]$UpgradeManifestPath = '',
     [string]$FixtureBase = '',
     [switch]$TestShortcutChoice,
+    [switch]$TestLegacyMigration,
     [switch]$ReproducePackageCollision,
     [switch]$AllowRollbackSecurityWarnings
 )
@@ -18,7 +19,13 @@ else { $ManifestPath = Join-Path $release "manifest-$Version.json" }
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
 $Version = $manifest.version
 $msi = Join-Path $release $manifest.installer
-$realRegistration = 'HKCU:\Software\Beren5556\BioShockVRDLSSDLAA'
+$isBs2 = $manifest.gameId -eq 'bs2'
+if (-not $manifest.testFamily) { throw 'Esta batería de integración requiere un MSI con familia aislada.' }
+$gameExeName = if ($isBs2) { 'Bioshock2HD.exe' } else { 'BioshockHD.exe' }
+$gameIniRelative = if ($isBs2) { 'BioshockHD\Bioshock2\Bioshock2SP.ini' } else { 'BioshockHD\Bioshock\Bioshock.ini' }
+$profileRelative = if ($isBs2) { 'BioshockVR\bs2' } else { 'BioshockVR' }
+$shortcutBaseName = if ($isBs2) { 'BioShock 2 VR DLSS-DLAA' } else { 'BioShock VR DLSS-DLAA' }
+$realRegistration = if ($isBs2) { 'HKCU:\Software\Beren5556\BioShock2VRDLSSDLAA' } else { 'HKCU:\Software\Beren5556\BioShockVRDLSSDLAA' }
 $realRegisteredBefore = Get-ItemProperty -LiteralPath $realRegistration -ErrorAction SilentlyContinue | Select-Object Version,GameDirectory,TestRoot | ConvertTo-Json -Compress
 $registration = $realRegistration
 if ($manifest.testFamily) {
@@ -35,7 +42,7 @@ if ($UpgradeManifestPath) {
     $UpgradeMsi = Join-Path (Split-Path -Parent ([IO.Path]::GetFullPath($UpgradeManifestPath))) $upgradeManifest.installer
     if ((Get-FileHash -LiteralPath $UpgradeMsi).Hash -ne $upgradeManifest.sha256) { throw 'MSI de actualización distinto de su manifiesto' }
 }
-$expectedExe = 'AEC21A0072CFDB15E4B525E2320C87256F14F16894F714272069270AD099A05B'
+$expectedExe = if ($isBs2) { 'C2A31FB67B285C136203A4A6E739545177BE5753D972E6AEA0F44C65DDF22F8C' } else { 'AEC21A0072CFDB15E4B525E2320C87256F14F16894F714272069270AD099A05B' }
 if ((Get-FileHash -LiteralPath $GameExeSource -Algorithm SHA256).Hash -ne $expectedExe) {
     throw 'La prueba necesita una copia local legítima del ejecutable compatible.'
 }
@@ -43,12 +50,12 @@ if (-not $FixtureBase) { $FixtureBase = [IO.Path]::GetTempPath() }
 $battery = Join-Path ([IO.Path]::GetFullPath($FixtureBase)) ('BvrMsiBattery-' + [Guid]::NewGuid().ToString('N'))
 $fixture = Join-Path $battery ('BvrMsiTest-' + $(if ($manifest.testFamily) { $manifest.testFamily } else { [Guid]::NewGuid().ToString('N') }))
 $game = Join-Path $fixture 'Game\Build\Final'
-$ini = Join-Path $fixture 'Roaming\BioshockHD\Bioshock\Bioshock.ini'
-$dlss = Join-Path $fixture 'Local\BioshockVR\dlss.ini'
+$ini = Join-Path $fixture ('Roaming\' + $gameIniRelative)
+$dlss = Join-Path $fixture ('Local\' + $profileRelative + '\dlss.ini')
 $shortcutName = if ($manifest.desktopShortcut) { $manifest.desktopShortcut } else { 'BioShock VR DLSS-DLAA.lnk' }
 $shortcut = Join-Path $fixture ('Desktop\' + $shortcutName)
-$legacyShortcut = Join-Path $fixture 'Desktop\BioShock VR DLSS-DLAA.lnk'
-$original = Join-Path $fixture 'Local\BioshockVR\WindowsInstaller\Original.xml'
+$legacyShortcut = Join-Path $fixture ('Desktop\' + $shortcutBaseName + '.lnk')
+$original = Join-Path $fixture ('Local\' + $profileRelative + '\WindowsInstaller\Original.xml')
 $checks = New-Object 'System.Collections.Generic.List[string]'
 $logs = New-Object 'System.Collections.Generic.List[string]'
 $rollbackSecurityWarnings = 0
@@ -56,7 +63,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 foreach ($dir in @($game, (Split-Path $ini), (Split-Path $dlss), (Split-Path $shortcut))) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }
-Copy-Item -LiteralPath $GameExeSource -Destination (Join-Path $game 'BioshockHD.exe')
+Copy-Item -LiteralPath $GameExeSource -Destination (Join-Path $game $gameExeName)
 [IO.File]::WriteAllText((Join-Path $game 'unrelated-test.txt'), 'Never change this unrelated file.', $utf8)
 $graphics = @('HighDetailShaders','Shadows','RealTimeReflection','PostProcessing','UseRippleSystem',
     'UseHighDetailSoftParticles','UseDistortion','UseHighDetailPostProcEffects')
@@ -66,7 +73,10 @@ $iniText += "FluidSurfaceDetail=Low`r`nKeepMe=123`r`n[Other.Section]`r`nUntouche
 [IO.File]::WriteAllText($ini, $iniText, $utf8)
 $realBefore = @{}
 foreach ($path in @($GameExeSource, (Join-Path (Split-Path $GameExeSource) 'bioshockvr.dll'),
+    (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ($profileRelative + '\dlss.ini')),
     (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'BioshockVR\dlss.ini'),
+    (Join-Path ([Environment]::GetFolderPath('ApplicationData')) $gameIniRelative),
+    (Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'BioshockHD\Bioshock2\Shared.ini'),
     (Join-Path ([Environment]::GetFolderPath('ApplicationData')) 'BioshockHD\Bioshock\Bioshock.ini'),
     (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'BioShock VR DLSS-DLAA.lnk'))) {
     if (Test-Path -LiteralPath $path) { $realBefore[$path] = (Get-FileHash -LiteralPath $path).Hash }
@@ -104,7 +114,7 @@ function Check-Payload($ExpectedManifest = $manifest) {
     Assert $true 'Todos los archivos instalados coinciden con el manifiesto'
 }
 function Check-Preserved {
-    Assert ((Hash (Join-Path $game 'BioshockHD.exe')) -eq $expectedExe) 'Ejecutable del juego intacto'
+    Assert ((Hash (Join-Path $game $gameExeName)) -eq $expectedExe) 'Ejecutable del juego intacto'
     Assert ((Get-Content (Join-Path $game 'unrelated-test.txt') -Raw) -eq 'Never change this unrelated file.') 'Archivos ajenos intactos'
     foreach ($path in $realBefore.Keys) {
         if ((Hash $path) -ne $realBefore[$path]) { throw "Cambió un archivo real: $path" }
@@ -125,7 +135,7 @@ try {
         Assert ($newIni -match "(?m)^$key=$expected\r?$") "Predeterminado: $key=$expected"
     }
     Assert ($newIni.Contains('FluidSurfaceDetail=High') -and $newIni.Contains('KeepMe=123') -and $newIni.Contains('WindowedViewportY=1080')) 'Fluidos Alto sin cambiar ajustes ajenos ni resolución'
-    $launched = @(Get-Process -Name 'Lanzador BioShock VR DLSS-DLAA','BioshockHD' -ErrorAction SilentlyContinue)
+    $launched = @(Get-Process -Name ('Lanzador ' + $shortcutBaseName),([IO.Path]::GetFileNameWithoutExtension($gameExeName)) -ErrorAction SilentlyContinue)
     Assert ($launched.Count -eq 0) 'No inicia el lanzador ni el juego al terminar'
     if ($ReproducePackageCollision) {
         # Reproduce a changed PackageCode under an already-installed ProductCode.
@@ -255,6 +265,70 @@ try {
     Check-Preserved
     $registrationAfter = Get-ItemProperty -LiteralPath $registration -ErrorAction SilentlyContinue
     Assert (-not $registrationAfter.GameDirectory) 'No queda un producto MSI de prueba registrado'
+    if ($TestLegacyMigration) {
+        if (-not $isBs2) { throw 'La migración beta es exclusiva de BS2.' }
+        $helper = Join-Path $repo 'artifacts\integration-0.2.13\migration-tests\LegacyMigrationTests.exe'
+        if (-not (Test-Path -LiteralPath $helper)) { throw 'Ejecuta primero Test-LegacyMigration.ps1.' }
+        $assembly = [Reflection.Assembly]::LoadFrom($helper)
+        $actions = $assembly.GetType('BioShockMsi.Actions', $true)
+        $legacyPath = [BioShockMsi.Actions]::CreateMsiMigrationFixture([string]$fixture)
+        $legacyNames = $actions.GetField('LegacyNames', [Reflection.BindingFlags]'Static,NonPublic').GetValue($null)
+        $legacyOriginals = Join-Path (Split-Path $legacyPath) 'Original-fixture'
+        $beforeMigration = @{}
+        foreach ($name in $legacyNames) { $file=Join-Path $game $name; $beforeMigration[$file]=Hash $file }
+        $beforeMigration[$legacyPath]=Hash $legacyPath
+        $beforeMigration[$legacyShortcut]=Hash $legacyShortcut
+        $originalHashes = @{}
+        Get-ChildItem -LiteralPath $legacyOriginals -Recurse -File | ForEach-Object { $originalHashes[$_.FullName]=Hash $_.FullName }
+        $profileHashes = @{ $ini=(Hash $ini); $dlss=(Hash $dlss) }
+        $bs1Sentinel = Join-Path $fixture 'Local\BioshockVR\dlss.ini'
+        [IO.File]::WriteAllText($bs1Sentinel, 'BS1 preferences: do not change', $utf8)
+        $profileHashes[$bs1Sentinel]=Hash $bs1Sentinel
+        Run-Msi '/i' '09-legacy-rollback-after-retire' 1603 'BVR_TESTFAIL=after-retire'
+        foreach ($file in $beforeMigration.Keys) {
+            if ((Hash $file) -ne $beforeMigration[$file]) { throw "Rollback beta no recuperó $file" }
+        }
+        Assert $true 'Rollback de migración devuelve los 21 archivos beta y su manifiesto activo'
+        Assert (-not (Test-Path -LiteralPath $original)) 'Migración fallida no sustituye la copia original'
+        $lostBackup=Join-Path $legacyOriginals 'xinput1_3.dll.original'
+        Move-Item -LiteralPath $lostBackup -Destination ($lostBackup + '.test-saved')
+        try { Run-Msi '/i' '10-legacy-missing-backup' 1603 }
+        finally { Move-Item -LiteralPath ($lostBackup + '.test-saved') -Destination $lostBackup }
+        foreach ($file in $beforeMigration.Keys) {
+            if ((Hash $file) -ne $beforeMigration[$file]) { throw "La copia beta dañada provocó un cambio: $file" }
+        }
+        Assert $true 'Una copia beta incompleta bloquea la instalación sin retirar archivos'
+        Run-Msi '/i' '11-legacy-migrate'
+        Check-Payload
+        Assert (-not (Test-Path -LiteralPath $legacyPath)) 'Manifiesto beta retirado tras copia verificada; el restaurador antiguo ya no gestiona el mod'
+        Assert (-not (Test-Path -LiteralPath (Join-Path $game 'BioShock2VR-DLSS45\LEEME-DLSS45.md'))) 'Retira solo la documentación obsoleta del inventario beta'
+        foreach ($file in $profileHashes.Keys) {
+            if ((Hash $file) -ne $profileHashes[$file]) { throw "La migración cambió preferencias: $file" }
+        }
+        Assert $true 'Migración conserva preferencias BS2 y no toca el perfil BS1'
+        $baselineHash=Hash $original
+        Run-Msi '/famus' '12-repair-migrated'
+        Assert ((Hash $original) -eq $baselineHash) 'Reparar conserva la primera copia anterior a la beta'
+        Check-Payload
+        Run-Msi '/x' '13-uninstall-migrated'
+        foreach ($name in $legacyNames) {
+            if ([IO.File]::ReadAllText((Join-Path $game $name)) -ne ('BEFORE BETA ' + $name)) {
+                throw "No se restauró el original anterior a la beta: $name"
+            }
+        }
+        Assert $true 'Desinstalar restaura los 21 originales anteriores a la beta, no los binarios de la beta'
+        Assert ([IO.File]::ReadAllText($legacyShortcut) -eq 'BEFORE BETA shortcut') 'Restaura el acceso anterior a la beta'
+        Assert (-not (Test-Path -LiteralPath $legacyPath)) 'Desinstalar no reactiva un manifiesto beta obsoleto'
+        foreach ($file in $originalHashes.Keys) {
+            if ((Hash $file) -ne $originalHashes[$file]) { throw "Cambió una copia beta conservada: $file" }
+        }
+        Assert $true 'Todas las copias originales de la beta se conservan byte por byte'
+        foreach ($file in $profileHashes.Keys) {
+            if ((Hash $file) -ne $profileHashes[$file]) { throw "La retirada del MSI cambió preferencias: $file" }
+        }
+        Assert $true 'Reparación y desinstalación migrada conservan ambos perfiles'
+        Check-Preserved
+    }
     Run-Msi '/i' '08-invalid-folder' 1603 ("BVR_GAMEPATH=`"" + (Join-Path $fixture 'MissingGame') + '"')
     Check-Preserved
 }

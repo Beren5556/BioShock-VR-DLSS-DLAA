@@ -16,16 +16,19 @@ void install();
 // the present loop. Logs once when it actually had to re-arm.
 void rearm();
 
-// The host window has begun closing (WM_CLOSE/WM_DESTROY/WM_ENDSESSION seen).
-// After this, a fault is treated as the host's own exit-path bug (session 38:
-// BS2 faults at Bioshock2HD.exe+0x4FF0FE on EVERY close, hook-free-proven):
-// one log line, no minidump, immediate TerminateProcess - which is faster and
-// quieter than letting the game's chained filter retry the faulting
-// instruction for seconds. Idempotent; logs once.
+// WM_CLOSE is only a request: BS2 may confirm asynchronously or cancel it.
+// For BS2 this is informational only: no watchdog, persistent engine gate, or
+// exception suppression. Other hosts retain their legacy teardown-on-request.
+void note_close_request(const char* why);
+
+// The main window is being destroyed, or the OS session is ending. BS2 callers
+// must not use this for a cancelable close request. Idempotently parks adapter
+// machinery and starts the shutdown watchdog. BS2 faults still get a report
+// and retain their real failure code; a watchdog expiry reports WAIT_TIMEOUT.
 void note_teardown(const char* why);
 
-// True once note_teardown has run. Cheap atomic read - adapters use it to
-// park their own machinery (doubled draw, engine-field writes) per frame.
+// True once teardown is confirmed (BS2), or legacy teardown has been noted
+// (other hosts). Cheap atomic read; adapters park engine work on this signal.
 bool teardown_seen();
 
 } // namespace bvr::crash

@@ -1,8 +1,68 @@
-# Roadmap
+# Roadmap BioShock 1–2 DLSS/DLAA
 
-Milestones ordered so something new is visible in the headset as early and often as possible.
-Each has a "done when" acceptance test. Effort in sessions (one focused working session each).
-Tick boxes as work lands; move surprises into STATUS.md.
+## Distribución 0.2.16 · cierre autorizado
+
+- [x] Corregir el límite de resolución DLSS y conservar la causa de un rechazo.
+- [x] Incorporar al paquete el perfil DLSS correcto del 2.
+- [x] Aceptación del usuario del funcionamiento de ambos mods (10/09/2026).
+- [x] Congelar los binarios validados sin recompilar núcleo ni lanzadores.
+- [x] MSI nativo único con desplegable individual y 46 archivos verificados.
+- [x] 130 comprobaciones / 22 operaciones MSI, incluida actualización 0.2.15,
+      recuperación ante fallos y preservación del otro juego.
+- [x] Autorización expresa de publicación en GitHub (10/09/2026).
+- Publicación de esta versión: [v0.2.16](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.16).
+- [ ] Validar instalación y recorrido de uso en otro ordenador.
+- [ ] Cambios de efectos gráficos BS2 en caliente (actualmente: lanzador y reinicio).
+
+El cierre de la distribución y sus pruebas se recoge en
+[RELEASE-0.2.16.md](RELEASE-0.2.16.md). Lo que sigue es historial de desarrollo,
+no una lista de bloqueos actuales de la entrega.
+
+## Integración 0.2.13 autorizada · historial
+
+- [x] Preservar originales y snapshot del desarrollo BS2.
+- [x] Integrar optimizaciones y pantalla Imagen común.
+- [x] Construir selector con ambos MSI y migración beta BS2.
+- [x] Validar núcleo, lanzadores y transacciones en entornos aislados.
+- [ ] Validar el candidato BS2 con visor, agua, reconfiguración y cierre.
+- [ ] Comprobar coexistencia real e instalación en ambos órdenes.
+- [ ] Derivar cambios gráficos nativos en caliente para BS2 (hoy: lanzador y reinicio).
+- [ ] Validar en otro equipo y publicar tras aceptación.
+
+Evidencia y límites: [integración 0.2.13](INTEGRATION-0.2.13.md).
+Los resultados 0.1.1 descritos debajo son históricos, no validan esta build.
+
+## Candidato local 0.1.1-beta — trabajo autorizado
+
+Las mejoras que estaban «EN ESPERA» en BioShock 1 fueron autorizadas por el
+usuario para esta adaptación BS2. Esto no modifica ni regenera el paquete BS1.
+
+- [x] Separar instalación completada y fallo posterior al abrir el lanzador.
+- [x] Confirmar proceso nuevo `Bioshock2HD.exe`, ruta exacta y ventana respondiendo
+      durante tres segundos antes de cerrar el lanzador; timeout de 60 segundos.
+- [x] Restauración explicada, copias verificadas y limpieza de directorios propios
+      vacíos; cambios posteriores conservados con restauración parcial reanudable.
+- [x] Lanzador NORMAL/DLAA/DLSS, render/salida y ocho perfiles de armas BS2.
+- [x] Adaptador temporal BS2 y pruebas aisladas de profundidad/cámara.
+- [x] Cerrar validación técnica integrada de los tres modos y empaquetado local.
+- [x] Investigar y corregir el orden de cierre observado también en NORMAL;
+      salida nativa y limpieza OpenXR/DLSS comprobadas en laboratorio, incluidos
+      cancelación y guardado por menú. No equivale a validación en el visor.
+- [ ] Probar la nueva ruta DLSS/DLAA dentro del visor físico.
+      Primera ejecución real: VR/VDXR arrancó, pero DLAA se desactivó por
+      render exclusivo 2560×1600 frente a salida solicitada 3072². Lanzador
+      0.1.1.1 prepara ventana y amplía presets; pendiente repetir en visor.
+- [ ] Repetir instalación, arranque, acceso directo, modos y restauración en otro PC.
+
+La base VR oficial 0.8.2 sí fue aceptada por el usuario con OpenXR/VDXR.
+No se da por realizada la prueba de la nueva versión en el visor ni en otro PC.
+Resultados del candidato inicial: [BS2-TEST-RESULTS.md](BS2-TEST-RESULTS.md).
+Corrección 0.1.1 y sus límites: [BS2-EXIT-FIX.md](BS2-EXIT-FIX.md).
+
+## Historial técnico heredado del mod original
+
+Los hitos siguientes se conservan como contexto de upstream y BioShock 1.
+Sus fechas, pruebas y marcas no certifican la adaptación DLSS/DLAA de BS2.
 
 ## Instalador 0.2.3
 

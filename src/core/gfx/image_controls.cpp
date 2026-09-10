@@ -1,7 +1,7 @@
 #include "core/gfx/image_controls.h"
 #include "core/util/log.h"
-#include "game/bioshock1r/game_ini.h"
-#include "game/bioshock1r/graphics_options.h"
+#include "core/util/config_batch.h"
+#include "game/shared/image_adapter.h"
 #include <windows.h>
 #include <atomic>
 #include <mutex>
@@ -19,7 +19,7 @@ bool g_initialized = false, g_pending = false, g_busy = false, g_savePending = f
 bool g_known = true, g_spatialFallback = false;
 std::wstring g_ini;
 std::string g_message;
-namespace graphics = bvr::b1r::graphics_options;
+namespace graphics = bvr::active_image::graphics;
 graphics::Values g_graphics{};
 size_t g_graphicsSelection = 0, g_graphicsToggleIndex = 0;
 bool g_graphicsRefresh = false, g_graphicsToggle = false, g_graphicsBusy = false;
@@ -32,9 +32,16 @@ bool persist(const Settings& s, const std::wstring& ini) {
     if (ini.empty() || s.probe != Probe::Off) return false;
     // Stage dlss.ini next to the original: preserve unrelated keys. No visible
     // partial mode/size pair, and no saves for unconfirmed rendering requests.
-    const std::wstring staged = ini + L".bvr-controls.tmp";
-    if (!CopyFileW(ini.c_str(), staged.c_str(), FALSE) &&
-        GetLastError() != ERROR_FILE_NOT_FOUND) return false;
+    std::string before; bool existed = false;
+    if (!config_batch::read(ini, before, existed)) return false;
+    const auto slash = ini.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) return false;
+    wchar_t temporary[MAX_PATH]{};
+    if (!GetTempFileNameW(ini.substr(0, slash).c_str(), L"bvc", 0, temporary)) return false;
+    const std::wstring staged = temporary; // freshly created, including first-ever dlss.ini
+    if (existed && !CopyFileW(ini.c_str(), staged.c_str(), FALSE)) {
+        DeleteFileW(staged.c_str()); return false;
+    }
     auto value = [&](const wchar_t* key, const wchar_t* val) {
         return WritePrivateProfileStringW(L"dlss", key, val, staged.c_str()) != FALSE;
     };
@@ -51,22 +58,8 @@ bool persist(const Settings& s, const std::wstring& ini) {
               number(L"sharpnessPercent", s.sharpnessPercent);
     WritePrivateProfileStringW(nullptr, nullptr, nullptr, staged.c_str());
     if (!ok) { DeleteFileW(staged.c_str()); return false; }
-    const auto oldViewport = bvr::b1r::game_ini::read_viewport();
-    const bool viewportChanged = !oldViewport.valid ||
-        oldViewport.windowedW != s.renderWidth || oldViewport.windowedH != s.renderHeight ||
-        oldViewport.fullscreenW != s.renderWidth || oldViewport.fullscreenH != s.renderHeight;
-    if (viewportChanged && !bvr::b1r::game_ini::write_viewport(s.renderWidth, s.renderHeight)) {
-        DeleteFileW(staged.c_str()); return false;
-    }
-    ok = MoveFileExW(staged.c_str(), ini.c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
-    if (!ok) {
-        // Best-effort rollback of the four viewport keys to the previous pair.
-        if (viewportChanged && oldViewport.valid && oldViewport.windowedW == oldViewport.fullscreenW &&
-            oldViewport.windowedH == oldViewport.fullscreenH)
-            bvr::b1r::game_ini::write_viewport(oldViewport.windowedW, oldViewport.windowedH);
-        DeleteFileW(staged.c_str());
-    }
+    ok = bvr::active_image::save_configuration(s.renderWidth, s.renderHeight, ini, staged, before, existed);
+    DeleteFileW(staged.c_str());
     return ok;
 }
 }

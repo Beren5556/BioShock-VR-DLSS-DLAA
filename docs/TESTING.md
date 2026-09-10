@@ -1,5 +1,10 @@
 # Pruebas
 
+Para **0.2.13**, las baterías vigentes son scripts/Test-Integration.ps1,
+installer/msi/Test-Msi.ps1 (familia aislada) y Test-LegacyMigration.ps1.
+Comandos y resultados en [integración](INTEGRATION-0.2.13.md).
+Los apartados del instalador EXE beta conservados debajo son históricos.
+
 ## Comprobación del repositorio
 
     .\scripts\Verify-Repository.ps1 -BuildLauncher

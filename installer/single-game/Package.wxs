@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="BioShock 1-2 VR DLSS-DLAA" Manufacturer="Beren5556 · BioShock VR Community"
+           Version="$(Version)" ProductCode="$(ProductCode)" UpgradeCode="$(UpgradeCode)"
+           Language="3082" Codepage="1252" Scope="perUser" InstallerVersion="500">
+    <SummaryInformation Description="BioShock 1 y 2 VR · selección individual · $(Version)" />
+    <Upgrade Id="$(UpgradeCode)">
+      <UpgradeVersion Maximum="$(Version)" IncludeMaximum="no" MigrateFeatures="no" Property="BVR_OLD_TARGET" />
+      <UpgradeVersion Minimum="$(Version)" IncludeMinimum="yes" OnlyDetect="yes" Property="BVR_NEWER_TARGET" />
+    </Upgrade>
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Property Id="BVR_INSTANCE" Value="selector" Secure="yes" />
+    <InstanceTransforms Property="BVR_INSTANCE">
+      <Instance Id="bs1" ProductCode="$(Bs1Product)" ProductName="BioShock VR DLSS-DLAA" UpgradeCode="$(Bs1Upgrade)" />
+      <Instance Id="bs2" ProductCode="$(Bs2Product)" ProductName="BioShock 2 VR DLSS-DLAA" UpgradeCode="$(Bs2Upgrade)" />
+    </InstanceTransforms>
+    <Upgrade Id="$(OldSuiteUpgrade)">
+      <UpgradeVersion Maximum="0.2.13" IncludeMaximum="yes" MigrateFeatures="no" Property="BVR_OLD_SUITE" RemoveFeatures="[BVR_OLD_REMOVE]" />
+    </Upgrade>
+    <Property Id="BVR_OLD_REMOVE" Secure="yes" />
+    <Property Id="BVR_GAME" Value="choose" />
+    <Property Id="BVR_OPERATION" Secure="yes" />
+    <Property Id="BVR_TESTROOT" Secure="yes" />
+    <Property Id="BVR_TESTFAIL" Secure="yes" />
+    <Property Id="BVR_TESTFAILGAME" Secure="yes" />
+    <Property Id="BVR_VALID" Value="0" />
+    <Property Id="INSTALLLEVEL" Value="1" />
+    <Property Id="ARPCOMMENTS" Value="Un instalador, un juego por ejecución. Basado en BioShock VR de Mohamad Balouza. Fork DLSS/DLAA de Beren5556." />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Beren5556/BioShock-VR-DLSS-DLAA" />
+    <Property Id="ARPPRODUCTICON" Value="ModIcon" />
+    <Icon Id="ModIcon" SourceFile="$(RepoRoot)\apps\launcher\assets\BioshockVrLauncher.ico" />
+    <Launch Condition="VersionNT64" Message="Este paquete necesita Windows de 64 bits." />
+    <Launch Condition="NOT BVR_NEWER_TARGET" Message="Este juego ya tiene un MSI igual o más reciente con otra identidad." />
+    <StandardDirectory Id="DesktopFolder" />
+    <FeatureRef Id="Game_bs1" /><FeatureRef Id="Game_bs2" />
+    <Binary Id="SuiteActions" SourceFile="$(SuiteActionsDll)" />
+    <CustomAction Id="OpenSelectedGame" BinaryRef="SuiteActions" DllEntry="OpenSelectedGame" Execute="immediate" Return="check" />
+    <CustomAction Id="DetectSuite" BinaryRef="SuiteActions" DllEntry="DetectSuite" Execute="immediate" Return="check" />
+    <CustomAction Id="PlanSingleGame" BinaryRef="SuiteActions" DllEntry="PlanSingleGame" Execute="immediate" Return="check" />
+    <CustomAction Id="PrepareSuite" BinaryRef="SuiteActions" DllEntry="PrepareSuite" Execute="immediate" Return="check" />
+    <InstallUISequence><Custom Action="DetectSuite" Before="DetectGame_bs1" /></InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="DetectSuite" Before="DetectGame_bs1" Condition="NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="PrepareSuite" Before="Prepare_bs1" Condition="NOT UPGRADINGPRODUCTCODE" />
+      <InstallExecute Sequence="6500" />
+      <RemoveExistingProducts After="InstallExecute" />
+    </InstallExecuteSequence>
+    <UIRef Id="BioShockSingleUI" />
+  </Package>
+</Wix>

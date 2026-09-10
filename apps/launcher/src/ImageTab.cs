@@ -126,8 +126,10 @@ namespace BioshockVrLauncher
             fields.SizeChanged += delegate { _imageHint.MaximumSize = new Size(Math.Max(200, fields.ClientSize.Width), 0); };
             fields.SetColumnSpan(_imageHint, 4);
             Label inGame = new Label();
-            inGame.Text = "F1 abre el menú en el visor y navega por las opciones disponibles.\n" +
-                "F2: anterior / − · F3: siguiente / + · En opciones gráficas, F4 cambia el valor.";
+            inGame.Text = GameProfile.IsBioShock2
+                ? "F1: menú del visor · F2: anterior / − · F3: siguiente / +\nGráficos del juego: cámbialos aquí, guarda y reinicia."
+                : "F1 abre el menú en el visor y navega por las opciones disponibles.\n" +
+                  "F2: anterior / − · F3: siguiente / + · En opciones gráficas, F4 cambia el valor.";
             inGame.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             inGame.AutoSize = true;
             inGame.Margin = new Padding(0, 5, 0, 0);
@@ -355,6 +357,7 @@ namespace BioshockVrLauncher
             ini += "[Other.Section]\r\nKeepMe=123\r\n";
             _gameIniLoadedContent = ini;
             _gameIniEntries = GameIniDocument.Parse(ini);
+            _sharedIniEntries = GameIniDocument.Parse("[SharedOptions]\r\nViewportX=2150\r\nViewportY=2150\r\nStartupFullscreen=False\r\n");
             _dlssMode.SelectedIndex = 2;
             _previousDlssModeIndex = 2;
             _dlssOutputWidth.Value = _dlssOutputHeight.Value = 3072;
@@ -439,6 +442,7 @@ namespace BioshockVrLauncher
                 form._gameIniEntries = GameIniDocument.Parse("[WinDrv.WindowsClient]\r\n" +
                     "WindowedViewportX=1280\r\nWindowedViewportY=720\r\n" +
                     "FullscreenViewportX=1280\r\nFullscreenViewportY=720\r\n");
+                form._sharedIniEntries = GameIniDocument.Parse("[SharedOptions]\r\nViewportX=1280\r\nViewportY=720\r\n");
                 form.LoadResolutionControls();
                 form._dlssMode.SelectedIndex = 0;
                 form._dlssOutputWidth.Value = 1280;
@@ -459,8 +463,8 @@ namespace BioshockVrLauncher
             {
                 form.InitializeImageFixture();
                 form._configStateLabel.Text = "Configuración de ejemplo · no modifica archivos del juego";
-                form._gameStateLabel.Text = "BioShock Remastered";
-                form.SetStatus("Vista previa · 0.2.11 · sin modificar archivos del juego", SystemColors.ControlText);
+                form._gameStateLabel.Text = GameProfile.DisplayName + " Remastered";
+                form.SetStatus("Vista previa · 0.2.13 · sin modificar archivos del juego", SystemColors.ControlText);
                 form.ShowInTaskbar = false;
                 form.Opacity = 0;
                 form.Show();

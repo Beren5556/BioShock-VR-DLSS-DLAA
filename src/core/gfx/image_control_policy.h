@@ -63,6 +63,13 @@ inline bool geometry(Settings& s) noexcept {
         const uint32_t w = rw * m, h = rh * m;
         if (w < kMinimum || h < kMinimum || w >= s.outputWidth || h >= s.outputHeight)
             continue;
+        // NGX 310.7's Performance/Balanced/Quality range starts at 50%.
+        // An odd half-size (2950 / 2 = 1475) must round UP to an even 1476,
+        // not below that boundary. Keep the preferred fraction unchanged and
+        // retain nearest/tie-down rounding everywhere else. This is not a
+        // substitute for the host's authoritative NGX capability check.
+        if (uint64_t(s.srScale.numerator) * 2 >= s.srScale.denominator &&
+            (w * 2 < s.outputWidth || h * 2 < s.outputHeight)) continue;
         const uint64_t value = uint64_t(m) * s.srScale.denominator;
         const uint64_t error = value > scaled ? value - scaled : scaled - value;
         if (error < bestError) { best = m; bestError = error; }

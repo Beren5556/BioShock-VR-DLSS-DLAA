@@ -29,3 +29,24 @@ omitted.  It stages the exact packaged host/runtime/manifest into isolated
 
 También se puede ejecutar solo `-Mode DLAA` o `-Mode SR`. Al terminar, cada carpeta de
 ojo conserva su `BioShockVR-DLSS45-eyeN.log` para auditoría.
+
+## Regresión de límites de resolución
+
+El cliente admite `--square-output 2950`: utiliza la política real de geometría
+del mod para calcular Performance (1476x1476, no 1474x1474) o DLAA (2950x2950).
+Se puede pasar este argumento al ejecutable con un runtime de prueba ya preparado.
+El cliente sigue sin abrir el juego ni OpenXR.
+
+La integración también dispone del target CMake `dlss_runtime_test32`, que usa
+la implementación real de `dlss45_client.cpp`, no solo el contrato IPC. Se ejecuta
+de forma opt-in, con GPU NVIDIA y directorios de prueba explícitos ya creados:
+
+```text
+dlss_runtime_test32.exe bs2 <host64/BioShockVR-DLSS45-Host64.exe verificado> <directorio de datos de prueba>
+```
+
+Usar `bs1` con el perfil de host publicado de BS1 o `bs2` con su perfil identificado.
+Nunca indicar la carpeta de datos personal del juego como directorio de prueba.
+Verifica transiciones DLAA/NORMAL/DLSS, rechazo del tamaño antiguo 1474 y posterior
+recuperación, salida de ambos ojos leída en GPU y cierre acotado de los hosts.
+No se incluye en la batería automática sin GPU y no certifica el motor ni el visor.

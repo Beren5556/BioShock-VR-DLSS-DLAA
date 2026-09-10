@@ -1,5 +1,10 @@
 # Arquitectura DLSS/DLAA
 
+> Documento heredado de la edición **BioShock 1**. Los nombres de ejecutable,
+> rutas de datos y proveedor `bioshock1r` descritos aquí no son el contrato de
+> BioShock 2. Para el port BS2 y sus límites temporales, consulta
+> [BS2-TEMPORAL.md](BS2-TEMPORAL.md).
+
 La Release v0.2.0-beta mantiene el mod dentro del proceso x86 de BioShock Remastered y ejecuta NVIDIA NGX en procesos auxiliares x64. Esta separación evita cargar una biblioteca x64 dentro del juego de 32 bits.
 
 ## Flujo por ojo

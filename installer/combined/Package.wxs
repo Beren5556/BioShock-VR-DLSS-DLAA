@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="BioShock 1-2 VR DLSS-DLAA" Manufacturer="Beren5556 · BioShock VR Community"
+           Version="$(Version)" ProductCode="$(ProductCode)" UpgradeCode="$(UpgradeCode)"
+           Language="3082" Codepage="1252" Scope="perUser" InstallerVersion="500">
+    <SummaryInformation Description="BioShock 1 y 2 VR · DLSS/DLAA · $(Version)" />
+    <MajorUpgrade DowngradeErrorMessage="Ya tienes un MSI conjunto más reciente." Schedule="afterInstallExecute" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Property Id="ARPCOMMENTS" Value="Un MSI, dos mods independientes. Basado en BioShock VR v0.8.2 de Mohamad Balouza. Fork DLSS/DLAA de Beren5556." />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Beren5556/BioShock-VR-DLSS-DLAA" />
+    <Property Id="ARPPRODUCTICON" Value="ModIcon" />
+    <Icon Id="ModIcon" SourceFile="$(RepoRoot)\apps\launcher\assets\BioshockVrLauncher.ico" />
+    <Property Id="BVR_TESTROOT" Secure="yes" />
+    <Property Id="BVR_TESTFAIL" Secure="yes" />
+    <Property Id="BVR_TESTFAILGAME" Secure="yes" />
+    <Property Id="BVR_SELECTIONINITIALIZED" Secure="yes" />
+    <Property Id="BVR_VALID" Value="0" />
+    <Property Id="INSTALLLEVEL" Value="1" />
+    <Launch Condition="VersionNT64" Message="Este paquete necesita Windows de 64 bits." />
+    <Launch Condition="NOT BVR_NEWER_BS1 AND NOT BVR_NEWER_BS2"
+            Message="Hay un MSI independiente más reciente. No se sustituirá por este paquete." />
+    <StandardDirectory Id="DesktopFolder" />
+    <FeatureRef Id="Game_bs1" />
+    <FeatureRef Id="Game_bs2" />
+    <Binary Id="SuiteActions" SourceFile="$(SuiteActionsDll)" />
+    <CustomAction Id="DetectSuite" BinaryRef="SuiteActions" DllEntry="DetectSuite" Execute="immediate" Return="check" />
+    <CustomAction Id="ApplySelection" BinaryRef="SuiteActions" DllEntry="ApplySelection" Execute="immediate" Return="check" />
+    <CustomAction Id="PrepareSuite" BinaryRef="SuiteActions" DllEntry="PrepareSuite" Execute="immediate" Return="check" />
+    <InstallUISequence>
+      <Custom Action="DetectSuite" Before="DetectGame_bs1" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="DetectSuite" Before="DetectGame_bs1" Condition="NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="PrepareSuite" Before="Prepare_bs1" Condition="NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+    <UIRef Id="BioShockSuiteUI" />
+  </Package>
+</Wix>

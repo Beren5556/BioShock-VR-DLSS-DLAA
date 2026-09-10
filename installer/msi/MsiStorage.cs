@@ -18,7 +18,14 @@ namespace BioShockMsi
 
         private static string Destination(CustomActionData data, string name)
         {
+            // Historical BS1 snapshots used '/' in the three host64 paths.
+            // Canonicalize separators only; the exact owned-file allowlist
+            // below still rejects traversal, arbitrary paths and other files.
+            name = name.Replace('/', '\\');
             if (name == "@shortcut") return data["Shortcut"];
+            if (name == "@beta-shortcut" && GamePackage.Id == "bs2")
+                return Child(data["Desktop"], "BioShock 2 VR DLSS-DLAA Beta.lnk");
+            if (name == "@legacy-manifest" && GamePackage.Id == "bs2") return data["Legacy"];
             // Keep the legacy token for 0.2.7/0.2.8 recovery snapshots. Each new
             // shortcut carries its own version so an upgrade cannot restore it
             // under the name of a different release.
@@ -28,16 +35,19 @@ namespace BioShockMsi
                 string version = name.Substring(prefix.Length);
                 if (!Regex.IsMatch(version, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))
                     throw new InvalidDataException("Versión de acceso directo no válida.");
-                return Child(data["Desktop"], "BioShock VR DLSS-DLAA " + version + ".lnk");
+                return Child(data["Desktop"], GamePackage.ShortcutBase + " " + version + ".lnk");
             }
             foreach (string[] item in PayloadPlan.Items)
-                if (item[0] == name) return Child(data["Game"], name);
+                if (item[0].Replace('/', '\\') == name) return Child(data["Game"], name);
+            if (IsLegacyName(name)) return Child(data["Game"], name);
             throw new InvalidDataException("Archivo no reconocido en la copia del instalador.");
         }
         private static void SaveSnapshot(string path, Snapshot snapshot)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            // The transaction directory already carries a GUID. Do not append
+            // another 37 characters to an otherwise valid MAX_PATH snapshot.
+            string temporary = Path.Combine(Path.GetDirectoryName(path), Path.GetRandomFileName());
             using (FileStream stream = new FileStream(temporary, FileMode.CreateNew))
                 new XmlSerializer(typeof(Snapshot)).Serialize(stream, snapshot);
             if (File.Exists(path)) File.Replace(temporary, path, null);
@@ -46,7 +56,11 @@ namespace BioShockMsi
         private static Snapshot LoadSnapshot(string path)
         {
             using (FileStream stream = File.OpenRead(path))
-                return (Snapshot)new XmlSerializer(typeof(Snapshot)).Deserialize(stream);
+            {
+                Snapshot snapshot = (Snapshot)new XmlSerializer(typeof(Snapshot)).Deserialize(stream);
+                foreach (SavedFile file in snapshot.Files) file.Name = file.Name.Replace('/', '\\');
+                return snapshot;
+            }
         }
         private static void Copy(string source, string destination)
         {
@@ -57,13 +71,16 @@ namespace BioShockMsi
         }
         private static void CheckSnapshot(CustomActionData data, Snapshot snapshot)
         {
+            if (snapshot.GameId != GamePackage.Id &&
+                !(GamePackage.Id == "bs1" && string.IsNullOrEmpty(snapshot.GameId)))
+                throw new InvalidDataException("La copia de seguridad pertenece a otro juego.");
             if (!string.Equals(Full(snapshot.Game), Full(data["Game"]), StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("La copia pertenece a otra instalación del juego.");
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (SavedFile file in snapshot.Files)
             {
                 Destination(data, file.Name);
-                if (!seen.Add(file.Name)) throw new InvalidDataException("Copia con archivos duplicados.");
+                if (!seen.Add(file.Name.Replace('/', '\\'))) throw new InvalidDataException("Copia con archivos duplicados.");
                 if (file.Existed && (!File.Exists(Child(data["Root"], file.Backup)) ||
                     Hash(Child(data["Root"], file.Backup)) != file.Hash))
                     throw new IOException("Falta una copia original válida de " + file.Name + ". No se han retirado los archivos del mod.");
@@ -77,14 +94,18 @@ namespace BioShockMsi
             {
                 CustomActionData data = session.CustomActionData;
                 string original = Child(data["Root"], "Original.xml");
-                if (File.Exists(original)) CheckSnapshot(data, LoadSnapshot(original));
+                Snapshot registeredOriginal = File.Exists(original) ? LoadSnapshot(original) : null;
+                if (registeredOriginal != null) CheckSnapshot(data, registeredOriginal);
                 Snapshot snapshot = new Snapshot();
                 snapshot.Game = data["Game"];
+                snapshot.GameId = GamePackage.Id;
                 snapshot.NewOriginal = !File.Exists(original);
                 snapshot.FreshMod = data["Removing"] != "1" &&
                     !File.Exists(Child(data["Game"], "bioshockvr.dll")) && !File.Exists(data["Dlss"]);
+                LegacyInstallation legacy = snapshot.NewOriginal && data["Removing"] != "1" ? ReadLegacy(data) : null;
+                if (legacy != null) snapshot.FreshMod = false;
                 List<string> names = new List<string>();
-                foreach (string[] item in PayloadPlan.Items) names.Add(item[0]);
+                foreach (string[] item in PayloadPlan.Items) names.Add(item[0].Replace('/', '\\'));
                 names.Add("@shortcut");
                 names.Add("@shortcut:" + PayloadPlan.Version);
                 // The previous product's RemoveShortcuts also creates an RBF.
@@ -96,6 +117,14 @@ namespace BioShockMsi
                     if (!Regex.IsMatch(previousVersion, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))
                         throw new InvalidDataException("La versión MSI anterior no es válida.");
                     names.Add("@shortcut:" + previousVersion);
+                }
+                if (registeredOriginal != null)
+                    foreach (SavedFile file in registeredOriginal.Files)
+                        if (!names.Contains(file.Name)) names.Add(file.Name);
+                if (legacy != null) {
+                    foreach (string name in LegacyNames) if (!names.Contains(name)) names.Add(name);
+                    names.Add("@legacy-manifest");
+                    if (legacy.Shortcut != null && !names.Contains(legacy.Shortcut.Name)) names.Add(legacy.Shortcut.Name);
                 }
                 foreach (string name in names)
                 {
@@ -121,7 +150,11 @@ namespace BioShockMsi
                     snapshot.IniHash = Hash(iniBackup);
                 }
                 SaveSnapshot(Child(data["Transaction"], "Snapshot.xml"), snapshot);
-                if (snapshot.NewOriginal && data["Removing"] != "1") SaveSnapshot(original, snapshot);
+                if (snapshot.NewOriginal && data["Removing"] != "1") {
+                    if (legacy != null && Hash(data["Legacy"]) != legacy.ManifestHash)
+                        throw new IOException("La instalación beta cambió durante la copia; no se migra.");
+                    SaveSnapshot(original, legacy == null ? snapshot : ImportLegacyOriginal(data, snapshot, legacy));
+                }
                 // The per-user MSI cannot secure rollback files in a protected
                 // secondary-drive Config.Msi (1926/error 5). Retire only files
                 // whose exact previous bytes have already been durably saved
@@ -225,7 +258,7 @@ namespace BioShockMsi
                 {
                     string original = Child(data["Root"], "Original.xml");
                     // If Steam removed the game itself, keep recovery copies but do not recreate it.
-                    if (File.Exists(original) && File.Exists(Child(data["Game"], "BioshockHD.exe")))
+                    if (File.Exists(original) && File.Exists(Child(data["Game"], GamePackage.ExeName)))
                         RestoreSnapshot(data, LoadSnapshot(original), false);
                 }
                 else

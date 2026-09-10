@@ -23,7 +23,7 @@
 
       <Dialog Id="BioShockProgressDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]" Modeless="yes">
         <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24"
-                 Text="{\WixUI_Font_Title}BioShock VR · DLSS/DLAA [ProductVersion]" />
+                 Text="{\WixUI_Font_Title}$(DisplayName) VR · DLSS/DLAA [ProductVersion]" />
         <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
         <Control Id="Description" Type="Text" X="20" Y="57" Width="330" Height="25"
                  Text="Espera mientras Windows aplica los cambios." />
@@ -42,9 +42,9 @@
 
       <Dialog Id="GameFolderDlg" Width="370" Height="270" Title="[ProductName]">
         <Control Id="Title" Type="Text" X="15" Y="12" Width="340" Height="24" Transparent="yes"
-                 Text="{\WixUI_Font_Title}BioShock VR · DLSS/DLAA [ProductVersion]" />
+                 Text="{\WixUI_Font_Title}$(DisplayName) VR · DLSS/DLAA [ProductVersion]" />
         <Control Id="Description" Type="Text" X="15" Y="40" Width="340" Height="30"
-                 Text="Instala el mod completo para BioShock Remastered. Confirma la carpeta del juego o selecciónala con Explorar." />
+                 Text="Instala el mod completo para $(DisplayName) Remastered. Confirma la carpeta del juego o selecciónala con Explorar." />
         <Control Id="FolderLabel" Type="Text" X="15" Y="79" Width="330" Height="14" Text="Carpeta de instalación del juego" />
         <Control Id="Folder" Type="Edit" X="15" Y="97" Width="267" Height="19" Property="BVR_GAMEPATH" />
         <Control Id="Browse" Type="PushButton" X="287" Y="97" Width="68" Height="19" Text="Explorar…">
@@ -76,10 +76,10 @@
                  Text="{\WixUI_Font_Title}Operación completada" />
         <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
         <Control Id="ShortcutHelp" Type="Text" X="20" Y="65" Width="330" Height="48" Hidden="yes"
-                 Text="Para abrir el lanzador, haz doble clic en el acceso «BioShock VR DLSS-DLAA [ProductVersion]» de tu escritorio. También está disponible en la carpeta del juego:"
+                 Text="Para abrir el lanzador, haz doble clic en el acceso «$(ShortcutBase) [ProductVersion]» de tu escritorio. También está disponible en la carpeta del juego:"
                  ShowCondition="NOT (REMOVE ~= &quot;ALL&quot;) AND BVR_DESKTOPSHORTCUT = &quot;1&quot;" />
         <Control Id="FolderHelp" Type="Text" X="20" Y="65" Width="330" Height="48" Hidden="yes"
-                 Text="Para abrir el lanzador, haz doble clic en «Lanzador BioShock VR DLSS-DLAA.exe», dentro de esta carpeta:"
+                 Text="Para abrir el lanzador, haz doble clic en «$(LauncherName)», dentro de esta carpeta:"
                  ShowCondition="NOT (REMOVE ~= &quot;ALL&quot;) AND BVR_DESKTOPSHORTCUT &lt;&gt; &quot;1&quot;" />
         <Control Id="GamePath" Type="Text" X="20" Y="121" Width="330" Height="65" Hidden="yes" NoPrefix="yes"
                  Text="[GAMEDIR]" ShowCondition="NOT (REMOVE ~= &quot;ALL&quot;)" />

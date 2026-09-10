@@ -1,0 +1,35 @@
+BIOSHOCK 1-2 VR · DLSS/DLAA 0.2.13 — CANDIDATO LOCAL
+Paquete seleccionado: BioShock 2 Remastered (Steam 409720).
+
+Incluye la adaptación VR de BioShock 2, el núcleo DLSS/DLAA, el lanzador
+compacto y NVIDIA DLSS 310.7.0.0. No incluye el juego ni sustituye su EXE.
+BioShock VR v0.8.2 fue creado por Mohamad Balouza / VR-Stereo-Hub.
+Este fork de Beren5556 conserva sus créditos y licencias.
+
+Antes de instalar, ejecutar el juego una vez desde Steam y cerrarlo.
+Elegir la carpeta Build\Final que contiene Bioshock2HD.exe compatible.
+El lanzador queda en esa carpeta. El escritorio recibe solo un acceso,
+si se marca la casilla. La instalación no abre automáticamente el juego.
+
+El lanzador usa Shared.ini como autoridad de resolución y sincroniza
+Bioshock2SP.ini. Guardar prepara el modo ventana. Solo se cierra al
+comprobar el proceso nuevo correcto y una ventana que responde.
+F1 recorre las páginas de imagen; F2 anterior / menos; F3 siguiente / más.
+Las opciones gráficas de BS2 se cambian en el lanzador: guardar y reiniciar.
+F4 en caliente todavía no está implementado para BS2.
+
+Actualizar o reparar conserva preferencias. Reparar reinstala los binarios
+incluidos, entre ellos NVIDIA 310.7.0.0. Las versiones x64 alternativas
+se permiten con aviso, sin garantía de funcionamiento.
+Desinstalar retira los archivos del mod y recupera los originales conocidos.
+La migración beta 0.1.0/0.1.1 verifica sus 21 copias; no utiliza las DLL de
+la beta como originales del juego. Si falta una copia, la migración se
+rechaza. Se conservan las copias y los INI personales; no se tocan partidas.
+
+Perfil independiente: %LOCALAPPDATA%\BioshockVR\bs2.
+Copias MSI: %LOCALAPPDATA%\BioshockVR\bs2\WindowsInstaller.
+El producto del 1 se mantiene por separado, con su MSI 0.2.11 aceptado.
+
+Pendiente: prueba de este candidato en visor (rendimiento, agua, modos,
+resolución, estéreo, carga y cierre), coexistencia y otro ordenador.
+No contiene DLSS 5 ni Frame Generation. No es una publicación estable.

@@ -9,6 +9,7 @@ param(
     [switch]$SkipBuild
 )
 $ErrorActionPreference = "Stop"
+throw 'Disabled in the BS2 DLSS/DLAA fork. Use installer/Build-Installer.ps1 with the BS2 payload manifest; the legacy upstream ZIP omits DLSS components.'
 $repo = Split-Path -Parent $PSScriptRoot
 
 # Version is the single source of truth in CMakeLists.txt.

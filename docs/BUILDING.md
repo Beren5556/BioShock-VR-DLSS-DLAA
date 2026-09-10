@@ -1,5 +1,10 @@
 # Compilación
 
+Para la rama **0.2.13 BioShock 1–2**, usar la [guía de integración](INTEGRATION-0.2.13.md):
+preset integration-win32, Build-Launcher -Game both, MSI BS2 y Build-Bundle.
+Las instrucciones generales/históricas siguientes no regeneran el MSI BS1
+aceptado ni sustituyen el pipeline explícito de esta candidata.
+
 ## Requisitos
 
 - Windows 10 u 11 de 64 bits.

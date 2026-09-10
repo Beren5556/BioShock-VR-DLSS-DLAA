@@ -4,9 +4,9 @@
 // quad layer ("cinema screen") in the headset. Everything is fail-soft: no
 // runtime, no headset, or any XR error just leaves the game running flat.
 //
-// Threading: init_instance() runs on the framework init thread before the
-// D3D11 hooks install; everything else runs on the game's render thread
-// inside the Present/ResizeBuffers detours.
+// Threading: init_instance() runs on the framework init thread after D3D11
+// hooks install. Rendering normally runs inside Present/ResizeBuffers; BS2
+// serializes those full callbacks and init against confirmed game-exit cleanup.
 
 #include <cstdint>
 
@@ -25,6 +25,14 @@ bool image_reconfiguration_active() noexcept;
 
 // Create the XrInstance (loads the active 32-bit runtime). Fail-soft.
 void init_instance();
+
+// BioShock 2 only: call after the engine has committed to exit, from its game
+// thread outside Present/Resize and NEVER DllMain. Terminal and idempotent.
+// Stops new XR work, joins workers before destruction, and releases the XR
+// instance and DLSS helpers. False means incomplete cleanup, not clean exit.
+// Gate/worker waits are bounded; runtime API calls retain the confirmed-exit
+// watchdog as their last-resort bound because OpenXR supplies no timeout.
+bool shutdown_on_game_exit();
 
 // Present-hook head: bring up / pump the session, xrWaitFrame + xrBeginFrame.
 // xrWaitFrame blocks, which paces the game to the headset refresh while a

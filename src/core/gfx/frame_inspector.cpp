@@ -14,7 +14,7 @@
 
 #include "core/gfx/gfx_hud.h"
 #include "core/gfx/hud_capture.h"
-#include "game/bioshock1r/temporal_guides.h"
+#include "game/shared/temporal_adapter.h"
 
 #include "core/util/log.h"
 
@@ -589,7 +589,7 @@ void STDMETHODCALLTYPE DrawIndexedDetour(ID3D11DeviceContext* ctx, UINT indexCou
     }
     // Only count draws that actually reach D3D11 when voting for the principal
     // scene depth buffer. A mesh veto above returns before this tap.
-    if (t_suppress == 0) bvr::b1r::temporal_guides::on_draw_indexed(ctx);
+    if (t_suppress == 0) bvr::active_temporal::on_draw_indexed(ctx);
     if (should_record()) {
         ++t_suppress; // our own Get* calls must not recurse into recording
         Event& ev = push_event(EventKind::DrawIndexed, _ReturnAddress(),
@@ -672,7 +672,7 @@ void STDMETHODCALLTYPE DrawDetour(ID3D11DeviceContext* ctx, UINT vertexCount, UI
         }
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    if (t_suppress == 0) bvr::active_temporal::on_untracked_draw(ctx);
 #endif
     g_origDraw(ctx, vertexCount, startVertex);
 }
@@ -691,7 +691,7 @@ void STDMETHODCALLTYPE DrawIndexedInstancedDetour(ID3D11DeviceContext* ctx, UINT
         --t_suppress;
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    if (t_suppress == 0) bvr::active_temporal::on_untracked_draw(ctx);
 #endif
     g_origDrawIndexedInstanced(ctx, indexCount, instances, startIndex, baseVertex, startInstance);
 }
@@ -709,7 +709,7 @@ void STDMETHODCALLTYPE DrawInstancedDetour(ID3D11DeviceContext* ctx, UINT vertex
         --t_suppress;
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    if (t_suppress == 0) bvr::active_temporal::on_untracked_draw(ctx);
 #endif
     g_origDrawInstanced(ctx, vertexCount, instances, startVertex, startInstance);
 }
@@ -734,7 +734,7 @@ void STDMETHODCALLTYPE OMSetRenderTargetsDetour(ID3D11DeviceContext* ctx, UINT n
     // no longer an output when it queues CopySubresourceRegion. The tap is an
     // armed-off no-op until the BioShock 1 DLSS path explicitly calls prepare.
     if (t_suppress == 0)
-        bvr::b1r::temporal_guides::on_setrt(ctx, numViews, rtvs, dsv);
+        bvr::active_temporal::on_setrt(ctx, numViews, rtvs, dsv);
 }
 
 void STDMETHODCALLTYPE ClearRtvDetour(ID3D11DeviceContext* ctx, ID3D11RenderTargetView* rtv,
@@ -765,7 +765,7 @@ void STDMETHODCALLTYPE ClearDsvDetour(ID3D11DeviceContext* ctx, ID3D11DepthStenc
     // The guide tap is armed-off until prepare(), rejects foreign/deferred
     // contexts, and only retains bounded counters/one float per candidate.
     if (t_suppress == 0)
-        bvr::b1r::temporal_guides::on_clear_dsv(ctx, dsv, flags, depth, stencil);
+        bvr::active_temporal::on_clear_dsv(ctx, dsv, flags, depth, stencil);
 }
 
 void STDMETHODCALLTYPE DrawAutoDetour(ID3D11DeviceContext* ctx) {
@@ -777,7 +777,7 @@ void STDMETHODCALLTYPE DrawAutoDetour(ID3D11DeviceContext* ctx) {
         --t_suppress;
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    if (t_suppress == 0) bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    if (t_suppress == 0) bvr::active_temporal::on_untracked_draw(ctx);
 #endif
     g_origDrawAuto(ctx);
 }
@@ -810,7 +810,7 @@ void STDMETHODCALLTYPE CopySubResDetour(ID3D11DeviceContext* ctx, ID3D11Resource
         --t_suppress;
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    bvr::b1r::temporal_guides::on_resource_write(ctx, dst);
+    bvr::active_temporal::on_resource_write(ctx, dst);
 #endif
     g_origCopySubRes(ctx, dst, dstSub, dstX, dstY, dstZ, src, srcSub, box);
 }
@@ -826,7 +826,7 @@ void STDMETHODCALLTYPE CopyResDetour(ID3D11DeviceContext* ctx, ID3D11Resource* d
         --t_suppress;
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    bvr::b1r::temporal_guides::on_resource_write(ctx, dst);
+    bvr::active_temporal::on_resource_write(ctx, dst);
 #endif
     g_origCopyRes(ctx, dst, src);
 }
@@ -886,7 +886,7 @@ void STDMETHODCALLTYPE UpdateSubResDetour(ID3D11DeviceContext* ctx, ID3D11Resour
         --t_suppress;
     }
 #ifdef BVR_DEPTH_COPY_REUSE
-    bvr::b1r::temporal_guides::on_resource_write(ctx, dst);
+    bvr::active_temporal::on_resource_write(ctx, dst);
 #endif
     g_origUpdateSubRes(ctx, dst, dstSub, box, data, rowPitch, depthPitch);
 }
@@ -903,7 +903,7 @@ void STDMETHODCALLTYPE ExecCmdListDetour(ID3D11DeviceContext* ctx, ID3D11Command
     }
     g_origExecCmdList(ctx, list, restore);
 #ifdef BVR_DEPTH_COPY_REUSE
-    bvr::b1r::temporal_guides::on_context_reset(ctx);
+    bvr::active_temporal::on_context_reset(ctx);
 #endif
 }
 
@@ -913,20 +913,20 @@ void STDMETHODCALLTYPE DepthStateDetour(ID3D11DeviceContext* ctx,
     g_origDepthState(ctx, state, stencil);
     // Observe even internally suppressed state changes: the cache must describe
     // actual D3D11 state after HUD/overlay substitutions and their restoration.
-    bvr::b1r::temporal_guides::on_depth_state(ctx, state);
+    bvr::active_temporal::on_depth_state(ctx, state);
 }
 void STDMETHODCALLTYPE ClearStateDetour(ID3D11DeviceContext* ctx) {
     g_origClearState(ctx);
-    bvr::b1r::temporal_guides::on_context_reset(ctx);
+    bvr::active_temporal::on_context_reset(ctx);
 }
 void STDMETHODCALLTYPE DrawIndexedIndirectDetour(ID3D11DeviceContext* ctx,
                                                  ID3D11Buffer* args, UINT offset) {
-    bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    bvr::active_temporal::on_untracked_draw(ctx);
     g_origDrawIndexedIndirect(ctx, args, offset);
 }
 void STDMETHODCALLTYPE DrawIndirectDetour(ID3D11DeviceContext* ctx,
                                           ID3D11Buffer* args, UINT offset) {
-    bvr::b1r::temporal_guides::on_untracked_draw(ctx);
+    bvr::active_temporal::on_untracked_draw(ctx);
     g_origDrawIndirect(ctx, args, offset);
 }
 #endif
@@ -1187,7 +1187,7 @@ bool install(void** ctxVtable) {
     }
     const bool complete = hooked == static_cast<int>(_countof(slots));
 #ifdef BVR_DEPTH_COPY_REUSE
-    bvr::b1r::temporal_guides::set_copy_tracking_available(complete);
+    bvr::active_temporal::set_copy_tracking_available(complete);
 #endif
     BVR_LOG("[gfx] frame inspector: %d/%u context slots hooked", hooked, unsigned(_countof(slots)));
     return complete;

@@ -3,7 +3,7 @@
 #ifdef BVR_DEPTH_COPY_REUSE
 bool depth_reuse_cases(ID3D11Device* device, ID3D11DeviceContext* context,
                        DepthSurface& main, DepthSurface& minor) {
-    namespace G = bvr::b1r::temporal_guides;
+    namespace G = depth_reuse_target;
     unsigned checks=0, failures=0;
     auto check=[&](bool pass,const char* text) {
         ++checks; if(!pass) ++failures;

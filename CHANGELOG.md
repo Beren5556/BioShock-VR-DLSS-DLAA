@@ -2,6 +2,37 @@
 
 Este proyecto sigue versiones con el formato MAJOR.MINOR.PATCH y sufijos de prepublicación cuando corresponde.
 
+## 0.2.16 · BioShock 1–2 · 2026-09-10
+
+- Un único MSI distribuible, selección individual de juego y dos mods completos.
+- Incluye exactamente los núcleos y lanzadores cuyo funcionamiento confirmó el
+  usuario en ambos juegos; no se recompilan para empaquetarlos.
+- Corrige el redondeo DLSS al 50 % que podía quedar por debajo del mínimo de
+  NVIDIA. Un rechazo conserva el ajuste previo y su explicación en el overlay.
+- Incluye el perfil DLSS específico de BS2, omitido por el empaquetado anterior.
+- Conserva las cuatro optimizaciones temporales, perfiles separados, mejoras
+  del lanzador y la migración del acceso Beta corregida en 0.2.15.
+- Inventarios fijados por SHA-256 y pruebas de actualización desde 0.2.15 con
+  archivos realmente distintos; no se modifica el otro juego.
+- Documentación de instalación, recuperación, créditos y límites actualizada.
+
+La versión del instalador es 0.2.16 para ambos juegos; núcleo y lanzadores
+conservan la versión interna 0.2.13 de los binarios aceptados. La publicación
+utiliza el mismo MSI aprobado. Otro ordenador y F4 gráfico en caliente para BS2
+siguen pendientes.
+Detalle: [cierre 0.2.16](docs/RELEASE-0.2.16.md).
+
+## 0.2.13 · integración local · 2026-09-10
+
+- Selector EXE con los dos MSI internos; BS1 0.2.11 se conserva byte por byte.
+- BS2 integra optimizaciones temporales y la pantalla Imagen compartida,
+  manteniendo cámara, proyección, armas, rutas y guardas de salida específicas.
+- Guardado coordinado Shared/SP/DLSS y migración de originales de la beta BS2.
+- Pruebas aisladas del núcleo, lanzadores, instalación, rollback y reparación.
+- Pendientes: visor/rendimiento, coexistencia real, F4 gráfico BS2 y otro equipo.
+
+No publicado. Detalle: [integración 0.2.13](docs/INTEGRATION-0.2.13.md).
+
 ## 0.2.11 · 2026-09-09
 
 Publicación del instalador probado, con las mejoras desarrolladas desde 0.2.3.

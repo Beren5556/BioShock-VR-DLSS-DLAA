@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="BioShock VR DLSS-DLAA" Manufacturer="Beren5556 · BioShock VR Community"
+  <Package Name="$(ShortcutBase)" Manufacturer="Beren5556 · BioShock VR Community"
            Version="$(Version)" ProductCode="$(ProductCode)" UpgradeCode="$(UpgradeCode)"
            Language="3082" Codepage="1252" Scope="perUser" InstallerVersion="500">
-    <SummaryInformation Description="BioShock 1 VR · DLSS/DLAA · $(Version)" />
-    <MajorUpgrade DowngradeErrorMessage="Ya tienes instalada una versión más reciente de BioShock VR DLSS-DLAA."
+    <SummaryInformation Description="$(DisplayName) VR · DLSS/DLAA · $(Version)" />
+    <MajorUpgrade DowngradeErrorMessage="Ya tienes instalada una versión más reciente de $(ShortcutBase)."
                   Schedule="afterInstallExecute" />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
     <Property Id="ARPCOMMENTS" Value="Fork de BioShock VR v0.8.2 de Mohamad Balouza. DLSS/DLAA, optimizaciones y lanzador de Beren5556." />
@@ -33,17 +33,17 @@
           <RegistryValue Name="TestRoot" Value="[BVR_TESTROOT]" Type="string" />
           <RegistryValue Name="DesktopShortcut" Value="[BVR_DESKTOPSHORTCUT]" Type="string" />
         </RegistryKey>
-        <RemoveFile Id="RetireUnversionedShortcut" Directory="DesktopFolder" Name="BioShock VR DLSS-DLAA.lnk" On="install" />
+        <RemoveFile Id="RetireUnversionedShortcut" Directory="DesktopFolder" Name="$(ShortcutBase).lnk" On="install" />
       </Component>
       <Component Id="VersionedDesktopLauncher" Guid="$(ShortcutComponentGuid)">
         <RegistryValue Root="HKCU" Key="$(RegistryPath)\Shortcuts" Name="$(Version)"
                        Value="1" Type="integer" KeyPath="yes" />
-        <Shortcut Id="DesktopLauncher" Directory="DesktopFolder" Name="BioShock VR DLSS-DLAA $(Version)"
-                  Target="[GAMEDIR]Lanzador BioShock VR DLSS-DLAA.exe" WorkingDirectory="GAMEDIR"
+        <Shortcut Id="DesktopLauncher" Directory="DesktopFolder" Name="$(ShortcutBase) $(Version)"
+                  Target="[GAMEDIR]$(LauncherName)" WorkingDirectory="GAMEDIR"
                   Icon="ModIcon" Advertise="no" />
       </Component>
     </DirectoryRef>
-    <Feature Id="Complete" Title="BioShock VR DLSS-DLAA" Level="1">
+    <Feature Id="Complete" Title="$(ShortcutBase)" Level="1">
       <ComponentGroupRef Id="ModFiles" />
       <ComponentRef Id="InstallRegistration" />
       <Feature Id="DesktopShortcut" Title="Acceso directo de escritorio" Level="1" Display="hidden">

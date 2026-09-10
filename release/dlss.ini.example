@@ -1,5 +1,5 @@
-; DLSS 4.5 experimental para BioShock Remastered VR.
-; La lanzadera administra este archivo en %LOCALAPPDATA%\BioshockVR\dlss.ini.
+; DLSS experimental para BioShock 2 Remastered VR.
+; La lanzadera administra %LOCALAPPDATA%\BioshockVR\bs2\dlss.ini.
 ; "off" conserva DLSS desactivado. No activa el reescalado espacial.
 [dlss]
 mode=off
@@ -9,6 +9,6 @@ quality=auto
 outputWidth=4056
 outputHeight=4056
 
-; Ajuste avanzado usado para reconstruir movimiento de cámara desde profundidad.
-; No modificar salvo que se calibre específicamente la proyección del juego.
+; Clave heredada: BS2 deriva near/far de la proyección WORLD observada por ojo.
+; No sustituye los datos observados ni corrige una proyección rechazada.
 nearPlaneUu=10.0

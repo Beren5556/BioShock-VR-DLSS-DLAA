@@ -1,6 +1,9 @@
 [CmdletBinding()]
 param(
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.11',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.13',
+    [ValidateSet('bs1','bs2')][string]$GameId = 'bs2',
+    [Parameter(Mandatory=$true)][string]$BasePayloadDirectory,
+    [string]$BuildToolsDirectory = '',
     [switch]$SkipLauncherBuild,
     [ValidatePattern('^(|[a-f0-9]{32})$')][string]$TestFamily = ''
 )
@@ -12,31 +15,35 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 if (-not $TestFamily -and (Test-Path -LiteralPath (Join-Path $repoRoot "release\SHA256SUMS-v$Version.txt"))) {
     throw "La versión $Version ya se ha entregado. Usa una versión nueva para que Windows Installer pueda actualizarla sin error 1638."
 }
-$releaseRoot = Join-Path $repoRoot ('artifacts\stable-' + $Version)
+$releaseRoot = if ($GameId -eq 'bs2') { Join-Path $repoRoot ("artifacts\integration-" + $Version + "\msi\bs2") } else { Join-Path $repoRoot ('artifacts\stable-' + $Version) }
+$buildRoot = if ($GameId -eq 'bs2') { Join-Path $repoRoot ("artifacts\integration-" + $Version + "\build") } else { Join-Path $releaseRoot 'build' }
+$displayName = if ($GameId -eq 'bs2') { 'BioShock 2' } else { 'BioShock' }
+$launcherName = 'Lanzador ' + $displayName + ' VR DLSS-DLAA.exe'
+$shortcutBase = $displayName + ' VR DLSS-DLAA'
 $outputRoot = if ($TestFamily) { Join-Path $repoRoot ("artifacts\msi-isolated\$TestFamily\$Version") } else { $releaseRoot }
 $work = Join-Path $outputRoot ('msi-build-' + $Version)
 $stage = Join-Path $work 'payload'
-$toolsRoot = Join-Path $repoRoot 'artifacts\msi-tools'
+$toolsRoot = if ($BuildToolsDirectory) { [IO.Path]::GetFullPath($BuildToolsDirectory) } else { Join-Path $repoRoot 'artifacts\msi-tools' }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
-if (-not $SkipLauncherBuild) { & (Join-Path $repoRoot 'apps\launcher\Build-Launcher.ps1') }
+if (-not $SkipLauncherBuild) { & (Join-Path $repoRoot 'apps\launcher\Build-Launcher.ps1') -Game $GameId }
 if (-not (Test-Path -LiteralPath (Join-Path $toolsRoot 'wix.6.0.2\tools\net6.0\any\wix.dll')) -or
     -not (Test-Path -LiteralPath (Join-Path $toolsRoot 'WiX-6.0.2-source.zip'))) {
-    & (Join-Path $PSScriptRoot 'Acquire-BuildTools.ps1')
+    throw 'Faltan las herramientas WiX verificadas. Ejecuta Acquire-BuildTools.ps1 o proporciona BuildToolsDirectory.'
 }
 
-$cache = [IO.File]::ReadAllText((Join-Path $releaseRoot 'build\CMakeCache.txt'))
+$cache = [IO.File]::ReadAllText((Join-Path $buildRoot 'CMakeCache.txt'))
 foreach ($flag in @('BVR_DLSS_OVERLAP','BVR_DEPTH_COPY_REUSE','BVR_DLSS_TAIL_OVERLAP','BVR_DLSS_EARLY_DELIVERY')) {
     if ($cache -notmatch "(?m)^${flag}:BOOL=ON\r?$") { throw "No se empaqueta una DLL sin la optimización probada $flag." }
 }
-foreach ($flag in @('BVR_PERFORMANCE_PROBE','BVR_LATENCY_PROBE','BVR_CRITICAL_PATH_PROBE')) {
+foreach ($flag in @('BVR_PERFORMANCE_PROBE','BVR_LATENCY_PROBE','BVR_CRITICAL_PATH_PROBE','BVR_BS2_TEST_ISOLATION')) {
     if ($cache -notmatch "(?m)^${flag}:BOOL=OFF\r?$") { throw "La distribución estable no debe activar $flag." }
 }
-$stamp = [IO.File]::ReadAllText((Join-Path $releaseRoot 'build\generated\bvr_version.h'))
+$stamp = [IO.File]::ReadAllText((Join-Path $buildRoot 'generated\bvr_version.h'))
 if (-not $stamp.Contains(('"' + $Version + '"'))) { throw "La DLL no procede de la compilación $Version." }
 $buildId = [regex]::Match($stamp, '#define BVR_BUILD_ID\s+"([^"]+)"').Groups[1].Value
-$registryPath = 'Software\Beren5556\BioShockVRDLSSDLAA'
+$registryPath = if ($GameId -eq 'bs2') { 'Software\Beren5556\BioShock2VRDLSSDLAA' } else { 'Software\Beren5556\BioShockVRDLSSDLAA' }
 if ($TestFamily) { $registryPath = 'Software\Beren5556\BioShockVRInstallerTests\' + $TestFamily }
 
 $items = New-Object 'System.Collections.Generic.List[object]'
@@ -49,42 +56,38 @@ function Add-Payload([string]$Source, [string]$Destination, [string]$Expected = 
     Copy-Item -LiteralPath $Source -Destination $target -Force
     $items.Add([pscustomobject]@{ Path = $Destination; Sha256 = $hash; Staged = $target })
 }
-$baseManifest = Get-Content -LiteralPath (Join-Path $repoRoot 'installer\payload-manifest.json') -Raw | ConvertFrom-Json
-foreach ($entry in $baseManifest.payload) {
-    if ($entry.destinationPath -eq 'bioshockvr.dll') {
-        Add-Payload (Join-Path $releaseRoot 'build\src\Release\bioshockvr.dll') $entry.destinationPath
-    } elseif ($entry.destinationPath -eq 'Lanzador BioShock VR DLSS-DLAA.exe') {
-        Add-Payload (Join-Path $repoRoot 'artifacts\launcher\Lanzador BioShock VR DLSS-DLAA.exe') $entry.destinationPath
-    } else {
-        Add-Payload (Join-Path $repoRoot ('installer\Payload\' + $entry.sourcePath)) $entry.destinationPath $entry.sha256
+# The accepted 0.2.11 inventory is the only source for shared redistributables.
+# Verify every source first, including files subsequently replaced by candidates.
+$baseManifest = Get-Content -LiteralPath (Join-Path $repoRoot 'release\manifest-v0.2.11.json') -Raw | ConvertFrom-Json
+foreach ($entry in $baseManifest.files) {
+    $baseFile = Join-Path $BasePayloadDirectory $entry.path
+    if (-not (Test-Path -LiteralPath $baseFile -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $baseFile -Algorithm SHA256).Hash -ne $entry.sha256) {
+        throw "El payload base aceptado ha cambiado: $($entry.path)"
     }
 }
-$releaseNotes = 'docs\releases\v' + $Version + '.md'
-if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $releaseNotes))) {
-    throw "Faltan las notas de la versión $Version."
+foreach ($entry in $baseManifest.files) {
+    # The accepted manifest uses '/', while game-specific overrides use '\'.
+    # Normalize before dispatch so BS2 never inherits BS1 host capabilities.
+    $destination = $entry.path.Replace('/', '\')
+    if ($destination -eq 'bioshockvr.dll' -or ($GameId -eq 'bs2' -and $destination -eq 'xinput1_3.dll')) {
+        Add-Payload (Join-Path $buildRoot ('src\Release\' + $destination)) $destination
+    } elseif ($destination -eq 'Lanzador BioShock VR DLSS-DLAA.exe') {
+        Add-Payload (Join-Path $repoRoot ("artifacts\integration-" + $Version + "\launcher\" + $GameId + "\" + $launcherName)) $launcherName
+    } elseif ($GameId -eq 'bs2' -and $destination -eq 'host64\dlss-capabilities.ini') {
+        Add-Payload (Join-Path $repoRoot 'installer\profiles\bs2\dlss-capabilities.ini') $destination
+    } elseif ($destination -eq 'BioShockVR-DLSS45\LEEME-DLSS45.md') {
+        Add-Payload (Join-Path $repoRoot ("docs\releases\v" + $Version + ".md")) $destination
+    } elseif ($GameId -eq 'bs2' -and $destination -eq 'BioShockVR-DLSS45\INFORMACION-DEL-PAQUETE.txt') {
+        Add-Payload (Join-Path $repoRoot 'installer\profiles\bs2\INFORMACION-DEL-PAQUETE.txt') $destination
+    } else {
+        Add-Payload (Join-Path $BasePayloadDirectory $destination) $destination $entry.sha256
+    }
 }
-$docs = @(
-    @($releaseNotes, 'BioShockVR-DLSS45\LEEME-DLSS45.md'),
-    @('docs\PERFORMANCE.md', 'BioShockVR-DLSS45\RENDIMIENTO.md'),
-    @('docs\licenses\NVIDIA-DLSS-LICENSE.txt', 'BioShockVR-DLSS45\NVIDIA-DLSS-LICENSE.txt'),
-    @('docs\release\dlss.ini.example', 'BioShockVR-DLSS45\dlss.ini.example'),
-    @('LICENSE', 'BioShockVR-DLSS45\Licenses\BioShockVR-MIT-LICENSE.txt'),
-    @('components\dlss-host\LICENSE', 'BioShockVR-DLSS45\Licenses\DLSS-Host-MIT-LICENSE.txt'),
-    @('THIRD_PARTY_NOTICES.md', 'BioShockVR-DLSS45\Licenses\THIRD_PARTY_NOTICES.md'),
-    @('ACKNOWLEDGEMENTS.md', 'BioShockVR-DLSS45\Licenses\ACKNOWLEDGEMENTS.md'),
-    @('third_party\minhook\LICENSE.txt', 'BioShockVR-DLSS45\Licenses\MinHook-LICENSE.txt'),
-    @('third_party\imgui\LICENSE.txt', 'BioShockVR-DLSS45\Licenses\Dear-ImGui-LICENSE.txt'),
-    @('third_party\openvr_headers\LICENSE', 'BioShockVR-DLSS45\Licenses\OpenVR-LICENSE.txt'),
-    @('third_party\OpenXR-SDK\LICENSE', 'BioShockVR-DLSS45\Licenses\OpenXR-LICENSE.txt'),
-    @('third_party\OpenXR-SDK\COPYING.adoc', 'BioShockVR-DLSS45\Licenses\OpenXR-COPYING.adoc')
-)
-foreach ($doc in $docs) { Add-Payload (Join-Path $repoRoot $doc[0]) $doc[1] }
-Add-Payload (Join-Path $toolsRoot 'WiX-6.0.2-LICENSE.txt') 'BioShockVR-DLSS45\Licenses\WiX-6.0.2-LICENSE.txt'
-Add-Payload (Join-Path $toolsRoot 'WiX-6.0.2-source.zip') 'BioShockVR-DLSS45\Licenses\WiX-6.0.2-source.zip'
 
 function Stable-Guid([string]$Value) {
     $sha = [Security.Cryptography.SHA256]::Create()
-    try { $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes('BioShockVR-DLSS-DLAA-MSI:' + $TestFamily + $(if ($TestFamily) { ':' } else { '' }) + $Value)) }
+    try { $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes('BioShockVR-DLSS-DLAA-MSI:' + $(if ($GameId -eq 'bs2') { 'bs2:' } else { '' }) + $TestFamily + $(if ($TestFamily) { ':' } else { '' }) + $Value)) }
     finally { $sha.Dispose() }
     $guidBytes = New-Object byte[] 16
     [Array]::Copy($bytes, $guidBytes, 16)
@@ -170,7 +173,8 @@ $xml.Save($filesPath)
 $dtf = Join-Path $toolsRoot 'wixtoolset.dtf.windowsinstaller.6.0.2\lib\net20\WixToolset.Dtf.WindowsInstaller.dll'
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $managed = Join-Path $work 'BioShockMsiActions.dll'
-& $compiler /nologo /target:library /platform:anycpu /optimize+ /codepage:65001 ("/out:$managed") /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll ("/reference:$dtf") (Join-Path $PSScriptRoot 'MsiActions.cs') (Join-Path $PSScriptRoot 'MsiStorage.cs') $planPath
+$gameDefine = if ($GameId -eq 'bs2') { '/define:BIOSHOCK2' } else { '/define:BIOSHOCK1' }
+& $compiler $gameDefine /nologo /target:library /platform:anycpu /optimize+ /codepage:65001 ("/out:$managed") /reference:System.dll /reference:System.Core.dll /reference:System.Xml.dll ("/reference:$dtf") (Join-Path $PSScriptRoot 'MsiActions.cs') (Join-Path $PSScriptRoot 'MsiStorage.cs') (Join-Path $PSScriptRoot 'GamePackage.cs') (Join-Path $PSScriptRoot 'LegacyMigration.cs') $planPath
 if ($LASTEXITCODE -ne 0) { throw 'No se han compilado las acciones MSI.' }
 $actions = Join-Path $work 'BioShockMsiActions.CA.dll'
 $make = Join-Path $toolsRoot 'wixtoolset.dtf.customaction.6.0.2\tools\WixToolset.Dtf.MakeSfxCA.exe'
@@ -178,25 +182,27 @@ $sfx = Join-Path $toolsRoot 'wixtoolset.dtf.customaction.6.0.2\tools\x64\SfxCA.d
 & $make $actions $sfx $managed $dtf (Join-Path $PSScriptRoot 'CustomAction.config')
 if ($LASTEXITCODE -ne 0) { throw 'No se han empaquetado las acciones MSI.' }
 
-$output = Join-Path $outputRoot ('BioShock-VR-DLSS-DLAA-' + $Version + '.msi')
+$output = Join-Path $outputRoot (($displayName -replace ' ','-') + '-VR-DLSS-DLAA-' + $Version + '.msi')
 $wixTool = Join-Path $toolsRoot 'wix.6.0.2\tools\net6.0\any\wix.dll'
 $ui = Join-Path $toolsRoot 'wixtoolset.ui.wixext.6.0.2\wixext6\WixToolset.UI.wixext.dll'
 $arguments = @($wixTool, 'build', (Join-Path $PSScriptRoot 'Package.wxs'), (Join-Path $PSScriptRoot 'Interface.wxs'), $filesPath,
     '-ext', $ui, '-arch', 'x64', '-culture', 'es-es', '-d', "Version=$Version", '-d', "RepoRoot=$repoRoot", '-d', "ActionsDll=$actions",
     '-d', ('ProductCode=' + (Stable-Guid ('product:' + $Version))),
-    '-d', ('UpgradeCode=' + $(if ($TestFamily) { Stable-Guid 'test-upgrade' } else { '4C28DEFC-3BB8-48C0-BB6E-4D5108119CE7' })),
-    '-d', ('RegistrationGuid=' + $(if ($TestFamily) { Stable-Guid 'test-registration' } else { '273CDA46-4A9B-4DD9-B2C8-A8E8D31E95F3' })),
-    '-d', ('RegistryPath=' + $registryPath),
+    '-d', ('UpgradeCode=' + $(if ($TestFamily) { Stable-Guid 'test-upgrade' } elseif ($GameId -eq 'bs2') { Stable-Guid 'upgrade' } else { '4C28DEFC-3BB8-48C0-BB6E-4D5108119CE7' })),
+    '-d', ('RegistrationGuid=' + $(if ($TestFamily) { Stable-Guid 'test-registration' } elseif ($GameId -eq 'bs2') { Stable-Guid 'registration' } else { '273CDA46-4A9B-4DD9-B2C8-A8E8D31E95F3' })),
+    '-d', ('RegistryPath=' + $registryPath), '-d', ('DisplayName=' + $displayName),
+    '-d', ('LauncherName=' + $launcherName), '-d', ('ShortcutBase=' + $shortcutBase),
     '-d', ('ShortcutComponentGuid=' + (Stable-Guid ('desktop-shortcut:' + $Version))), '-o', $output)
 & dotnet @arguments
 if ($LASTEXITCODE -ne 0) { throw 'No se ha generado el MSI.' }
 $manifest = [ordered]@{
+    gameId = $GameId
     version = $Version
     productCode = (Stable-Guid ('product:' + $Version))
     installer = [IO.Path]::GetFileName($output)
     sha256 = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
     launcherAutoStart = $false
-    desktopShortcut = 'BioShock VR DLSS-DLAA ' + $Version + '.lnk'
+    desktopShortcut = $shortcutBase + ' ' + $Version + '.lnk'
     baseMod = 'BioShock VR v0.8.2'
     modBuild = $buildId
     testFamily = $TestFamily

@@ -1,5 +1,10 @@
 # DLSS 4.5 experimental
 
+> Documento heredado de **BioShock 1**. Sus rutas, nombre de host y ajuste manual
+> `nearPlaneUu` no describen la implementación específica de BioShock 2.
+> El contrato WORLD por ojo, la captura real de near/far y los límites actuales
+> de BS2 están en [BS2-TEMPORAL.md](BS2-TEMPORAL.md).
+
 Esta fase integra el runtime oficial NVIDIA DLSS Super Resolution 310.7.0.0
 (DLSS 4.5) con BioShock Remastered VR. Incluye dos modos reales:
 

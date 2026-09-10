@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+throw 'Disabled in the BS2 DLSS/DLAA fork. Use the verified standalone BS2 installer; this legacy upstream script has no BS2 package/restore manifest.'
 $repo = Split-Path -Parent $PSScriptRoot
 $config = if ($Release) { "RelWithDebInfo" } else { "Debug" }
 $outDir = Join-Path $repo "build\src\$config"

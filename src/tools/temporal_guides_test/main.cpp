@@ -369,6 +369,7 @@ bool finite_depth_case(ID3D11Device* device, ID3D11DeviceContext* context,
 
 } // namespace
 
+namespace depth_reuse_target = bvr::b1r::temporal_guides;
 #include "depth_reuse_cases.h"
 
 int main() {

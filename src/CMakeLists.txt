@@ -10,6 +10,13 @@ set_target_properties(xinput_proxy PROPERTIES
     PREFIX ""
 )
 
+# Developer-only profile redirection for physical BioShock 2 test copies.
+# Release packaging always uses the default OFF configuration.
+option(BVR_BS2_TEST_ISOLATION "Isolate BioShock 2 test-copy profile and logs" OFF)
+if(BVR_BS2_TEST_ISOLATION)
+    target_compile_definitions(xinput_proxy PRIVATE BVR_BS2_TEST_ISOLATION)
+endif()
+
 # --- bioshockvr.dll - the mod -------------------------------------------------
 add_library(bioshockvr SHARED
     core/framework/command.cpp
@@ -59,6 +66,8 @@ add_library(bioshockvr SHARED
     core/util/module_id.h
     core/util/crash.cpp
     core/util/crash.h
+    core/util/close_policy.h
+    core/util/game_exit_gate.h
     game/adapter_registry.cpp
     game/adapter_registry.h
     game/igame_adapter.h
@@ -98,6 +107,9 @@ add_library(bioshockvr SHARED
     game/bioshock2r/aim.h
     game/bioshock2r/bioshock2r_adapter.cpp
     game/bioshock2r/bioshock2r_adapter.h
+    game/bioshock2r/exit_guard.cpp
+    game/bioshock2r/exit_guard.h
+    game/bioshock2r/exit_guard_contract.h
     game/bioshock2r/body.cpp
     game/bioshock2r/body.h
     game/bioshock2r/bones.cpp
@@ -115,6 +127,8 @@ add_library(bioshockvr SHARED
     game/bioshock2r/patterns.h
     game/bioshock2r/scenedraw.cpp
     game/bioshock2r/scenedraw.h
+    game/bioshock2r/temporal_guides.cpp
+    game/bioshock2r/temporal_guides.h
     game/bioshockinf/aim.cpp
     game/bioshockinf/aim.h
     game/bioshockinf/arsenal.cpp
@@ -170,8 +184,17 @@ add_library(bioshockvr SHARED
     game/bioshockinf/xhair.cpp
     game/bioshockinf/xhair.h
     game/shared/ue_math.h
+    game/shared/temporal_adapter.cpp
+    game/shared/image_adapter.cpp
+    game/shared/image_adapter.h
+    game/shared/resolution_mailbox.h
+    game/shared/temporal_adapter.h
+    game/shared/temporal_types.h
 )
 set_target_properties(bioshockvr PROPERTIES PREFIX "")
+if(BVR_BS2_TEST_ISOLATION)
+    target_compile_definitions(bioshockvr PRIVATE BVR_BS2_TEST_ISOLATION)
+endif()
 
 # --- generated version header --------------------------------------------------
 # Regenerated before every build of the mod, so `bioshockvr X.Y.Z (build id)` in
@@ -236,6 +259,12 @@ endif()
 
 # Pure launcher/HUD policy parity; no game, profiles, GPU or headset required.
 add_executable(image_controls_test tools/image_controls_test/main.cpp)
+add_executable(resolution_mailbox_test tools/image_controls_test/resolution_mailbox_test.cpp)
+target_include_directories(resolution_mailbox_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(bs2_config_test tools/image_controls_test/bs2_config_test.cpp game/bioshock2r/game_ini.cpp)
+target_include_directories(bs2_config_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(bs2_config_test PRIVATE BVR_BS2_TEST_ISOLATION=1 BVR_CONFIG_BATCH_TESTS=1)
+target_link_libraries(bs2_config_test PRIVATE shell32 ole32)
 target_include_directories(image_controls_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(stereo_recovery_test tools/image_controls_test/stereo_recovery_test.cpp)
 target_include_directories(stereo_recovery_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -286,6 +315,11 @@ target_link_libraries(eye_timeline_test32 PRIVATE d3d11)
 add_executable(dlss_overlap_test32 tools/dlss_overlap_test/main.cpp core/gfx/dlss_sharpen.cpp)
 target_include_directories(dlss_overlap_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(dlss_overlap_test32 PRIVATE d3d11 d3dcompiler)
+
+# Opt-in hardware NGX transitions. Explicit test directories; never a real game.
+add_executable(dlss_runtime_test32 tools/dlss_runtime_test/main.cpp core/gfx/dlss_sharpen.cpp)
+target_include_directories(dlss_runtime_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(dlss_runtime_test32 PRIVATE d3d11 d3dcompiler)
 
 add_executable(latency_probe_test32 tools/latency_probe_test/main.cpp core/gfx/dlss_sharpen.cpp)
 target_include_directories(latency_probe_test32 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -345,6 +379,27 @@ if(BVR_DEPTH_COPY_REUSE)
     target_compile_definitions(bioshockvr PRIVATE BVR_DEPTH_COPY_REUSE=1)
     target_compile_definitions(temporal_guides_test32 PRIVATE BVR_DEPTH_COPY_REUSE=1)
 endif()
+
+# --- temporal_guides_bs2_test32 - BS2 finite-depth/camera contract ------------
+add_executable(close_policy_test32 tools/close_policy_test/main.cpp)
+target_include_directories(close_policy_test32 PRIVATE .)
+
+add_executable(bvr_bs2_exit_guard_test tools/bs2_exit_guard_test/main.cpp)
+target_include_directories(bvr_bs2_exit_guard_test PRIVATE .)
+
+add_executable(game_exit_gate_test32 ../tools/game_exit_gate_test/main.cpp)
+target_include_directories(game_exit_gate_test32 PRIVATE .)
+
+add_executable(temporal_guides_bs2_test32
+    tools/temporal_guides_bs2_test/main.cpp
+    game/bioshock2r/temporal_guides.cpp
+    core/util/log.cpp
+)
+target_include_directories(temporal_guides_bs2_test32 PRIVATE .)
+if(BVR_DEPTH_COPY_REUSE)
+    target_compile_definitions(temporal_guides_bs2_test32 PRIVATE BVR_DEPTH_COPY_REUSE=1)
+endif()
+target_link_libraries(temporal_guides_bs2_test32 PRIVATE d3d11 d3dcompiler shell32)
 
 # --- bvr_xrsim32 - the simulated OpenXR runtime -------------------------------
 # A Quest-3-shaped 32-bit OpenXR runtime so an agent can test the mod with no

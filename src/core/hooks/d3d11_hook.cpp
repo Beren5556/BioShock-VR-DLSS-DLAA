@@ -7,6 +7,7 @@
 #include "core/ui/overlay.h"
 #include "core/util/crash.h"
 #include "core/util/diag.h"
+#include "core/util/game_exit_gate.h"
 #include "core/util/log.h"
 #include "core/vr/openxr_runtime.h"
 #include "core/vr/critical_path_probe.h"
@@ -65,6 +66,8 @@ void LogSwapchainInfo(IDXGISwapChain* swapchain) {
 }
 
 HRESULT WINAPI PresentDetour(IDXGISwapChain* swapchain, UINT syncInterval, UINT flags) {
+    game_exit::Scope runtimeScope(game_exit::host_is_bioshock2());
+    if (!runtimeScope) return g_origPresent(swapchain, syncInterval, flags);
     namespace CP = bvr::critical_path_probe;
     CP::Scope presentScope(CP::Stage::PresentSetup);
     // Stop the scene interval before letterbox, xrWaitFrame, overlays and DLAA.
@@ -181,6 +184,9 @@ HRESULT WINAPI PresentDetour(IDXGISwapChain* swapchain, UINT syncInterval, UINT 
 HRESULT WINAPI ResizeBuffersDetour(IDXGISwapChain* swapchain, UINT bufferCount,
                                    UINT width, UINT height, DXGI_FORMAT format,
                                    UINT swapchainFlags) {
+    game_exit::Scope runtimeScope(game_exit::host_is_bioshock2());
+    if (!runtimeScope)
+        return g_origResizeBuffers(swapchain, bufferCount, width, height, format, swapchainFlags);
     vr::on_resize(width, height, static_cast<unsigned>(format));
     overlay::on_resize();
     hud::release_resources(); // recreated lazily at the new size

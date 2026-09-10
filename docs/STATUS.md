@@ -1,5 +1,40 @@
 # Project status
 
+## BioShock 1–2 integration candidate (2026-09-10)
+
+Development of the shared 0.2.13 distribution is authorized. See
+[integration status, reproducible builds and remaining gates](INTEGRATION-0.2.13.md).
+BS1's accepted 0.2.11 MSI stays embedded unchanged. BS2 is a new candidate,
+not headset-validated yet. The 0.2.12 rejection below remains in force.
+
+## BioShock 1 DLSS/DLAA fork: accepted baseline (2026-09-10)
+
+User decision: **0.2.11 is the only accepted version for the mod, launcher,
+installer, distribution and future development.** The user observed problems
+with 0.2.12 and explicitly discarded it. This decision supersedes earlier
+0.2.12 implementation, validation and multilingual-release plans.
+
+- Active local branch: `codex/v0.2.11-stable`, based on `7b5ee08` (the
+  published `v0.2.11` release, `894cae8`, plus the existing CI-only UTF-8 fix).
+- Dead local branch: `codex/discarded-v0.2.12`, retaining candidate `7d948aa`
+  and the later technical-report commit `5573ac1`. Its remote tracking was
+  removed. Do not continue, merge, cherry-pick, build for distribution or
+  publish the discarded candidate. Do not reuse its cached build outputs.
+- The accepted installer is `BioShock-VR-DLSS-DLAA-0.2.11.msi`; its release
+  manifest and checksums remain authoritative. The desktop 0.2.12 MSI is
+  archived under `Lanzadores MOD VR/Archivados/0.2.12-descartada/`.
+- GitHub was checked: `v0.2.11` remains the latest public release and `main`
+  remains at `7b5ee08`. There is no 0.2.12 release or tag. Its code had already
+  been pushed in development branch `codex/v0.2.4-live-controls` before this
+  decision; no remote branch was deleted or rewritten in this session.
+- No installed game/mod files, user settings or existing 0.2.11 packages were
+  changed. The separately produced technical report was preserved locally.
+
+Next steps: wait for the user's next instruction. Any future authorized work
+must start from 0.2.11, not from the discarded multilingual candidate.
+
+---
+
 > Handoff file. Rewrite "Current state" and "Next steps" every session; append to the session log.
 
 ## The three games (one branch, one release line)

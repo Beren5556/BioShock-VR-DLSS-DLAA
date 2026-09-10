@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <UI Id="BioShockSingleUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="10" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="InstallDir" />
+      <DialogRef Id="BrowseDlg" /><DialogRef Id="DiskCostDlg" /><DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" /><DialogRef Id="FilesInUse" /><DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" /><DialogRef Id="UserExit" />
+      <Dialog Id="GameSelectorDlg" Width="370" Height="160" Title="BioShock 1-2 VR · [ProductVersion]">
+        <Control Id="Title" Type="Text" X="15" Y="14" Width="340" Height="24" Text="{\WixUI_Font_Title}Selecciona el juego" />
+        <Control Id="Game" Type="ComboBox" X="15" Y="54" Width="340" Height="70" Property="BVR_GAME" ComboList="yes" Sorted="yes">
+          <ComboBox Property="BVR_GAME">
+            <ListItem Value="choose" Text="Selecciona un juego…" />
+            <ListItem Value="bs1" Text="BioShock Remastered" />
+            <ListItem Value="bs2" Text="BioShock 2 Remastered" />
+          </ComboBox>
+        </Control>
+        <Control Id="Line" Type="Line" X="0" Y="125" Width="370" Height="0" />
+        <Control Id="Next" Type="PushButton" X="226" Y="133" Width="62" Height="18" Default="yes" Text="Siguiente">
+          <Publish Event="DoAction" Value="OpenSelectedGame" Order="1" />
+          <Publish Event="SpawnDialog" Value="SuiteErrorDlg" Order="2" Condition="BVR_VALID &lt;&gt; &quot;1&quot;" />
+          <Publish Event="EndDialog" Value="Exit" Order="3" Condition="BVR_DISPATCHING = &quot;1&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="133" Width="62" Height="18" Cancel="yes" Text="Cancelar"><Publish Event="EndDialog" Value="Exit" /></Control>
+      </Dialog>
+      <Dialog Id="SingleOperationDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="15" Y="14" Width="340" Height="24" Text="{\WixUI_Font_Title}[BVR_GAME_TITLE] · mod VR" />
+        <Control Id="Description" Type="Text" X="15" Y="52" Width="340" Height="40" Text="Continúa para instalar, actualizar o reparar el mod de este juego. Tus preferencias se conservan; el otro juego no se modifica." />
+        <Control Id="Remove" Type="PushButton" X="15" Y="117" Width="155" Height="22" Hidden="yes" ShowCondition="Installed" Text="Desinstalar este mod">
+          <Publish Property="BVR_OPERATION" Value="remove" Order="1" />
+          <Publish Event="DoAction" Value="PlanSingleGame" Order="2" />
+          <Publish Event="NewDialog" Value="SingleReadyDlg" Order="3" Condition="BVR_VALID = &quot;1&quot;" />
+        </Control>
+        <Control Id="Originals" Type="Text" X="15" Y="158" Width="340" Height="47" Text="Desinstalar retira únicamente este mod y recupera los archivos previos cuando su copia es válida. No borra el juego de Steam, partidas ni preferencias." />
+        <Control Id="Line" Type="Line" X="0" Y="235" Width="370" Height="0" />
+        <Control Id="Next" Type="PushButton" X="200" Y="243" Width="88" Height="18" Default="yes" Text="Continuar">
+          <Publish Property="BVR_OPERATION" Value="install" Order="1" />
+          <Publish Event="NewDialog" Value="Folder_bs1" Order="2" Condition="BVR_INSTANCE = &quot;bs1&quot;" />
+          <Publish Event="NewDialog" Value="Folder_bs2" Order="3" Condition="BVR_INSTANCE = &quot;bs2&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="243" Width="62" Height="18" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+      </Dialog>
+      <Dialog Id="SingleReadyDlg" Width="370" Height="220" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="15" Y="14" Width="340" Height="24" Text="{\WixUI_Font_Title}[BVR_GAME_TITLE] · confirmar" />
+        <Control Id="Action" Type="Text" X="15" Y="53" Width="340" Height="38" Text="[BVR_SUMMARY]" />
+        <Control Id="Folder" Type="Text" X="15" Y="104" Width="340" Height="58" NoPrefix="yes" Text="Carpeta del juego:&#13;&#10;[BVR_SELECTED_PATH]" />
+        <Control Id="Line" Type="Line" X="0" Y="185" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="156" Y="193" Width="62" Height="18" Text="Atrás"><Publish Event="NewDialog" Value="SingleOperationDlg" /></Control>
+        <Control Id="Apply" Type="PushButton" X="226" Y="193" Width="62" Height="18" Default="yes" Text="Aplicar">
+          <Publish Event="DoAction" Value="PlanSingleGame" Order="1" />
+          <Publish Event="SpawnDialog" Value="SuiteErrorDlg" Order="2" Condition="BVR_VALID &lt;&gt; &quot;1&quot;" />
+          <Publish Event="ReinstallMode" Value="amus" Order="3" Condition="BVR_VALID = &quot;1&quot;" />
+          <Publish Event="Reinstall" Value="Game_bs1" Order="4" Condition="Installed AND BVR_OPERATION &lt;&gt; &quot;remove&quot; AND BVR_INSTANCE = &quot;bs1&quot;" />
+          <Publish Event="Reinstall" Value="Desktop_bs1" Order="5" Condition="Installed AND BVR_OPERATION &lt;&gt; &quot;remove&quot; AND BVR_INSTANCE = &quot;bs1&quot; AND BVR_BS1_DESKTOPSHORTCUT = &quot;1&quot;" />
+          <Publish Event="Reinstall" Value="Game_bs2" Order="6" Condition="Installed AND BVR_OPERATION &lt;&gt; &quot;remove&quot; AND BVR_INSTANCE = &quot;bs2&quot;" />
+          <Publish Event="Reinstall" Value="Desktop_bs2" Order="7" Condition="Installed AND BVR_OPERATION &lt;&gt; &quot;remove&quot; AND BVR_INSTANCE = &quot;bs2&quot; AND BVR_BS2_DESKTOPSHORTCUT = &quot;1&quot;" />
+          <Publish Event="EndDialog" Value="Return" Order="8" Condition="BVR_VALID = &quot;1&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="193" Width="62" Height="18" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+      </Dialog>
+      <Dialog Id="SingleProgressDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]" Modeless="yes">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24" Text="{\WixUI_Font_Title}[BVR_GAME_TITLE] · aplicando cambios" />
+        <Control Id="Info" Type="Text" X="20" Y="60" Width="330" Height="35" Text="Espera mientras Windows aplica los cambios únicamente al mod seleccionado." />
+        <Control Id="ActionText" Type="Text" X="20" Y="107" Width="330" Height="38" NoPrefix="yes"><Subscribe Event="ActionText" Attribute="Text" /></Control>
+        <Control Id="Progress" Type="ProgressBar" X="20" Y="157" Width="330" Height="12" ProgressBlocks="yes"><Subscribe Event="SetProgress" Attribute="Progress" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="243" Width="62" Height="18" Default="yes" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+      </Dialog>
+      <Dialog Id="SingleExitDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24" Text="{\WixUI_Font_Title}[BVR_GAME_TITLE] · completado" />
+        <Control Id="Info" Type="Text" X="20" Y="62" Width="330" Height="65" Text="La operación ha terminado correctamente. Si has instalado o reparado el mod, su lanzador está dentro de Build\Final del juego y tiene un acceso en el escritorio si lo elegiste." />
+        <Control Id="Preserved" Type="Text" X="20" Y="143" Width="330" Height="48" Text="Tus partidas, preferencias y copias de seguridad se conservan. El otro juego no se ha modificado." />
+        <Control Id="Finish" Type="PushButton" X="296" Y="243" Width="62" Height="18" Default="yes" Cancel="yes" Text="Finalizar"><Publish Event="EndDialog" Value="Return" Order="999" /></Control>
+      </Dialog>
+      <Dialog Id="SuiteErrorDlg" Width="300" Height="135" Title="BioShock VR">
+        <Control Id="Message" Type="Text" X="15" Y="15" Width="270" Height="80" Text="[BVR_ERROR]" />
+        <Control Id="OK" Type="PushButton" X="118" Y="106" Width="64" Height="18" Default="yes" Cancel="yes" Text="Aceptar"><Publish Event="EndDialog" Value="Return" /></Control>
+      </Dialog>
+      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="1" />
+      <Publish Dialog="BrowseDlg" Control="OK" Property="BVR_BS1_GAMEPATH" Value="[BS1DIR]" Order="2" Condition="_BrowseProperty = &quot;BS1DIR&quot;" />
+      <Publish Dialog="BrowseDlg" Control="OK" Property="BVR_BS2_GAMEPATH" Value="[BS2DIR]" Order="3" Condition="_BrowseProperty = &quot;BS2DIR&quot;" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="4" />
+      <InstallUISequence>
+        <Show Dialog="override ExitDialog" Sequence="1250" Condition="0" />
+        <Show Dialog="override UserExit" OnExit="cancel" Condition="NOT BVR_DISPATCHING" />
+        <Show Dialog="SingleExitDlg" OnExit="success" Condition="BVR_INSTANCE &lt;&gt; &quot;selector&quot;" />
+        <Show Dialog="GameSelectorDlg" Sequence="1293" Condition="BVR_INSTANCE = &quot;selector&quot;" />
+        <Show Dialog="SingleOperationDlg" Sequence="1294" Condition="BVR_INSTANCE &lt;&gt; &quot;selector&quot; AND Installed" />
+        <Show Dialog="Folder_bs1" Sequence="1295" Condition="BVR_INSTANCE = &quot;bs1&quot; AND NOT Installed" />
+        <Show Dialog="Folder_bs2" Sequence="1296" Condition="BVR_INSTANCE = &quot;bs2&quot; AND NOT Installed" />
+        <Show Dialog="override ProgressDlg" Sequence="1298" Condition="0" />
+        <Show Dialog="SingleProgressDlg" Sequence="1299" Condition="BVR_INSTANCE &lt;&gt; &quot;selector&quot;" />
+      </InstallUISequence>
+    </UI>
+    <UIRef Id="GameUI_bs1" /><UIRef Id="GameUI_bs2" /><UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>

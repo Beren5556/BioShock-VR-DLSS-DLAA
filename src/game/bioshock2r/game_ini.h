@@ -57,12 +57,14 @@
 // endings and are edited in place, preserving every other byte.
 
 #include <cstdint>
+#include <string>
 
 namespace bvr::b2r::game_ini {
 
 // Full path to the located Shared.ini (the file that governs), or an empty
 // string. Cached after the first call; the search is logged once.
 const wchar_t* path();
+const wchar_t* sp_path();
 
 struct Viewport {
     // The GOVERNING pair, from Shared.ini [SharedOptions].
@@ -80,8 +82,8 @@ Viewport read_viewport();
 
 // Set the render resolution to w x h. Writes Shared.ini's ViewportX/Y (the
 // authoritative pair, verified by read-back) and then keeps Bioshock2SP.ini's
-// windowed AND fullscreen pairs in sync (best effort, non-fatal - the engine
-// does not read them). MenuViewportX/Y is deliberately left alone: it is the
+// windowed AND fullscreen pairs in sync (one coordinated, verified save).
+// MenuViewportX/Y is deliberately left alone: it is the
 // pre-game menu surface, not the render target.
 //
 // Each file is backed up once to <name>.bvr-bak-res before its first edit.
@@ -89,6 +91,10 @@ Viewport read_viewport();
 // file. Game thread, on explicit request only. Takes effect on the NEXT
 // launch - see the header note on why there is no live path.
 bool write_viewport(uint32_t w, uint32_t h);
+// Used after a confirmed HMD change: includes dlss.ini in the same rollback set.
+// The caller supplies its pre-edit snapshot so an external edit aborts the save.
+bool write_viewport_and_settings(uint32_t w, uint32_t h, const std::wstring& settings,
+                                 bool existed, const std::string& before, const std::wstring& staged);
 
 // One log line: both files' geometry and whether the governing pair agrees
 // with the live backbuffer. A disagreement after a relaunch is the signal that

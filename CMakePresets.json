@@ -9,10 +9,10 @@
       "binaryDir": "${sourceDir}/build"
     },
     {
-      "name": "stable-win32",
+      "name": "integration-win32",
       "inherits": "win32",
-      "displayName": "0.2.11 - stereo recovery and MSI upgrade",
-      "binaryDir": "${sourceDir}/artifacts/stable-0.2.11/build",
+      "displayName": "0.2.13 - BioShock 1-2 development candidate",
+      "binaryDir": "${sourceDir}/artifacts/integration-0.2.13/build",
       "cacheVariables": {
         "BVR_DLSS_OVERLAP": "ON",
         "BVR_DEPTH_COPY_REUSE": "ON",
@@ -20,7 +20,8 @@
         "BVR_DLSS_EARLY_DELIVERY": "ON",
         "BVR_PERFORMANCE_PROBE": "OFF",
         "BVR_LATENCY_PROBE": "OFF",
-        "BVR_CRITICAL_PATH_PROBE": "OFF"
+        "BVR_CRITICAL_PATH_PROBE": "OFF",
+        "BVR_BS2_TEST_ISOLATION": "OFF"
       }
     }
   ],
@@ -36,8 +37,8 @@
       "configuration": "RelWithDebInfo"
     },
     {
-      "name": "stable",
-      "configurePreset": "stable-win32",
+      "name": "integration",
+      "configurePreset": "integration-win32",
       "configuration": "Release"
     }
   ]

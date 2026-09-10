@@ -10,11 +10,11 @@ using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-[assembly: AssemblyTitle("Complemento DLSS 4.5 para BioShock VR - Beren5556")]
+[assembly: AssemblyTitle("BioShock 1-2 VR - DLSS/DLAA - Beren5556")]
 [assembly: AssemblyDescription("Lanzador y editor seguro con modos Normal, DLAA y DLSS 4.5")]
 [assembly: AssemblyProduct("Complemento DLSS 4.5 para BioShock VR")]
-[assembly: AssemblyVersion("0.2.11.0")]
-[assembly: AssemblyFileVersion("0.2.11.0")]
+[assembly: AssemblyVersion("0.2.13.0")]
+[assembly: AssemblyFileVersion("0.2.13.0")]
 
 namespace BioshockVrLauncher
 {
@@ -124,7 +124,7 @@ namespace BioshockVrLauncher
             if (lines.Count == 1 && lines[0].Length == 0)
             {
                 lines.Clear();
-                lines.Add("# BioShock VR - valores guardados por el lanzador en castellano");
+                lines.Add("# " + GameProfile.DisplayName + " VR - valores guardados por el lanzador en castellano");
             }
 
             HashSet<string> written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -411,7 +411,7 @@ namespace BioshockVrLauncher
             if (!foundSpatial)
             {
                 if (lines.Count > 0) lines.Add(string.Empty);
-                lines.Add("# Reescalado espacial experimental de BioShock VR");
+                lines.Add("# Reescalado espacial experimental de " + GameProfile.DisplayName + " VR");
                 lines.Add("# No activa DLSS ni DLAA. Solo lo utiliza la DLL experimental compatible.");
                 lines.Add("[spatial]");
                 spatialEnd = lines.Count;
@@ -841,7 +841,7 @@ namespace BioshockVrLauncher
             if (!foundDlss)
             {
                 if (lines.Count > 0) lines.Add(string.Empty);
-                lines.Add("# Complemento DLSS 4.5 para BioShock VR - integracion de Beren5556");
+                lines.Add("# Complemento DLSS 4.5 para " + GameProfile.DisplayName + " VR - integracion de Beren5556");
                 lines.Add("# Requiere dos historiales por ojo, profundidad, movimiento, jitter y host x64.");
                 lines.Add("[dlss]");
                 dlssEnd = lines.Count;
@@ -1035,6 +1035,12 @@ namespace BioshockVrLauncher
                     width >= outputWidth || height >= outputHeight ||
                     (width & 1) != 0 || (height & 1) != 0)
                     continue;
+                // Match image_control_policy.h: never round a >=50% request
+                // below NGX's half-resolution boundary (2950: 1476, not 1474).
+                // The host still validates the real runtime's advertised range.
+                if ((long)numerator * 2 >= denominator &&
+                    (width * 2 < outputWidth || height * 2 < outputHeight))
+                    continue;
                 long error = Math.Abs((long)denominator * multiplier - targetNumerator);
                 if (error < bestError)
                 {
@@ -1122,6 +1128,13 @@ namespace BioshockVrLauncher
                 out width, out height);
             bool tiesRoundDown = TryCalculateRender(4096, 4096, 2049, 4096,
                 out width, out height) && width == 2048 && height == 2048;
+            bool oddPerformanceBoundary = TryCalculateRender(2950, 2950, 1, 2,
+                out width, out height) && width == 1476 && height == 1476;
+            bool allPerformanceBoundaries = true;
+            for (int output = 2048; output <= 8192; output += 2)
+                allPerformanceBoundaries &= TryCalculateRender(output, output, 1, 2,
+                    out width, out height) && width * 2 >= output && height * 2 >= output &&
+                    width <= output / 2 + 1 && (width & 1) == 0 && (height & 1) == 0;
 
             DlssSettings custom = DlssConfigDocument.Defaults(2360, 2360);
             custom.Mode = DlssMode.SuperResolution;
@@ -1135,7 +1148,8 @@ namespace BioshockVrLauncher
                                                                out roundTrip, out warning);
             return quality && balanced && performance && ultra &&
                    recognizesBalanced && personalized && intermediateSteps &&
-                   minimumIsRespected && tiesRoundDown && roundTripValid &&
+                   minimumIsRespected && tiesRoundDown && oddPerformanceBoundary &&
+                   allPerformanceBoundaries && roundTripValid &&
                    string.IsNullOrEmpty(warning) &&
                    roundTrip.Quality == DlssQuality.Custom &&
                    rendered.Contains("quality=auto") &&
@@ -1575,11 +1589,11 @@ namespace BioshockVrLauncher
                 else if (IsBoolean(entry.Value))
                     description = "Activa o desactiva este comportamiento del juego. Es una opción general y no se ha identificado un efecto VR directo.";
                 else
-                    description = "Valor de configuración general del juego. No se ha identificado un efecto VR directo; se conserva visible para ofrecer acceso al Bioshock.ini completo.";
+                    description = "Valor de configuración general del juego. No se ha identificado un efecto VR directo; se conserva visible para ofrecer acceso al Bioshock2SP.ini completo.";
             }
             if (consoleSection)
                 description = "Copia para consola de «" + entry.FriendlyName +
-                    "». Esta sección no afecta a la versión de Windows ni al mod VR instalado; se muestra únicamente para que Bioshock.ini esté completo.";
+                    "». Esta sección no afecta a la versión de Windows ni al mod VR instalado; se muestra únicamente para que Bioshock2SP.ini esté completo.";
             entry.Description = description;
         }
 
@@ -1609,7 +1623,7 @@ namespace BioshockVrLauncher
                 entry.Impact = IniImpact.Warning;
                 entry.Protected = true;
                 string selected = alternativeRenderer ? activeRenderer : activeAudio;
-                entry.Description = "Ajuste de una ruta alternativa que este Bioshock.ini no tiene seleccionada. " +
+                entry.Description = "Ajuste de una ruta alternativa que este Bioshock2SP.ini no tiene seleccionada. " +
                     "La ruta activa es [" + selected + "]; cambiar este valor normalmente no afectará al juego ni a VR. " +
                     "Se mantiene protegido para evitar confundir una copia inactiva con el ajuste efectivo.";
             }
@@ -1661,8 +1675,22 @@ namespace BioshockVrLauncher
         private readonly string _upscalerConfigPath;
         private readonly string _dlssConfigPath;
         private readonly string _gameIniPath;
+        private readonly string _sharedIniPath;
+        private readonly string _weaponsPath;
+        private string _weaponsLoadedContent;
+        private string _sharedIniLoadedContent;
+        private Encoding _sharedIniEncoding;
+        private List<IniEntry> _sharedIniEntries = new List<IniEntry>();
+        private Timer _launchTimer;
+        private bool _launchPending;
+        private DateTime _launchRequestedUtc;
+        private readonly HashSet<int> _launchPreviousIds = new HashSet<int>();
+        private GameLaunchTracker _launchTracker;
+        private TextBox _diagnostics;
         private readonly List<ParamDef> _definitions;
         private readonly Dictionary<string, Control> _editors;
+        private readonly Dictionary<string, string> _originalEditorValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _initialEditorValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly ToolTip _toolTip;
         private string _loadedContent;
         private DateTime _loadedWriteTimeUtc;
@@ -1691,9 +1719,6 @@ namespace BioshockVrLauncher
         private int _previousDlssModeIndex;
         private int _previousDlssOutputWidth = 2048;
         private int _previousDlssOutputHeight = 2048;
-        private bool _launchPending;
-        private DateTime _launchDeadlineUtc;
-        private Timer _launchWatchTimer;
         private string _gameExePath;
 
         private Label _configStateLabel;
@@ -1741,19 +1766,15 @@ namespace BioshockVrLauncher
         private MainForm(bool selfTest)
         {
             string isolated = selfTest ? Path.Combine(Path.GetTempPath(),
-                "BioShockLauncherSelfTest-" + Guid.NewGuid().ToString("N")) : null;
-            _configPath = Path.Combine(
-                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "BioshockVR", "vrpreset.ini");
-            _upscalerConfigPath = Path.Combine(
-                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "BioshockVR", "upscaler.ini");
-            _dlssConfigPath = Path.Combine(
-                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "BioshockVR", "dlss.ini");
-            _gameIniPath = Path.Combine(
-                isolated ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "BioshockHD", "Bioshock", "Bioshock.ini");
+                "BioShockLauncherSelfTest-" + Guid.NewGuid().ToString("N")) : Program.SandboxRoot;
+            string local = GameProfile.GetLocalDirectory(isolated);
+            string game = GameProfile.GetGameIniDirectory(isolated);
+            _configPath = Path.Combine(local, "vrpreset.ini");
+            _upscalerConfigPath = Path.Combine(local, "upscaler.ini");
+            _dlssConfigPath = Path.Combine(local, "dlss.ini");
+            _weaponsPath = Path.Combine(local, "weapons.ini");
+            _gameIniPath = Path.Combine(game, GameProfile.IniName);
+            _sharedIniPath = Path.Combine(game, "Shared.ini");
             _definitions = BuildDefinitions();
             _editors = new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase);
             _gameIniEntries = new List<IniEntry>();
@@ -1762,7 +1783,7 @@ namespace BioshockVrLauncher
             _toolTip.InitialDelay = 350;
             _toolTip.ReshowDelay = 100;
 
-            Text = "BioShock VR · DLSS/DLAA 0.2.11";
+            Text = GameProfile.DisplayName + " VR · DLSS/DLAA 0.2.13 · candidato";
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -1800,6 +1821,8 @@ namespace BioshockVrLauncher
                     "[WinDrv.WindowsClient]\r\nWindowedViewportX=2730\r\n" +
                     "WindowedViewportY=2730\r\nFullscreenViewportX=2730\r\n" +
                     "FullscreenViewportY=2730\r\n");
+                form._sharedIniEntries = GameIniDocument.Parse(
+                    "[SharedOptions]\r\nViewportX=2730\r\nViewportY=2730\r\nStartupFullscreen=False\r\n");
                 form._dlssMode.SelectedIndex = 2;
                 form._previousDlssModeIndex = 2;
                 form._dlssPreset.SelectedIndex = 0;
@@ -1999,7 +2022,7 @@ namespace BioshockVrLauncher
                 "Desplazamiento vertical del panel. Positivo lo sube y negativo lo baja.",
                 "metros", -1.0m, 1.0m, 0.05m, 2, "-0.10"));
 
-            return p;
+            return GameProfile.IsBioShock2 ? Bs2Profile.AdaptDefinitions(p) : p;
         }
 
         private void BuildInterface()
@@ -2012,7 +2035,7 @@ namespace BioshockVrLauncher
             Controls.Add(header);
 
             Label title = new Label();
-            title.Text = "BioShock VR · DLSS/DLAA";
+            title.Text = GameProfile.DisplayName + " VR · DLSS/DLAA";
             title.ForeColor = SystemColors.ControlText;
             title.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
             title.AutoSize = true;
@@ -2085,7 +2108,7 @@ namespace BioshockVrLauncher
             footer.Controls.Add(_statusLabel);
             ContextMenuStrip fileMenu = new ContextMenuStrip();
             fileMenu.Items.Add("Abrir vrpreset.ini", null, delegate { OpenConfigurationFile(); });
-            fileMenu.Items.Add("Abrir Bioshock.ini", null, delegate { OpenGameIniFile(); });
+            fileMenu.Items.Add("Abrir " + GameProfile.IniName, null, delegate { OpenGameIniFile(); });
             fileMenu.Items.Add("Ver copias de seguridad", null, delegate { OpenBackupFolder(); });
             fileMenu.Items.Add(new ToolStripSeparator());
             fileMenu.Items.Add("Créditos y licencias", null, delegate { ShowCreditsAndLicenses(); });
@@ -2108,17 +2131,20 @@ namespace BioshockVrLauncher
 
             string[] categoryOrder = new string[] {
                 "Cámara y escala", "Manos y apuntado", "Movimiento y giro",
-                "Ataque por gesto", "Cinemáticas y efectos", "HUD y ayudas"
+                "Cinemáticas y efectos", "HUD y ayudas"
             };
             AddResolutionTab();
             foreach (string category in categoryOrder)
                 AddCategoryTab(category);
+            if (GameProfile.IsBioShock2) AddWeaponsTab();
+            else AddCategoryTab("Ataque por gesto");
+
             InitializeHiddenIniEditor();
 
             KeyPreview = true;
             KeyDown += MainForm_KeyDown;
             FormClosing += MainForm_FormClosing;
-            FormClosed += delegate { StopLaunchWatch(); };
+            FormClosed += delegate { StopLaunchMonitor(); };
         }
 
         private Button MakeButton(string text, Color backColor, Color foreColor, int width)
@@ -2165,6 +2191,157 @@ namespace BioshockVrLauncher
 
             page.Controls.Add(table);
             _tabs.TabPages.Add(page);
+        }
+
+        private void AddWeaponsTab()
+        {
+            TabPage page = new TabPage("Armas");
+            page.Name = "Armas";
+            page.Padding = new Padding(8);
+            ComboBox select = new ComboBox();
+            select.DropDownStyle = ComboBoxStyle.DropDownList;
+            select.Dock = DockStyle.Top;
+            select.Items.AddRange(Bs2Profile.WeaponNames);
+            Panel host = new Panel();
+            host.Dock = DockStyle.Fill;
+            host.AutoScroll = true;
+            List<TableLayoutPanel> panels = new List<TableLayoutPanel>();
+            for (int weapon = 0; weapon < Bs2Profile.WeaponClasses.Length; ++weapon)
+            {
+                TableLayoutPanel table = new TableLayoutPanel();
+                table.Dock = DockStyle.Top;
+                table.AutoSize = true;
+                table.ColumnCount = 4;
+                table.Padding = new Padding(2, 8, 2, 2);
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+                table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                int row = 0;
+                foreach (ParamDef definition in _definitions)
+                {
+                    if (definition.Category != "Armas" ||
+                        !definition.Key.StartsWith(Bs2Profile.WeaponClasses[weapon] + ".", StringComparison.Ordinal)) continue;
+                    table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    AddParameterRow(table, row++, definition);
+                }
+                table.Visible = false;
+                panels.Add(table);
+                host.Controls.Add(table);
+            }
+            select.SelectedIndexChanged += delegate
+            {
+                host.SuspendLayout();
+                for (int i = 0; i < panels.Count; ++i) panels[i].Visible = i == select.SelectedIndex;
+                host.AutoScrollPosition = Point.Empty;
+                host.ResumeLayout();
+            };
+            page.Controls.Add(host);
+            page.Controls.Add(select);
+            select.SelectedIndex = 0;
+            _tabs.TabPages.Add(page);
+        }
+
+        private void AddDiagnosticsTab()
+        {
+            TabPage page = new TabPage("Diagnóstico");
+            page.Name = "Diagnóstico";
+            page.Padding = new Padding(8);
+            FlowLayoutPanel actions = new FlowLayoutPanel();
+            actions.Dock = DockStyle.Top;
+            actions.Height = 38;
+            Button refresh = MakeButton("Actualizar", SystemColors.Control, SystemColors.ControlText, 95);
+            refresh.Click += delegate { RefreshDiagnostics(); };
+            actions.Controls.Add(refresh);
+            Button copy = MakeButton("Copiar informe", SystemColors.Control, SystemColors.ControlText, 130);
+            copy.Click += delegate
+            {
+                try { RefreshDiagnostics(); Clipboard.SetText(_diagnostics.Text); SetStatus("Diagnóstico copiado.", Success); }
+                catch (Exception ex) { SetStatus("No se pudo copiar: " + ex.Message, Color.Firebrick); }
+            };
+            actions.Controls.Add(copy);
+            Button open = MakeButton("Abrir datos VR", SystemColors.Control, SystemColors.ControlText, 125);
+            open.Click += delegate
+            {
+                try
+                {
+                    if (Directory.Exists(GameProfile.LocalDirectory))
+                        Process.Start(new ProcessStartInfo("explorer.exe", "\"" + GameProfile.LocalDirectory + "\"") { UseShellExecute = true });
+                    else SetStatus("La carpeta VR aún no existe; se creará al guardar.", Warning);
+                }
+                catch (Exception ex) { SetStatus("No se pudo abrir: " + ex.Message, Color.Firebrick); }
+            };
+            actions.Controls.Add(open);
+            _diagnostics = new TextBox();
+            _diagnostics.Multiline = true;
+            _diagnostics.ReadOnly = true;
+            _diagnostics.ScrollBars = ScrollBars.Both;
+            _diagnostics.WordWrap = false;
+            _diagnostics.Dock = DockStyle.Fill;
+            _diagnostics.Font = new Font("Consolas", 9);
+            page.Controls.Add(_diagnostics);
+            page.Controls.Add(actions);
+            _tabs.TabPages.Add(page);
+        }
+
+        private void RefreshDiagnostics()
+        {
+            if (_diagnostics == null) return;
+            StringBuilder info = new StringBuilder();
+            info.AppendLine(GameProfile.DisplayName + " VR DLSS/DLAA · 0.2.13 candidato");
+            info.AppendLine("Fecha UTC: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture));
+            info.AppendLine("Steam AppID: " + GameProfile.AppId);
+            info.AppendLine("Ejecutable: " + (_gameExePath ?? "(no encontrado)"));
+            try
+            {
+                if (!string.IsNullOrEmpty(_gameExePath) && File.Exists(_gameExePath))
+                {
+                    string hash = Bs2Profile.Hash(_gameExePath);
+                    info.AppendLine("SHA-256: " + hash);
+                    info.AppendLine("Compilación compatible: " + (hash == GameProfile.ExeHash ? "sí" : "NO"));
+                }
+            }
+            catch (Exception ex) { info.AppendLine("Hash no disponible: " + ex.Message); }
+            info.AppendLine("Datos específicos BS2: " + GameProfile.LocalDirectory);
+            info.AppendLine("Resolución efectiva: " + _sharedIniPath);
+            info.AppendLine("Espejo y gráficos: " + _gameIniPath);
+            foreach (string file in new string[] { _configPath, _weaponsPath, _dlssConfigPath, _sharedIniPath, _gameIniPath })
+                info.AppendLine((File.Exists(file) ? "[existe] " : "[ausente] ") + file);
+            int width, height;
+            if (TryGetRenderDimensions(out width, out height))
+                info.AppendLine("Render Shared.ini: " + width + " × " + height +
+                    " | espejo SP: " + (MirrorMatches(width, height) ? "sincronizado" : "distinto/incompleto"));
+            info.AppendLine("Backend: " + DetectDlssBackend().Summary);
+            try
+            {
+                using (RegistryKey machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32))
+                using (RegistryKey xr = machine.OpenSubKey(@"SOFTWARE\Khronos\OpenXR\1"))
+                    info.AppendLine("Runtime OpenXR x86: " + (xr == null ? "(sin registro)" : Convert.ToString(xr.GetValue("ActiveRuntime"), CultureInfo.InvariantCulture)));
+            }
+            catch (Exception ex) { info.AppendLine("OpenXR: " + ex.Message); }
+            info.AppendLine("Comprobación de arranque: proceso nuevo " + GameProfile.ProcessName + ", ruta exacta, ventana y respuesta durante al menos 3 segundos.");
+            info.AppendLine("Nota: una ventana operativa confirma el arranque del juego; no valida la calidad de imagen ni la sesión del visor.");
+            string logPath = Path.Combine(GameProfile.LocalDirectory, "bioshockvr.log");
+            info.AppendLine();
+            info.AppendLine("Últimas líneas del registro: " + logPath);
+            try
+            {
+                if (File.Exists(logPath))
+                {
+                    using (FileStream stream = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                    {
+                        stream.Seek(Math.Max(0, stream.Length - 16000), SeekOrigin.Begin);
+                        using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
+                        {
+                            string[] lines = reader.ReadToEnd().Replace("\r", "").Split('\n');
+                            for (int i = Math.Max(0, lines.Length - 50); i < lines.Length; ++i) info.AppendLine(lines[i]);
+                        }
+                    }
+                }
+                else info.AppendLine("(El juego todavía no ha generado un registro BS2.)");
+            }
+            catch (Exception ex) { info.AppendLine("No se pudo leer: " + ex.Message); }
+            _diagnostics.Text = info.ToString();
         }
 
         private static string ShortCategoryName(string category)
@@ -2288,7 +2465,7 @@ namespace BioshockVrLauncher
             fxaaGroup.Controls.Add(_fxaaStateLabel);
 
             Label warning = new Label();
-            warning.Text = "AVISO VR  ·  Un 10 % más de resolución por eje supone aproximadamente un 21 % más de píxeles. Los cambios se aplican al siguiente inicio y deben guardarse con BioShock cerrado. Se recomienda StartupFullscreen=False.";
+            warning.Text = "ARRANQUE VR EN VENTANA  ·  Al guardar se desactiva la pantalla completa en ambos INI para conservar la resolución elegida. No cambia la visualización dentro del visor. Guarda con el juego cerrado. Un 10 % más por eje supone un 21 % más de píxeles.";
             warning.BackColor = SystemColors.Info;
             warning.ForeColor = SystemColors.InfoText;
             warning.Padding = new Padding(10);
@@ -2396,7 +2573,7 @@ namespace BioshockVrLauncher
             dlssGroup.ForeColor = Navy;
             dlssGroup.BackColor = SystemColors.Control;
             dlssGroup.Location = new Point(14, FinalDlssEdition ? 292 : 584);
-            dlssGroup.Size = new Size(820, 270);
+            dlssGroup.Size = new Size(820, 225);
             dlssGroup.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             page.Controls.Add(dlssGroup);
 
@@ -2537,7 +2714,7 @@ namespace BioshockVrLauncher
             _toolTip.SetToolTip(_dlssOutputPreset,
                 "Mismos tramos que F1/F2/F3. Conserva la calidad DLSS y recalcula el render. En Normal y DLAA, render y salida son iguales.");
 
-            Label nearPlaneLabel = MakeCompactLabel("Avanzado · Plano cercano");
+            Label nearPlaneLabel = MakeCompactLabel("Plano cercano · automático");
             nearPlaneLabel.Location = new Point(14, 182);
             dlssGroup.Controls.Add(nearPlaneLabel);
 
@@ -2558,12 +2735,16 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(nearPlaneUnit);
 
             Label nearPlaneHint = new Label();
-            nearPlaneHint.Text = "Ayuda a reconstruir profundidad y movimiento temporal. Recomendado: 10,0. No cambia tu altura ni el FOV.";
+            nearPlaneHint.Text = "Base BS2: 10,0 UU. El MOD usa la proyección observada por ojo; no requiere ajuste manual.";
             nearPlaneHint.ForeColor = Muted;
             nearPlaneHint.AutoSize = true;
             nearPlaneHint.MaximumSize = new Size(510, 0);
             nearPlaneHint.Location = new Point(296, 185);
             dlssGroup.Controls.Add(nearPlaneHint);
+            nearPlaneLabel.Visible = false;
+            nearPlaneUnit.Visible = false;
+            nearPlaneHint.Visible = false;
+            _dlssNearPlane.Visible = false;
 
             _dlssSettingsStateLabel = new Label();
             _dlssSettingsStateLabel.Text = "Configuración DLSS pendiente de cargar…";
@@ -2571,7 +2752,7 @@ namespace BioshockVrLauncher
             _dlssSettingsStateLabel.ForeColor = Blue;
             _dlssSettingsStateLabel.AutoSize = true;
             _dlssSettingsStateLabel.MaximumSize = new Size(785, 0);
-            _dlssSettingsStateLabel.Location = new Point(14, 229);
+            _dlssSettingsStateLabel.Location = new Point(14, 184);
             dlssGroup.Controls.Add(_dlssSettingsStateLabel);
 
             _toolTip.SetToolTip(_dlssPreset,
@@ -2622,8 +2803,8 @@ namespace BioshockVrLauncher
 
         private void InitializeHiddenIniEditor()
         {
-            TabPage page = new TabPage("Bioshock.ini");
-            page.Name = "Bioshock.ini completo";
+            TabPage page = new TabPage("Bioshock2SP.ini");
+            page.Name = "Bioshock2SP.ini completo";
             page.UseVisualStyleBackColor = true;
             page.Padding = new Padding(7);
 
@@ -2856,7 +3037,11 @@ namespace BioshockVrLauncher
             if (_squareResolution.Checked)
             {
                 if (sender == _resolutionHeight)
-                    _resolutionWidth.Value = _resolutionHeight.Value;
+                {
+                    decimal square = Math.Max(_resolutionWidth.Minimum, _resolutionHeight.Value);
+                    _resolutionWidth.Value = square;
+                    _resolutionHeight.Value = square;
+                }
                 else
                     _resolutionHeight.Value = _resolutionWidth.Value;
             }
@@ -2890,7 +3075,9 @@ namespace BioshockVrLauncher
         private IniEntry FindIniEntry(string section, string key)
         {
             IniEntry found = null;
-            foreach (IniEntry entry in _gameIniEntries)
+            IList<IniEntry> entries = string.Equals(section, "SharedOptions", StringComparison.OrdinalIgnoreCase)
+                ? _sharedIniEntries : _gameIniEntries;
+            foreach (IniEntry entry in entries)
             {
                 if (string.Equals(entry.Section, section, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase))
@@ -3042,28 +3229,29 @@ namespace BioshockVrLauncher
 
         private void LoadResolutionControls()
         {
-            IniEntry widthEntry = FindIniEntry("WinDrv.WindowsClient", "WindowedViewportX");
-            IniEntry heightEntry = FindIniEntry("WinDrv.WindowsClient", "WindowedViewportY");
-            IniEntry fullWidth = FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportX");
-            IniEntry fullHeight = FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportY");
+            IniEntry widthEntry = GameProfile.IsBioShock2 ? FindIniEntry("SharedOptions", "ViewportX") : FindIniEntry("WinDrv.WindowsClient", "WindowedViewportX");
+            IniEntry heightEntry = GameProfile.IsBioShock2 ? FindIniEntry("SharedOptions", "ViewportY") : FindIniEntry("WinDrv.WindowsClient", "WindowedViewportY");
+            IniEntry fullWidth = GameProfile.IsBioShock2 ? widthEntry : FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportX");
+            IniEntry fullHeight = GameProfile.IsBioShock2 ? heightEntry : FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportY");
             int width, height, fw, fh;
             if (widthEntry == null || heightEntry == null || fullWidth == null || fullHeight == null ||
-                !int.TryParse(widthEntry.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out width) ||
-                !int.TryParse(heightEntry.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out height) ||
-                !int.TryParse(fullWidth.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out fw) ||
-                !int.TryParse(fullHeight.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out fh) ||
+                !int.TryParse(widthEntry.Value.TrimEnd(';'), NumberStyles.Integer, CultureInfo.InvariantCulture, out width) ||
+                !int.TryParse(heightEntry.Value.TrimEnd(';'), NumberStyles.Integer, CultureInfo.InvariantCulture, out height) ||
+                !int.TryParse(fullWidth.Value.TrimEnd(';'), NumberStyles.Integer, CultureInfo.InvariantCulture, out fw) ||
+                !int.TryParse(fullHeight.Value.TrimEnd(';'), NumberStyles.Integer, CultureInfo.InvariantCulture, out fh) ||
                 width < (FinalDlssEdition ? 1 : 1024) || width > 8192 ||
                 height < (FinalDlssEdition ? 1 : 1024) || height > 8192)
             {
                 _resolutionWidth.Enabled = false;
                 _resolutionHeight.Enabled = false;
                 _resolutionPreset.Enabled = false;
-                _resolutionLoadLabel.Text = "No se pudo localizar una pareja única y válida de resolución PC.";
+                _resolutionLoadLabel.Text = "Faltan claves de resolución únicas y válidas en " + (GameProfile.IsBioShock2 ? "Shared.ini" : "Bioshock.ini") + ".";
                 _resolutionLoadLabel.ForeColor = Color.Firebrick;
                 return;
             }
-
             _syncingResolution = true;
+            _resolutionWidth.Minimum = 640;
+            _resolutionHeight.Minimum = 480;
             _resolutionWidth.Enabled = true;
             _resolutionHeight.Enabled = true;
             _resolutionPreset.Enabled = true;
@@ -3072,10 +3260,51 @@ namespace BioshockVrLauncher
             _squareResolution.Checked = width == height;
             _resolutionPreset.SelectedIndex = ResolutionPresetIndex(width, height);
             _syncingResolution = false;
-            UpdateResolutionSummary(width, height, fw == width && fh == height);
+            UpdateResolutionSummary(width, height, MirrorMatches(width, height));
+        }
+
+        private bool MirrorMatches(int width, int height)
+        {
+            string[] keys = { "WindowedViewportX", "WindowedViewportY", "FullscreenViewportX", "FullscreenViewportY" };
+            for (int i = 0; i < keys.Length; ++i)
+            {
+                IniEntry entry = FindIniEntry("WinDrv.WindowsClient", keys[i]);
+                int value;
+                if (entry == null || !int.TryParse(entry.Value.TrimEnd(';'), out value) ||
+                    value != (i % 2 == 0 ? width : height)) return false;
+            }
+            return true;
         }
 
         private void ApplyResolutionControlsToEntries()
+        {
+            if (!GameProfile.IsBioShock2) { ApplyResolutionControlsToEntriesBs1(); return; }
+            if (_loading) return;
+            IniEntry sx = FindIniEntry("SharedOptions", "ViewportX");
+            IniEntry sy = FindIniEntry("SharedOptions", "ViewportY");
+            if (sx == null || sy == null)
+            {
+                SetStatus("No se puede cambiar resolución: falta la pareja única de Shared.ini.", Color.Firebrick);
+                return;
+            }
+            string width = ((int)_resolutionWidth.Value).ToString(CultureInfo.InvariantCulture);
+            string height = ((int)_resolutionHeight.Value).ToString(CultureInfo.InvariantCulture);
+            sx.Value = width;
+            sy.Value = height;
+            string[] keys = { "WindowedViewportX", "WindowedViewportY", "FullscreenViewportX", "FullscreenViewportY" };
+            for (int i = 0; i < keys.Length; ++i)
+            {
+                IniEntry entry = FindIniEntry("WinDrv.WindowsClient", keys[i]);
+                if (entry != null) entry.Value = i % 2 == 0 ? width : height;
+            }
+            UpdateResolutionSummary((int)_resolutionWidth.Value, (int)_resolutionHeight.Value,
+                MirrorMatches((int)_resolutionWidth.Value, (int)_resolutionHeight.Value));
+            RecalculateGameIniDirty();
+            RebuildIniGrid();
+        }
+
+
+        private void ApplyResolutionControlsToEntriesBs1()
         {
             if (_loading) return;
             IniEntry wx = FindIniEntry("WinDrv.WindowsClient", "WindowedViewportX");
@@ -3106,8 +3335,8 @@ namespace BioshockVrLauncher
             _resolutionLoadLabel.Text = width.ToString(CultureInfo.CurrentCulture) + " × " +
                 height.ToString(CultureInfo.CurrentCulture) + "  ·  " +
                 megapixels.ToString("0.00", CultureInfo.CurrentCulture) + " MP  ·  " + shape +
-                (pairsMatch ? "  ·  ventana y pantalla completa sincronizadas" :
-                              "  ·  AVISO: los dos modos no coinciden");
+                (pairsMatch ? "  ·  Shared.ini + espejo SP sincronizados" :
+                              "  ·  Shared.ini gobierna; espejo SP distinto o incompleto");
             _resolutionLoadLabel.ForeColor = pairsMatch ? Blue : Warning;
             UpdateUpscalerSummary();
             if (_syncingDlss) return;
@@ -3133,6 +3362,20 @@ namespace BioshockVrLauncher
         }
 
         private bool TryGetRenderDimensions(out int width, out int height)
+        {
+            if (!GameProfile.IsBioShock2) return TryGetRenderDimensionsBs1(out width, out height);
+            width = 0;
+            height = 0;
+            IniEntry widthEntry = FindIniEntry("SharedOptions", "ViewportX");
+            IniEntry heightEntry = FindIniEntry("SharedOptions", "ViewportY");
+            return widthEntry != null && heightEntry != null &&
+                int.TryParse(widthEntry.Value.TrimEnd(';'), NumberStyles.Integer, CultureInfo.InvariantCulture, out width) &&
+                int.TryParse(heightEntry.Value.TrimEnd(';'), NumberStyles.Integer, CultureInfo.InvariantCulture, out height) &&
+                width >= 640 && height >= 480;
+        }
+
+
+        private bool TryGetRenderDimensionsBs1(out int width, out int height)
         {
             width = 0;
             height = 0;
@@ -3314,7 +3557,7 @@ namespace BioshockVrLauncher
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
                 MessageBox.Show(this,
-                    "No se puede calcular el preset porque no hay una resolución de render válida en Bioshock.ini.",
+                    "No se puede calcular el preset porque no hay una resolución de render válida en Bioshock2SP.ini.",
                     "Preset de salida VR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -3463,7 +3706,7 @@ namespace BioshockVrLauncher
             if (settings.NearPlaneUu < 0.1m || settings.NearPlaneUu > 1000.0m)
             {
                 problem = "El plano cercano debe estar entre 0,1 y 1000,0 UU. " +
-                          "El valor recomendado para BioShock es 10,0 UU.";
+                          "Debe corresponder al plano de proyección utilizado por el adaptador de " + GameProfile.DisplayName + ".";
                 return false;
             }
             if (settings.OutputWidth < 1024 || settings.OutputWidth > 8192 ||
@@ -3480,6 +3723,11 @@ namespace BioshockVrLauncher
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
                 problem = "No se puede validar DLSS porque falta una resolución render válida del juego.";
+                return false;
+            }
+            if (renderWidth < 1024 || renderHeight < 1024)
+            {
+                problem = "DLAA/DLSS necesita un render de al menos 1024 píxeles por eje. Aumenta la resolución; Normal permite conservar la actual.";
                 return false;
             }
             if (!UpscalerConfigDocument.HasExactAspect(renderWidth, renderHeight,
@@ -3579,7 +3827,7 @@ namespace BioshockVrLauncher
                 _dlssQuality.Enabled = true;
                 _dlssOutputWidth.Enabled = true;
                 _dlssOutputHeight.Enabled = true;
-                _dlssNearPlane.Enabled = true;
+                _dlssNearPlane.Enabled = false;
                 _dlssMode.SelectedIndex = settings.Mode == DlssMode.Dlaa ? 1 :
                     (settings.Mode == DlssMode.SuperResolution ? 2 : 0);
                 _dlssPreset.SelectedIndex = 0;
@@ -3691,7 +3939,7 @@ namespace BioshockVrLauncher
                             " aplicado en memoria: render " +
                             renderWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                             renderHeight.ToString(CultureInfo.CurrentCulture) +
-                            "; la salida DLSS no ha cambiado. Pulsa Guardar para escribir Bioshock.ini.";
+                            "; la salida DLSS no ha cambiado. Pulsa Guardar para escribir Shared.ini y su espejo SP.";
                     else
                         SynchronizeDlssQualityFromResolution();
                 }
@@ -3755,13 +4003,13 @@ namespace BioshockVrLauncher
             renderHeight = 0;
             if (_resolutionWidth == null || _resolutionHeight == null ||
                 !_resolutionWidth.Enabled || !_resolutionHeight.Enabled ||
-                FindIniEntry("WinDrv.WindowsClient", "WindowedViewportX") == null ||
-                FindIniEntry("WinDrv.WindowsClient", "WindowedViewportY") == null ||
-                FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportX") == null ||
-                FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportY") == null)
+                FindIniEntry(GameProfile.IsBioShock2 ? "SharedOptions" : "WinDrv.WindowsClient",
+                    GameProfile.IsBioShock2 ? "ViewportX" : "WindowedViewportX") == null ||
+                FindIniEntry(GameProfile.IsBioShock2 ? "SharedOptions" : "WinDrv.WindowsClient",
+                    GameProfile.IsBioShock2 ? "ViewportY" : "WindowedViewportY") == null)
             {
                 MessageBox.Show(this,
-                    "No se puede aplicar el tramo porque faltan las cuatro claves únicas de resolución PC en Bioshock.ini.",
+                    "No se puede aplicar el tramo porque falta la pareja única ViewportX / ViewportY de Shared.ini.",
                     "Calidad DLSS SR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
@@ -3832,6 +4080,8 @@ namespace BioshockVrLauncher
             if (_dlssMode == null || _dlssMode.SelectedIndex == 2) return;
             int renderWidth, renderHeight;
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight)) return;
+            if (renderWidth < _dlssOutputWidth.Minimum || renderHeight < _dlssOutputHeight.Minimum ||
+                renderWidth > _dlssOutputWidth.Maximum || renderHeight > _dlssOutputHeight.Maximum) return;
             if ((int)_dlssOutputWidth.Value == renderWidth &&
                 (int)_dlssOutputHeight.Value == renderHeight) return;
 
@@ -3937,9 +4187,7 @@ namespace BioshockVrLauncher
             if (settings.Mode == DlssMode.Off)
             {
                 _dlssSettingsStateLabel.Text = prefix +
-                    "DESACTIVADO · plano cercano preparado " +
-                    settings.NearPlaneUu.ToString("0.0##", CultureInfo.CurrentCulture) +
-                    " UU · sin ejecutar DLSS." +
+                    "DESACTIVADO · render nativo, sin ejecutar DLSS." +
                     (string.IsNullOrEmpty(_dlssNormalizationNote) ? string.Empty :
                         " NOTA · " + _dlssNormalizationNote);
                 _dlssSettingsStateLabel.ForeColor = _dlssDirty ? Warning : Muted;
@@ -3971,8 +4219,7 @@ namespace BioshockVrLauncher
                  settings.Quality == DlssQuality.Custom
                     ? " · NGX elegirá según el ratio real"
                     : string.Empty) +
-                " · plano cercano " +
-                settings.NearPlaneUu.ToString("0.0##", CultureInfo.CurrentCulture) + " UU" +
+                " · proyección capturada por ojo" +
                 (_dlssBackendStatus.Ready ? " · backend preparado" :
                     " · se guardará, pero el backend aún no está operativo") +
                 (string.IsNullOrEmpty(_dlssNormalizationNote) ? string.Empty :
@@ -4136,13 +4383,23 @@ namespace BioshockVrLauncher
                 {
                     Dictionary<string, string> capability =
                         ConfigDocument.Parse(File.ReadAllText(capabilityPath, Encoding.UTF8));
-                    string phase, eyes, runtime;
+                    string phase, eyes, runtime, game, adapter;
                     capability.TryGetValue("phase", out phase);
                     capability.TryGetValue("eyeHosts", out eyes);
                     capability.TryGetValue("runtime", out runtime);
+                    game = null;
+                    adapter = null;
+                    foreach (IniEntry entry in GameIniDocument.Parse(File.ReadAllText(capabilityPath, Encoding.UTF8)))
+                    {
+                        if (!string.Equals(entry.Section, "backend", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (string.Equals(entry.Key, "game", StringComparison.OrdinalIgnoreCase)) game = entry.Value;
+                        if (string.Equals(entry.Key, "adapter", StringComparison.OrdinalIgnoreCase)) adapter = entry.Value;
+                    }
                     int.TryParse(eyes, NumberStyles.Integer, CultureInfo.InvariantCulture,
                                  out declaredEyes);
-                    capabilityValid = string.Equals(phase, "DLSS45", StringComparison.OrdinalIgnoreCase) &&
+                    capabilityValid = string.Equals(game, "bs2", StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(adapter, "bioshock2r", StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(phase, "DLSS45", StringComparison.OrdinalIgnoreCase) &&
                         declaredEyes == 2 &&
                         string.Equals(runtime, DlssConfigDocument.RequiredRuntime,
                                       StringComparison.OrdinalIgnoreCase);
@@ -4384,23 +4641,23 @@ namespace BioshockVrLauncher
         {
             _gameIniDirty = false;
             foreach (IniEntry entry in _gameIniEntries)
-            {
-                if (entry.Changed)
-                {
-                    _gameIniDirty = true;
-                    break;
-                }
-            }
+                if (entry.Changed) { _gameIniDirty = true; break; }
+            foreach (IniEntry entry in _sharedIniEntries)
+                if (entry.Changed) { _gameIniDirty = true; break; }
             UpdateDirtyState();
         }
 
         private bool HasPcResolutionChanges()
         {
-            foreach (IniEntry entry in _gameIniEntries)
+            if (!GameProfile.IsBioShock2)
             {
-                if (IsPcResolutionEntry(entry) && entry.Changed)
-                    return true;
+                foreach (IniEntry entry in _gameIniEntries)
+                    if (entry.Changed && IsPcResolutionEntry(entry)) return true;
+                return false;
             }
+            foreach (IniEntry entry in _sharedIniEntries)
+                if (entry.Changed && entry.Section == "SharedOptions" &&
+                    (entry.Key == "ViewportX" || entry.Key == "ViewportY")) return true;
             return false;
         }
 
@@ -4416,7 +4673,7 @@ namespace BioshockVrLauncher
         {
             _dirty = _vrDirty || _upscalerDirty ||
                      _dlssDirty || _gameIniDirty;
-            _saveButton.Enabled = _dirty;
+            _saveButton.Enabled = _dirty || NeedsWindowedVrMode();
             if (_dirty)
                 SetStatus("Hay cambios pendientes de guardar.", Warning);
             else if (_statusLabel != null &&
@@ -4426,7 +4683,7 @@ namespace BioshockVrLauncher
 
         private void UpdatePathStatus()
         {
-            _configStateLabel.Text = "CONFIGURACIÓN  ·  vrpreset.ini + dlss.ini + Bioshock.ini";
+            _configStateLabel.Text = GameProfile.DisplayName + (GameProfile.IsBioShock2 ? "  ·  VR + armas + DLSS + Shared.ini" : "  ·  VR + gestos + DLSS");
             if (!string.IsNullOrEmpty(_gameExePath) && File.Exists(_gameExePath))
             {
                 _gameStateLabel.Text = "JUEGO ENCONTRADO  ·  " + _gameExePath;
@@ -4434,7 +4691,7 @@ namespace BioshockVrLauncher
             }
             else
             {
-                _gameStateLabel.Text = "JUEGO NO ENCONTRADO  ·  podrás localizar BioshockHD.exe al iniciar";
+                _gameStateLabel.Text = "JUEGO NO ENCONTRADO  ·  podrás localizar " + GameProfile.ExeName + " al iniciar";
                 _launchButton.Enabled = !_launchPending;
             }
             _dlssBackendStatus = DetectDlssBackend();
@@ -4443,6 +4700,7 @@ namespace BioshockVrLauncher
 
         private void LoadConfiguration(bool initiatedByUser)
         {
+            if (_launchPending) return;
             if (initiatedByUser && _dirty)
             {
                 DialogResult answer = MessageBox.Show(
@@ -4462,17 +4720,18 @@ namespace BioshockVrLauncher
                 {
                     _loadedContent = File.ReadAllText(_configPath, Encoding.UTF8);
                     _loadedWriteTimeUtc = File.GetLastWriteTimeUtc(_configPath);
-                    PopulateEditors(ConfigDocument.Parse(_loadedContent));
+                    PopulateEditors(LoadAllVrValues(_loadedContent));
                     _vrDirty = false;
                 }
                 else
                 {
                     _loadedContent = string.Empty;
                     _loadedWriteTimeUtc = DateTime.MinValue;
-                    PopulateEditors(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+                    PopulateEditors(LoadAllVrValues(string.Empty));
                     _vrDirty = true;
                 }
 
+                LoadSharedIni();
                 if (File.Exists(_gameIniPath))
                 {
                     _gameIniLoadedContent = ReadGameIniText(_gameIniPath);
@@ -4495,20 +4754,23 @@ namespace BioshockVrLauncher
                     _resolutionPreset.Enabled = false;
                     _fxaaEnabled.Enabled = false;
                     _fxaaEnabled.Checked = false;
-                    _resolutionLoadLabel.Text = "No se encuentra Bioshock.ini en " + _gameIniPath;
+                    _resolutionLoadLabel.Text = "No se encuentra Bioshock2SP.ini en " + _gameIniPath;
                     _resolutionLoadLabel.ForeColor = Color.Firebrick;
-                    _fxaaStateLabel.Text = "No se encuentra Bioshock.ini.";
+                    _fxaaStateLabel.Text = "No se encuentra Bioshock2SP.ini.";
                     _fxaaStateLabel.ForeColor = Color.Firebrick;
                 }
+                if (File.Exists(_sharedIniPath)) LoadResolutionControls();
                 LoadUpscalerConfiguration();
                 LoadDlssConfiguration();
                 LoadGraphicsOptions();
                 bool finalPolicyAdjusted = EnforceFinalImagePolicy();
                 _dirty = _vrDirty || _upscalerDirty ||
                          _dlssDirty || _gameIniDirty;
-                _saveButton.Enabled = _dirty;
+                _saveButton.Enabled = _dirty || NeedsWindowedVrMode();
                 if (finalPolicyAdjusted)
                     SetStatus("La edición final desactivará FXAA y el antiguo reescalado espacial al guardar.", Warning);
+                else if (NeedsWindowedVrMode())
+                    SetStatus("Arranque VR: pulsa Guardar para preparar el modo ventana y evitar que la pantalla completa sustituya la resolución.", Warning);
                 else if (_dlssDirty && _upscalerDirty)
                     SetStatus("Se detectaron DLSS y reescalado espacial activos a la vez. La interfaz ha dejado solo DLSS; pulsa Guardar para corregir ambos archivos.", Warning);
                 else if (!string.IsNullOrEmpty(_dlssLoadWarning))
@@ -4517,7 +4779,7 @@ namespace BioshockVrLauncher
                     SetStatus("Configuración cargada; revisa el aviso de upscaler.ini en la pestaña Imagen.", Warning);
                 else
                     SetStatus(File.Exists(_configPath)
-                        ? "Configuración VR, modos Normal/DLAA/DLSS 4.5 y " + _gameIniEntries.Count + " entradas de Bioshock.ini cargadas sin modificar archivos."
+                        ? "Configuración VR, modos Normal/DLAA/DLSS 4.5 y " + _gameIniEntries.Count + " entradas de Bioshock2SP.ini cargadas sin modificar archivos."
                         : "Falta vrpreset.ini; se muestran valores iniciales listos para guardar.",
                         File.Exists(_configPath) ? Success : Warning);
             }
@@ -4538,6 +4800,9 @@ namespace BioshockVrLauncher
 
         private void PopulateEditors(Dictionary<string, string> values)
         {
+            _originalEditorValues.Clear();
+            _initialEditorValues.Clear();
+            foreach (KeyValuePair<string, string> item in values) _originalEditorValues[item.Key] = item.Value;
             foreach (ParamDef definition in _definitions)
             {
                 string text;
@@ -4571,26 +4836,31 @@ namespace BioshockVrLauncher
                     if (value > number.Maximum) value = number.Maximum;
                     number.Value = value;
                 }
+                _initialEditorValues[definition.Key] = FormatEditorValue(definition);
             }
+        }
+
+        private string FormatEditorValue(ParamDef definition)
+        {
+            Control editor = _editors[definition.Key];
+            if (definition.Kind == ParamKind.Boolean) return ((CheckBox)editor).Checked ? "1" : "0";
+            if (definition.Kind == ParamKind.Choice)
+                return ((ComboBox)editor).SelectedIndex.ToString(CultureInfo.InvariantCulture);
+            return ((NumericUpDown)editor).Value.ToString(
+                "F" + definition.Decimals.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
         }
 
         private Dictionary<string, string> CollectValues()
         {
-            Dictionary<string, string> values =
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (ParamDef definition in _definitions)
             {
-                Control editor = _editors[definition.Key];
-                if (definition.Kind == ParamKind.Boolean)
-                    values[definition.Key] = ((CheckBox)editor).Checked ? "1" : "0";
-                else if (definition.Kind == ParamKind.Choice)
-                    values[definition.Key] = ((ComboBox)editor).SelectedIndex.ToString(CultureInfo.InvariantCulture);
-                else
-                {
-                    decimal value = ((NumericUpDown)editor).Value;
-                    string format = "F" + definition.Decimals.ToString(CultureInfo.InvariantCulture);
-                    values[definition.Key] = value.ToString(format, CultureInfo.InvariantCulture);
-                }
+                string value = FormatEditorValue(definition);
+                string initial, original;
+                if (_initialEditorValues.TryGetValue(definition.Key, out initial) && initial == value &&
+                    _originalEditorValues.TryGetValue(definition.Key, out original))
+                    value = original;
+                values[definition.Key] = value;
             }
             return values;
         }
@@ -4602,34 +4872,36 @@ namespace BioshockVrLauncher
 
         private bool ValidateBeforeSave()
         {
-            if (NumericValue("swingRearm") >= NumericValue("swingThreshold"))
-            {
-                DialogResult answer = MessageBox.Show(this,
-                    "La velocidad para rearmar el gesto es igual o superior a la velocidad necesaria para atacar. " +
-                    "El mod la limitará internamente, pero el comportamiento será menos predecible.\n\n" +
-                    "¿Quieres guardar de todos modos?",
-                    "Revisar ataque por gesto", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-                if (answer != DialogResult.Yes)
-                {
-                    SelectTab("Ataque por gesto");
-                    return false;
-                }
-            }
             return true;
         }
 
         private string ReadGameIniText(string path)
         {
-            byte[] bytes = File.ReadAllBytes(path);
-            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-                _gameIniEncoding = new UTF8Encoding(true);
-            else if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-                _gameIniEncoding = Encoding.Unicode;
-            else if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-                _gameIniEncoding = Encoding.BigEndianUnicode;
-            else
-                _gameIniEncoding = Encoding.GetEncoding(1252);
+            _gameIniEncoding = AtomicConfigBatch.DetectEncoding(path);
             return File.ReadAllText(path, _gameIniEncoding);
+        }
+
+        private void LoadSharedIni()
+        {
+            if (!GameProfile.IsBioShock2) return;
+            _sharedIniLoadedContent = string.Empty;
+            _sharedIniEncoding = Encoding.GetEncoding(1252);
+            if (File.Exists(_sharedIniPath))
+            {
+                _sharedIniEncoding = AtomicConfigBatch.DetectEncoding(_sharedIniPath);
+                _sharedIniLoadedContent = File.ReadAllText(_sharedIniPath, _sharedIniEncoding);
+            }
+            _sharedIniEntries = GameIniDocument.Parse(_sharedIniLoadedContent);
+        }
+
+        private Dictionary<string, string> LoadAllVrValues(string vrContent)
+        {
+            Dictionary<string, string> values = ConfigDocument.Parse(vrContent);
+            _weaponsLoadedContent = File.Exists(_weaponsPath)
+                ? File.ReadAllText(_weaponsPath, Encoding.UTF8) : string.Empty;
+            foreach (KeyValuePair<string, string> pair in ConfigDocument.Parse(_weaponsLoadedContent))
+                values[pair.Key] = pair.Value;
+            return values;
         }
 
         private bool PrepareVrSave(out string expectedContent)
@@ -4712,13 +4984,18 @@ namespace BioshockVrLauncher
 
         private bool SaveConfiguration(bool showNoChanges)
         {
+            if (_launchPending) return false;
             if (IsGameRunning())
             {
                 MessageBox.Show(this,
-                    "BioShock está abierto. Ciérralo antes de guardar para evitar que el juego vuelva a sobrescribir el fichero al salir.",
+                    "" + GameProfile.DisplayName + " está abierto. Ciérralo antes de guardar para evitar que el juego vuelva a sobrescribir el fichero al salir.",
                     "Juego en ejecución", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
+
+            // Only an explicit save prepares windowed VR. Opening/reloading
+            // remains read-only, including profiles inherited from flat play.
+            if (!PrepareWindowedVrMode()) return false;
 
             if (!_dirty)
             {
@@ -4775,7 +5052,7 @@ namespace BioshockVrLauncher
                 if (!SaveVrConfigurationCore(expectedVrContent))
                 {
                     if (savedGame)
-                        SetStatus("Bioshock.ini sí se guardó; vrpreset.ini no se ha guardado.", Warning);
+                        SetStatus("Bioshock2SP.ini sí se guardó; vrpreset.ini no se ha guardado.", Warning);
                     return false;
                 }
                 savedVr = true;
@@ -4802,13 +5079,49 @@ namespace BioshockVrLauncher
             }
             UpdateDirtyState();
             List<string> savedNames = new List<string>();
-            if (savedVr) savedNames.Add("vrpreset.ini");
+            if (savedVr) savedNames.Add("vrpreset.ini + weapons.ini");
             if (savedDlss) savedNames.Add("dlss.ini");
             if (savedUpscaler) savedNames.Add("upscaler.ini");
-            if (savedGame) savedNames.Add("Bioshock.ini");
+            if (savedGame) savedNames.Add(GameProfile.IsBioShock2 ? "Shared.ini + Bioshock2SP.ini" : "Bioshock.ini");
             SetStatus(string.Join(" + ", savedNames.ToArray()) +
                 " guardado(s), verificado(s) y respaldado(s).", Success);
             return true;
+        }
+
+        private bool NeedsWindowedVrMode()
+        {
+            if (!GameProfile.IsBioShock2) return false;
+            if (!FinalDlssEdition) return false;
+            foreach (string section in new string[] { "SharedOptions", "WinDrv.WindowsClient" })
+            {
+                IniEntry entry = FindIniEntry(section, "StartupFullscreen");
+                bool enabled;
+                if (entry == null || !TryParseIniSwitch(entry.Value, out enabled) || enabled)
+                    return true;
+            }
+            return false;
+        }
+
+        private bool PrepareWindowedVrMode()
+        {
+            if (!GameProfile.IsBioShock2) return true;
+            if (!FinalDlssEdition) return true;
+            try
+            {
+                if (VrWindowPolicy.Apply(_sharedIniEntries, _gameIniEntries))
+                {
+                    RecalculateGameIniDirty();
+                    RebuildIniGrid();
+                }
+                return true;
+            }
+            catch (InvalidDataException ex)
+            {
+                MessageBox.Show(this, "No se puede preparar el arranque VR en ventana:\n\n" + ex.Message +
+                    "\n\nNo se ha guardado ningún archivo. Revisa los INI y recarga el lanzador.",
+                    "Configuración de ventana no válida", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
         }
 
         private bool SaveUpscalerConfigurationCore(string expectedContent)
@@ -4840,42 +5153,9 @@ namespace BioshockVrLauncher
                     verification.Sharpness != values.Sharpness)
                     throw new InvalidDataException("No se pudo verificar upscaler.ini. " + warning);
 
-                string directory = Path.GetDirectoryName(_upscalerConfigPath);
-                Directory.CreateDirectory(directory);
-                if (File.Exists(_upscalerConfigPath))
-                {
-                    string backupDirectory = Path.Combine(directory, "Copias del lanzador");
-                    Directory.CreateDirectory(backupDirectory);
-                    string backupPath = Path.Combine(backupDirectory,
-                        "upscaler-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff",
-                                                            CultureInfo.InvariantCulture) + ".ini");
-                    File.Copy(_upscalerConfigPath, backupPath, false);
-                    if (!FilesHaveSameBytes(backupPath, _upscalerConfigPath))
-                        throw new IOException("No se pudo verificar la copia de seguridad de upscaler.ini.");
-                }
-
-                temporaryPath = _upscalerConfigPath + ".lanzador-" +
-                                Guid.NewGuid().ToString("N") + ".tmp";
-                File.WriteAllText(temporaryPath, newContent, new UTF8Encoding(false));
-                if (File.Exists(_upscalerConfigPath))
-                {
-                    try
-                    {
-                        File.Replace(temporaryPath, _upscalerConfigPath, null, true);
-                        temporaryPath = null;
-                    }
-                    catch
-                    {
-                        File.Copy(temporaryPath, _upscalerConfigPath, true);
-                        File.Delete(temporaryPath);
-                        temporaryPath = null;
-                    }
-                }
-                else
-                {
-                    File.Move(temporaryPath, _upscalerConfigPath);
-                    temporaryPath = null;
-                }
+                AtomicConfigBatch.Save(new ConfigWrite[] {
+                    new ConfigWrite(_upscalerConfigPath, expectedContent, newContent, new UTF8Encoding(false))
+                });
 
                 string diskContent = File.ReadAllText(_upscalerConfigPath, Encoding.UTF8);
                 if (diskContent != newContent)
@@ -4936,42 +5216,9 @@ namespace BioshockVrLauncher
                     verification.NearPlaneUu != values.NearPlaneUu)
                     throw new InvalidDataException("No se pudo verificar dlss.ini. " + warning);
 
-                string directory = Path.GetDirectoryName(_dlssConfigPath);
-                Directory.CreateDirectory(directory);
-                if (File.Exists(_dlssConfigPath))
-                {
-                    string backupDirectory = Path.Combine(directory, "Copias del lanzador");
-                    Directory.CreateDirectory(backupDirectory);
-                    string backupPath = Path.Combine(backupDirectory,
-                        "dlss-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff",
-                                                       CultureInfo.InvariantCulture) + ".ini");
-                    File.Copy(_dlssConfigPath, backupPath, false);
-                    if (!FilesHaveSameBytes(backupPath, _dlssConfigPath))
-                        throw new IOException("No se pudo verificar la copia de seguridad de dlss.ini.");
-                }
-
-                temporaryPath = _dlssConfigPath + ".lanzador-" +
-                                Guid.NewGuid().ToString("N") + ".tmp";
-                File.WriteAllText(temporaryPath, newContent, new UTF8Encoding(false));
-                if (File.Exists(_dlssConfigPath))
-                {
-                    try
-                    {
-                        File.Replace(temporaryPath, _dlssConfigPath, null, true);
-                        temporaryPath = null;
-                    }
-                    catch
-                    {
-                        File.Copy(temporaryPath, _dlssConfigPath, true);
-                        File.Delete(temporaryPath);
-                        temporaryPath = null;
-                    }
-                }
-                else
-                {
-                    File.Move(temporaryPath, _dlssConfigPath);
-                    temporaryPath = null;
-                }
+                AtomicConfigBatch.Save(new ConfigWrite[] {
+                    new ConfigWrite(_dlssConfigPath, expectedContent, newContent, new UTF8Encoding(false))
+                });
 
                 string diskContent = File.ReadAllText(_dlssConfigPath, Encoding.UTF8);
                 if (diskContent != newContent)
@@ -4999,71 +5246,38 @@ namespace BioshockVrLauncher
 
         private bool SaveVrConfigurationCore(string expectedContent)
         {
-
             try
             {
-                string currentContent = File.Exists(_configPath)
-                    ? File.ReadAllText(_configPath, Encoding.UTF8)
-                    : string.Empty;
-                if (currentContent != (expectedContent ?? string.Empty))
-                    throw new IOException("vrpreset.ini ha vuelto a cambiar durante el guardado. Recarga antes de intentarlo de nuevo.");
-
                 Dictionary<string, string> values = CollectValues();
-                string newContent = ConfigDocument.Render(currentContent, _definitions, values);
-                Dictionary<string, string> verification = ConfigDocument.Parse(newContent);
+                List<ParamDef> vrDefinitions = new List<ParamDef>();
+                List<ParamDef> weaponDefinitions = new List<ParamDef>();
+                Dictionary<string, string> vrValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                Dictionary<string, string> weaponValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (ParamDef definition in _definitions)
                 {
-                    if (!verification.ContainsKey(definition.Key) ||
-                        verification[definition.Key] != values[definition.Key])
-                        throw new InvalidDataException("No se pudo verificar el parámetro " + definition.Key + ".");
+                    bool weapon = definition.Category == "Armas";
+                    (weapon ? weaponDefinitions : vrDefinitions).Add(definition);
+                    (weapon ? weaponValues : vrValues)[definition.Key] = values[definition.Key];
                 }
-
-                string directory = Path.GetDirectoryName(_configPath);
-                Directory.CreateDirectory(directory);
-                string backupPath = null;
-                if (File.Exists(_configPath))
-                {
-                    string backupDirectory = Path.Combine(directory, "Copias del lanzador");
-                    Directory.CreateDirectory(backupDirectory);
-                    backupPath = Path.Combine(backupDirectory,
-                        "vrpreset-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture) + ".ini");
-                    File.Copy(_configPath, backupPath, false);
-                }
-
-                string temporaryPath = _configPath + ".lanzador.tmp";
-                File.WriteAllText(temporaryPath, newContent, new UTF8Encoding(false));
-                if (File.Exists(_configPath))
-                {
-                    try
-                    {
-                        File.Replace(temporaryPath, _configPath, null, true);
-                    }
-                    catch
-                    {
-                        File.Copy(temporaryPath, _configPath, true);
-                        File.Delete(temporaryPath);
-                    }
-                }
-                else
-                {
-                    File.Move(temporaryPath, _configPath);
-                }
-
-                string diskContent = File.ReadAllText(_configPath, Encoding.UTF8);
-                if (diskContent != newContent)
-                    throw new IOException("La comprobación final del fichero guardado no coincide.");
-
-                _loadedContent = newContent;
+                string vrContent = ConfigDocument.Render(expectedContent, vrDefinitions, vrValues);
+                string weaponsContent = ConfigDocument.Render(_weaponsLoadedContent, weaponDefinitions, weaponValues);
+                List<ConfigWrite> writes = new List<ConfigWrite>();
+                writes.Add(new ConfigWrite(_configPath, expectedContent, vrContent, new UTF8Encoding(false)));
+                if (GameProfile.IsBioShock2)
+                    writes.Add(new ConfigWrite(_weaponsPath, _weaponsLoadedContent, weaponsContent, new UTF8Encoding(false)));
+                AtomicConfigBatch.Save(writes);
+                _loadedContent = vrContent;
+                _weaponsLoadedContent = weaponsContent;
                 _loadedWriteTimeUtc = File.GetLastWriteTimeUtc(_configPath);
                 _vrDirty = false;
+                RefreshDiagnostics();
                 return true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this,
-                    "No se han podido guardar los cambios:\n\n" + ex.Message,
+                MessageBox.Show(this, "No se ha podido guardar vrpreset.ini y weapons.ini:\n\n" + ex.Message,
                     "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("No se ha podido guardar la configuración.", Color.Firebrick);
+                SetStatus("Guardado VR incompleto. Revisa el aviso y recarga.", Color.Firebrick);
                 return false;
             }
         }
@@ -5158,6 +5372,51 @@ namespace BioshockVrLauncher
         }
 
         private bool SaveGameIniCore()
+        {
+            if (!GameProfile.IsBioShock2) return SaveGameIniCoreBs1();
+            try
+            {
+                IniEntry sx = FindIniEntry("SharedOptions", "ViewportX");
+                IniEntry sy = FindIniEntry("SharedOptions", "ViewportY");
+                if (sx == null || sy == null)
+                    throw new InvalidDataException("Shared.ini debe contener una pareja única ViewportX / ViewportY en [SharedOptions].");
+                int width, height;
+                if (!int.TryParse(sx.Value.TrimEnd(';'), out width) || !int.TryParse(sy.Value.TrimEnd(';'), out height) ||
+                    width < 640 || width > 8192 || height < 480 || height > 8192)
+                    throw new InvalidDataException("La resolución de Shared.ini está fuera de 640×480 a 8192×8192.");
+                string sharedContent = GameIniDocument.Render(_sharedIniLoadedContent, _sharedIniEntries);
+                string spContent = GameIniDocument.Render(_gameIniLoadedContent, _gameIniEntries);
+                List<ConfigWrite> writes = new List<ConfigWrite>();
+                writes.Add(new ConfigWrite(_sharedIniPath, _sharedIniLoadedContent, sharedContent, _sharedIniEncoding));
+                if (File.Exists(_gameIniPath))
+                    writes.Add(new ConfigWrite(_gameIniPath, _gameIniLoadedContent, spContent, _gameIniEncoding));
+                AtomicConfigBatch.Save(writes);
+                _sharedIniLoadedContent = sharedContent;
+                _sharedIniEntries = GameIniDocument.Parse(sharedContent);
+                _gameIniLoadedContent = spContent;
+                _gameIniEntries = GameIniDocument.Parse(spContent);
+                _gameIniDirty = false;
+                _loading = true;
+                PopulateIniFilters();
+                LoadResolutionControls();
+                LoadFxaaControl();
+                RebuildIniGrid();
+                RefreshDiagnostics();
+                _loading = false;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _loading = false;
+                MessageBox.Show(this, "No se han podido guardar Shared.ini y Bioshock2SP.ini:\n\n" + ex.Message,
+                    "Error al guardar imagen", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("No se completó el guardado de los INI del juego.", Color.Firebrick);
+                return false;
+            }
+        }
+
+
+        private bool SaveGameIniCoreBs1()
         {
             string temporaryPath = null;
             try
@@ -5257,145 +5516,165 @@ namespace BioshockVrLauncher
 
         private void SaveAndLaunch()
         {
-            if (_launchPending)
-                return;
-            if (!SaveConfiguration(false))
-                return;
-            if (IsGameRunning())
+            if (_launchPending) return;
+            if (!string.IsNullOrEmpty(Program.SandboxRoot))
             {
-                MessageBox.Show(this, "BioShock ya está ejecutándose.", "Juego en ejecución",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetStatus("Prueba aislada: el inicio del juego está desactivado.", Warning);
                 return;
             }
-
+            if (IsGameRunning())
+            {
+                MessageBox.Show(this, "" + GameProfile.DisplayName + " ya está ejecutándose. Cierra el juego antes de aplicar cambios o iniciar otra sesión.",
+                    "Juego en ejecución", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             if (string.IsNullOrEmpty(_gameExePath) || !File.Exists(_gameExePath))
             {
-                OpenFileDialog dialog = new OpenFileDialog();
-                dialog.Title = "Localiza BioshockHD.exe";
-                dialog.Filter = "BioShock Remastered (BioshockHD.exe)|BioshockHD.exe|Aplicaciones (*.exe)|*.exe";
-                dialog.CheckFileExists = true;
-                if (dialog.ShowDialog(this) != DialogResult.OK)
+                using (OpenFileDialog dialog = new OpenFileDialog())
+                {
+                    dialog.Title = "Localiza " + GameProfile.ExeName;
+                    dialog.Filter = GameProfile.DisplayName + " Remastered|" + GameProfile.ExeName;
+                    dialog.CheckFileExists = true;
+                    if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                    _gameExePath = Path.GetFullPath(dialog.FileName);
+                    UpdatePathStatus();
+                }
+            }
+            string problem;
+            try
+            {
+                if (!GameProfile.VerifyExecutable(_gameExePath, out problem))
+                {
+                    MessageBox.Show(this, problem, "Versión del juego incompatible", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
-                _gameExePath = dialog.FileName;
-                UpdatePathStatus();
-            }
-
-            try
-            {
-                ProcessStartInfo steam = new ProcessStartInfo("steam://rungameid/409710");
-                steam.UseShellExecute = true;
-                Process.Start(steam);
-                BeginSteamLaunchWatch();
-            }
-            catch
-            {
-                TryStartGameDirectly();
-            }
-        }
-
-        private void BeginSteamLaunchWatch()
-        {
-            StopLaunchWatch();
-            _launchPending = true;
-            _launchDeadlineUtc = DateTime.UtcNow.AddSeconds(30);
-            _launchButton.Enabled = false;
-            SetStatus("Orden enviada a Steam · esperando a que BioShock se abra…", Blue);
-            _launchWatchTimer = new Timer();
-            _launchWatchTimer.Interval = 500;
-            _launchWatchTimer.Tick += SteamLaunchWatchTick;
-            _launchWatchTimer.Start();
-        }
-
-        private void SteamLaunchWatchTick(object sender, EventArgs e)
-        {
-            if (IsGameRunning())
-            {
-                StopLaunchWatch();
-                SetStatus("BioShock VR se ha iniciado mediante Steam.", Success);
-                Close();
-                return;
-            }
-            if (DateTime.UtcNow < _launchDeadlineUtc)
-                return;
-
-            StopLaunchWatch();
-            _launchButton.Enabled = true;
-            SetStatus("Steam no ha iniciado BioShock; el lanzador sigue abierto.", Warning);
-            DialogResult answer = MessageBox.Show(this,
-                "Steam ha aceptado la orden, pero BioShock no se ha abierto en 30 segundos.\r\n\r\n" +
-                "El lanzador permanecerá abierto. ¿Quieres intentar iniciar BioshockHD.exe directamente?",
-                "BioShock no se ha iniciado", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (answer != DialogResult.Yes)
-                return;
-
-            // Steam podría terminar de arrancar mientras se muestra el aviso.
-            if (IsGameRunning())
-            {
-                SetStatus("BioShock VR se ha iniciado mediante Steam.", Success);
-                Close();
-                return;
-            }
-            TryStartGameDirectly();
-        }
-
-        private void StopLaunchWatch()
-        {
-            _launchPending = false;
-            if (_launchWatchTimer == null)
-                return;
-            _launchWatchTimer.Stop();
-            _launchWatchTimer.Tick -= SteamLaunchWatchTick;
-            _launchWatchTimer.Dispose();
-            _launchWatchTimer = null;
-        }
-
-        private void TryStartGameDirectly()
-        {
-            try
-            {
-                ProcessStartInfo direct = new ProcessStartInfo(_gameExePath);
-                direct.WorkingDirectory = Path.GetDirectoryName(_gameExePath);
-                direct.UseShellExecute = true;
-                Process process = Process.Start(direct);
-                if (process == null)
-                    throw new InvalidOperationException("Windows no devolvió un proceso del juego.");
-                process.Dispose();
-                SetStatus("BioShock VR se está iniciando directamente.", Success);
-                Close();
+                }
             }
             catch (Exception ex)
             {
-                _launchButton.Enabled = true;
-                MessageBox.Show(this,
-                    "No se ha podido iniciar BioShock:\n\n" + ex.Message,
-                    "Error al iniciar", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("No se ha podido iniciar el juego; el lanzador sigue abierto.", Color.Firebrick);
+                MessageBox.Show(this, "No se ha podido verificar el ejecutable:\n\n" + ex.Message,
+                    "Error de verificación", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
+            if (!SaveConfiguration(false)) return;
+            _launchPreviousIds.Clear();
+            foreach (Process process in Process.GetProcessesByName(GameProfile.ProcessName))
+                using (process) { _launchPreviousIds.Add(process.Id); }
+            _launchRequestedUtc = DateTime.UtcNow;
+            _launchTracker = new GameLaunchTracker(_launchRequestedUtc, _gameExePath, _launchPreviousIds);
+            _launchPending = true;
+            _launchButton.Enabled = false;
+            _saveButton.Enabled = false;
+            _tabs.Enabled = false;
+            try
+            {
+                try
+                {
+                    ProcessStartInfo steam = new ProcessStartInfo("steam://rungameid/" + GameProfile.AppId);
+                    steam.UseShellExecute = true;
+                    using (Process request = Process.Start(steam)) { }
+                }
+                catch
+                {
+                    ProcessStartInfo direct = new ProcessStartInfo(_gameExePath);
+                    direct.WorkingDirectory = Path.GetDirectoryName(_gameExePath);
+                    direct.UseShellExecute = true;
+                    using (Process request = Process.Start(direct)) { }
+                }
+                _launchTimer = new Timer();
+                _launchTimer.Interval = 500;
+                _launchTimer.Tick += PollGameLaunch;
+                _launchTimer.Start();
+                SetStatus("Esperando a " + GameProfile.DisplayName + ": proceso nuevo, ruta verificada y ventana del juego…", Blue);
+            }
+            catch (Exception ex)
+            {
+                EndLaunchAttempt("No se pudo solicitar el inicio de " + GameProfile.DisplayName + ".\n\n" + ex.Message);
+            }
+        }
+
+        private void PollGameLaunch(object sender, EventArgs e)
+        {
+            List<GameProcessObservation> observations = new List<GameProcessObservation>();
+            foreach (Process process in Process.GetProcessesByName(GameProfile.ProcessName))
+            {
+                using (process)
+                {
+                    try
+                    {
+                        if (process.HasExited) continue;
+                        observations.Add(new GameProcessObservation {
+                            Id = process.Id,
+                            StartedUtc = process.StartTime.ToUniversalTime(),
+                            ImagePath = GameLaunchEvidence.ProcessPath(process.Id),
+                            HasWindow = process.MainWindowHandle != IntPtr.Zero,
+                            Responding = process.Responding
+                        });
+                    }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
+                }
+            }
+            LaunchOutcome outcome = _launchTracker.Observe(DateTime.UtcNow, observations);
+            if (outcome == LaunchOutcome.Started)
+            {
+                StopLaunchMonitor();
+                _launchPending = false;
+                SetStatus("" + GameProfile.DisplayName + " iniciado y comprobado.", Success);
+                Close();
+                return;
+            }
+            if (outcome == LaunchOutcome.ExitedEarly)
+            {
+                EndLaunchAttempt("" + GameProfile.DisplayName + " llegó a crear un proceso, pero terminó antes de confirmar una ventana operativa.\n\n" +
+                    "Revisa el registro VR en la pestaña Diagnóstico y el estado del juego en Steam. Los ajustes guardados se conservan.");
+                return;
+            }
+            if (outcome == LaunchOutcome.TimedOut)
+            {
+                EndLaunchAttempt("No se ha confirmado el inicio de " + GameProfile.DisplayName + " en 60 segundos.\n\n" +
+                    "Steam abierto no confirma que el juego haya arrancado. Comprueba si Steam está actualizando el juego o mostrando un aviso. " +
+                    "También puedes revisar Diagnóstico. El lanzador permanece abierto y tus ajustes están guardados.");
+                return;
+            }
+            int elapsed = (int)(DateTime.UtcNow - _launchRequestedUtc).TotalSeconds;
+            SetStatus("Esperando al proceso y ventana de " + GameProfile.DisplayName + "… " + elapsed + "/60 s", Blue);
+        }
+
+        private void StopLaunchMonitor()
+        {
+            if (_launchTimer == null) return;
+            _launchTimer.Stop();
+            _launchTimer.Dispose();
+            _launchTimer = null;
+        }
+
+        private void EndLaunchAttempt(string problem)
+        {
+            StopLaunchMonitor();
+            _launchPending = false;
+            _tabs.Enabled = true;
+            _launchButton.Enabled = true;
+            _saveButton.Enabled = _dirty;
+            RefreshDiagnostics();
+            SetStatus("No se ha confirmado el inicio; revisa Steam y Diagnóstico.", Color.Firebrick);
+            MessageBox.Show(this, problem, "" + GameProfile.DisplayName + " no ha iniciado correctamente",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private static bool IsGameRunning()
         {
-            Process[] processes = new Process[0];
-            try
-            {
-                processes = Process.GetProcessesByName("BioshockHD");
-                return processes.Length > 0;
-            }
-            catch
-            {
-                return false;
-            }
-            finally
-            {
-                foreach (Process process in processes)
-                    process.Dispose();
-            }
+            Process[] processes = Process.GetProcessesByName(GameProfile.ProcessName);
+            bool running = processes.Length > 0;
+            foreach (Process process in processes)
+                process.Dispose();
+            return running;
         }
 
         private static string FindGameExecutable()
         {
+            if (!string.IsNullOrEmpty(Program.SandboxRoot)) return null;
             List<string> candidates = new List<string>();
-            candidates.Add(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BioshockHD.exe"));
+            candidates.Add(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, GameProfile.ExeName));
 
             try
             {
@@ -5438,8 +5717,8 @@ namespace BioshockVrLauncher
 
         private static void AddSteamCandidate(List<string> candidates, string steamRoot)
         {
-            candidates.Add(Path.Combine(steamRoot, "steamapps", "common", "BioShock Remastered",
-                                        "Build", "Final", "BioshockHD.exe"));
+            candidates.Add(Path.Combine(steamRoot, "steamapps", "common", GameProfile.SteamFolder,
+                                        "Build", "Final", GameProfile.ExeName));
         }
 
         private static void AddLibrariesFromVdf(List<string> candidates, string steamRoot)
@@ -5485,7 +5764,7 @@ namespace BioshockVrLauncher
         private void ShowCreditsAndLicenses()
         {
             MessageBox.Show(this,
-                "Complemento DLSS 4.5 para BioShock VR · Beta 0.2.6\n" +
+                "BioShock 1–2 VR · DLSS/DLAA 0.2.13\n" +
                 "Integración DLSS/DLAA y lanzador: Beren5556\n\n" +
                 "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\n" +
                 "Creador de BioShock VR y de la implementación VR fundamental " +
@@ -5553,19 +5832,19 @@ namespace BioshockVrLauncher
         {
             try
             {
-                if (File.Exists(_gameIniPath))
+                if (File.Exists(_sharedIniPath))
                 {
-                    ProcessStartInfo info = new ProcessStartInfo("notepad.exe", "\"" + _gameIniPath + "\"");
+                    ProcessStartInfo info = new ProcessStartInfo("notepad.exe", "\"" + _sharedIniPath + "\"");
                     info.UseShellExecute = true;
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this, "No se encuentra Bioshock.ini en:\n\n" + _gameIniPath,
-                                    "Bioshock.ini", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "No se encuentra Shared.ini en:\n\n" + _sharedIniPath,
+                                    "Shared.ini", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir Bioshock.ini",
+                MessageBox.Show(this, ex.Message, "No se pudo abrir Shared.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5584,7 +5863,7 @@ namespace BioshockVrLauncher
                 ProcessStartInfo gameInfo = new ProcessStartInfo("explorer.exe", "\"" + gameDirectory + "\"");
                 gameInfo.UseShellExecute = true;
                 Process.Start(gameInfo);
-                SetStatus("Se han abierto las copias de vrpreset.ini, dlss.ini y Bioshock.ini.", Success);
+                SetStatus("Se han abierto las copias de vrpreset.ini, dlss.ini y Bioshock2SP.ini.", Success);
             }
             catch (Exception ex)
             {
@@ -5613,6 +5892,113 @@ namespace BioshockVrLauncher
             _statusLabel.ForeColor = color;
         }
 
+        internal bool RunSandboxRoundTrip()
+        {
+            if (string.IsNullOrEmpty(Program.SandboxRoot)) throw new InvalidOperationException("La prueba requiere sandbox.");
+            if (_resolutionWidth.Value != 800 || _resolutionHeight.Value != 600)
+                throw new InvalidDataException("La interfaz no ha usado la resolución efectiva de Shared.ini.");
+            if (string.IsNullOrEmpty(_dlssMode.Text) || string.IsNullOrEmpty(_resolutionPreset.Text))
+                throw new InvalidDataException("Los selectores no muestran su valor.");
+            // The real regression starts from inherited fullscreen=True with
+            // no edited controls. Use the same save path as Guardar/iniciar.
+            _dirty = _vrDirty = _gameIniDirty = _dlssDirty = _upscalerDirty = false;
+            UpdateDirtyState();
+            if (!NeedsWindowedVrMode() || !_saveButton.Enabled || !SaveConfiguration(false) || NeedsWindowedVrMode())
+                throw new InvalidDataException("Guardar sin otros cambios no preparó el modo ventana heredado.");
+            foreach (string path in new string[] { _sharedIniPath, _gameIniPath })
+            {
+                if (!File.ReadAllText(path).Contains("StartupFullscreen=False"))
+                    throw new InvalidDataException("Modo ventana no persistido en " + path);
+                string savedHash = Bs2Profile.Hash(path);
+                if (!SaveConfiguration(false) || Bs2Profile.Hash(path) != savedHash)
+                    throw new InvalidDataException("Guardar ventana por segunda vez no es idempotente.");
+            }
+            _dlssMode.SelectedIndex = 1;
+            string lowResolutionProblem;
+            if (TryValidateDlssSettings(CollectDlssSettings(), out lowResolutionProblem))
+                throw new InvalidDataException("DLAA no debe aceptar render 800×600.");
+            _dlssMode.SelectedIndex = 0;
+            _squareResolution.Checked = true;
+            _resolutionHeight.Value = 480;
+            if (_resolutionWidth.Value != 640 || _resolutionHeight.Value != 640)
+                throw new InvalidDataException("Resolución cuadrada mínima inválida.");
+            if (_definitions.Count < 180 || _editors.Count != _definitions.Count)
+                throw new InvalidDataException("Faltan editores VR/armas.");
+            for (int index = 1; index < ResolutionPresets.Items.Length; ++index)
+            {
+                ResolutionPreset preset = ResolutionPresets.Items[index];
+                _resolutionPreset.SelectedIndex = index;
+                if (_resolutionWidth.Value != preset.Width || _resolutionHeight.Value != preset.Height ||
+                    ResolutionPresetIndex(preset.Width, preset.Height) != index)
+                    throw new InvalidDataException("Selector de resolución desincronizado: " + preset);
+                _dlssMode.SelectedIndex = preset.Width == preset.Height ? 1 : 0;
+                if (!SaveConfiguration(false) || !MirrorMatches(preset.Width, preset.Height))
+                    throw new InvalidDataException("No se guardó el perfil y su espejo: " + preset);
+                if (_dlssMode.SelectedIndex == 1)
+                {
+                    DlssSettings persisted;
+                    string note;
+                    if (!DlssConfigDocument.TryParse(File.ReadAllText(_dlssConfigPath), preset.Width, preset.Height,
+                            out persisted, out note) || persisted.Mode != DlssMode.Dlaa ||
+                        persisted.OutputWidth != preset.Width || persisted.OutputHeight != preset.Height)
+                        throw new InvalidDataException("DLAA no mantuvo 1:1 para " + preset);
+                }
+            }
+            _resolutionWidth.Value = 3010;
+            if (_resolutionPreset.SelectedIndex != 0)
+                throw new InvalidDataException("La resolución personalizada perdió su selector.");
+            _resolutionWidth.Value = 2048;
+            _resolutionHeight.Value = 2048;
+            ApplyResolutionControlsToEntries();
+            if (!SaveGameIniCore()) return false;
+            if (!MirrorMatches(2048, 2048)) throw new InvalidDataException("Espejo SP no sincronizado.");
+            _dlssMode.SelectedIndex = 1;
+            if (!SaveDlssConfigurationCore(_dlssLoadedContent)) return false;
+            DlssSettings settings;
+            string warning;
+            if (!DlssConfigDocument.TryParse(File.ReadAllText(_dlssConfigPath), 2048, 2048, out settings, out warning) ||
+                settings.Mode != DlssMode.Dlaa || settings.OutputWidth != 2048 || settings.OutputHeight != 2048)
+                throw new InvalidDataException("Guardado DLAA 1:1 incorrecto.");
+            _dlssMode.SelectedIndex = 2;
+            _dlssOutputWidth.Value = 3072;
+            _dlssOutputHeight.Value = 3072;
+            if (!SaveDlssConfigurationCore(_dlssLoadedContent)) return false;
+            if (!DlssConfigDocument.TryParse(File.ReadAllText(_dlssConfigPath), 2048, 2048, out settings, out warning) ||
+                settings.Mode != DlssMode.SuperResolution || settings.OutputWidth != 3072 || settings.OutputHeight != 3072)
+                throw new InvalidDataException("Guardado DLSS SR incorrecto.");
+            _dlssMode.SelectedIndex = 0;
+            if (!SaveDlssConfigurationCore(_dlssLoadedContent)) return false;
+            string untouchedScale = ConfigDocument.Parse(_loadedContent)["worldScale"];
+            ((NumericUpDown)_editors["PlayerDrill.aimTrimPitch"]).Value = 21.5m;
+            ((NumericUpDown)_editors["handOffFwdL"]).Value = 2.5m;
+            if (!SaveVrConfigurationCore(_loadedContent)) return false;
+            Dictionary<string, string> vr = ConfigDocument.Parse(File.ReadAllText(_configPath));
+            Dictionary<string, string> weapons = ConfigDocument.Parse(File.ReadAllText(_weaponsPath));
+            if (vr.ContainsKey("PlayerDrill.aimTrimPitch") || weapons.ContainsKey("handOffFwdL") ||
+                weapons["PlayerDrill.aimTrimPitch"] != "21.50" || vr["handOffFwdL"] != "2.50" ||
+                vr["worldScale"] != untouchedScale)
+                throw new InvalidDataException("Aislamiento de los perfiles de armas fallido.");
+            _dirty = _vrDirty = _gameIniDirty = _dlssDirty = _upscalerDirty = false;
+            return true;
+        }
+
+        internal void CaptureSandboxTabs(string directory)
+        {
+            if (string.IsNullOrEmpty(Program.SandboxRoot)) throw new InvalidOperationException("La prueba requiere sandbox.");
+            foreach (string name in new string[] { "Imagen", "Manos", "Armas", "Diagnóstico" })
+            {
+                foreach (TabPage tab in _tabs.TabPages)
+                    if (tab.Text == name) { _tabs.SelectedTab = tab; break; }
+                Application.DoEvents();
+                using (Bitmap bitmap = new Bitmap(Width, Height))
+                {
+                    DrawToBitmap(bitmap, new Rectangle(0, 0, Width, Height));
+                    bitmap.Save(Path.Combine(directory, "launcher-" + name + ".png"),
+                        System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+        }
+
         private void MainForm_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && e.KeyCode == Keys.S)
@@ -5629,6 +6015,7 @@ namespace BioshockVrLauncher
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            StopLaunchMonitor();
             if (!_dirty)
                 return;
             DialogResult answer = MessageBox.Show(this,
@@ -5644,12 +6031,16 @@ namespace BioshockVrLauncher
     internal static class Program
     {
         internal static string InitialGamePath;
+        internal static string SandboxRoot;
 
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args != null && args.Length > 0 && args[0] == "--self-test-process")
+                return Bs2LauncherTests.RunHelperWindow();
             if (args != null && args.Length > 0 && args[0] == "--self-test")
-                return ConfigDocument.SelfTest() && UpscalerConfigDocument.SelfTest() &&
+                return GameProfile.SelfTest() && (!GameProfile.IsBioShock2 || Bs2LauncherTests.RunCoreTests()) &&
+                       ConfigDocument.SelfTest() && UpscalerConfigDocument.SelfTest() &&
                        DlssConfigDocument.SelfTest() && DlssQualityPolicy.SelfTest() &&
                        GameIniDocument.SelfTest() && MainForm.ImageControlsSelfTest() &&
                        MainForm.SimpleImageSelfTest() ? 0 : 2;
@@ -5669,7 +6060,11 @@ namespace BioshockVrLauncher
             {
                 for (int i = 0; i < args.Length; i++)
                 {
-                    if (string.Equals(args[i], "--game", StringComparison.OrdinalIgnoreCase) &&
+                    if (string.Equals(args[i], "--sandbox", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                    {
+                        SandboxRoot = Path.GetFullPath(args[++i]);
+                    }
+                    else if (string.Equals(args[i], "--game", StringComparison.OrdinalIgnoreCase) &&
                         i + 1 < args.Length)
                     {
                         InitialGamePath = args[++i];

@@ -8,6 +8,7 @@
 #include "core/util/log.h"
 #include "core/vr/openxr_runtime.h"
 #include "game/igame_adapter.h"
+#include "game/bioshock2r/exit_guard.h"
 
 #include <windows.h>
 #include <d3d11.h>
@@ -39,15 +40,13 @@ HWND g_window = nullptr;
 WNDPROC g_originalWndProc = nullptr;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-    // Session 38: the subclass is on the GAME's main window, so it is the
-    // earliest game-agnostic sight of a close. BS2's engine faults on its own
-    // exit path (hook-free-proven); noting teardown here turns that into a
-    // quiet fast exit instead of a dump per close. WM_ENDSESSION covers
-    // logoff/shutdown. Always forwarded - observation only.
-    if (msg == WM_CLOSE || msg == WM_DESTROY || (msg == WM_ENDSESSION && wparam))
-        crash::note_teardown(msg == WM_CLOSE     ? "WM_CLOSE"
-                             : msg == WM_DESTROY ? "WM_DESTROY"
-                                                 : "WM_ENDSESSION");
+    // BS2 must ask the verified native exit path while its viewport is alive.
+    // The request is not an accepted quit/save dialog and never changes status.
+    if (msg == WM_CLOSE) {
+        crash::note_close_request("WM_CLOSE");
+        if (bvr::b2r::exit_guard::request_window_close()) return 0;
+    } else if (msg == WM_DESTROY || (msg == WM_ENDSESSION && wparam))
+        crash::note_teardown(msg == WM_DESTROY ? "WM_DESTROY" : "WM_ENDSESSION");
     const bool imageControlKey = wparam == VK_F1 || wparam == VK_F2 || wparam == VK_F3 ||
         (wparam == VK_F4 && image_controls::graphics_panel_open());
     if ((msg == WM_KEYDOWN || msg == WM_KEYUP) && imageControlKey &&

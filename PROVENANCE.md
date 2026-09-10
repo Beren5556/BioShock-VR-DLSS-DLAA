@@ -2,6 +2,16 @@
 
 Este documento separa la base original, las adaptaciones del fork y los componentes que conservan términos propios.
 
+## Integración 0.2.13 en desarrollo
+
+La referencia aceptada BS1 es el tag v0.2.11, commit
+894cae888dbe74611875eb82921a6ac80f423297; HEAD 065a43e conserva su código funcional.
+El desarrollo BS2 previo se preserva en la rama local codex/bs2-pre-0.2.13,
+commit 7b4514090d5d1f319b463f158d076f4155a5347e. La integración ocurre en una
+copia nueva, sin modificar las dos referencias originales. Se excluye 0.2.12.
+El EXE incorpora el MSI BS1 aceptado sin regenerarlo y un MSI BS2 candidato.
+Véase [trazabilidad y límites](docs/INTEGRATION-0.2.13.md).
+
 ## Agradecimiento principal
 
 BioShock VR y la mayor parte del trabajo fundamental de realidad virtual fueron creados por **Mohamad Balouza**. Su implementación hizo posible el renderizado estereoscópico, el seguimiento 6DOF, los controladores de movimiento y la integración con BioShock. Este fork añade una ruta DLSS/DLAA y herramientas de distribución sobre esa base; no reclama la autoría del mod original. Nuestro agradecimiento expreso es para Mohamad Balouza y para VR-Stereo-Hub por mantener y publicar el proyecto.

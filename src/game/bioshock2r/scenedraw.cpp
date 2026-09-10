@@ -39,6 +39,22 @@ const uint8_t* g_imageBase = nullptr;
 size_t g_imageSize = 0;
 bvr::pattern_scan::ProcessImage g_image{};
 
+thread_local int t_eyeBuild = -1;
+thread_local uint64_t t_eyeBuildId = 0;
+struct ScopedEyeBuild {
+    int previousEye;
+    uint64_t previousId;
+    ScopedEyeBuild(int eye, uint64_t id)
+        : previousEye(t_eyeBuild), previousId(t_eyeBuildId) {
+        t_eyeBuild = eye;
+        t_eyeBuildId = id;
+    }
+    ~ScopedEyeBuild() {
+        t_eyeBuild = previousEye;
+        t_eyeBuildId = previousId;
+    }
+};
+
 // UGameEngine::Draw is `ret 0x10` with a live ECX this (the engine object) -
 // __fastcall passthrough with a dummy EDX slot and 4 stack params is
 // register/stack/cleanup-identical (same trick as the BS1 build detour).
@@ -830,7 +846,8 @@ void maybe_second_draw(void* ecx, void* edx, void* a1, void* a2, void* a3, void*
     //
     // Still unknown: WHY the second call blocks. It is not a deadlock on
     // anything this mod holds - the mod is not in the stack at that point.
-    if (g_stereo.load(std::memory_order_relaxed)) bvr::vr::sr_push_eye(+1);
+    const uint64_t rightBuildId =
+        g_stereo.load(std::memory_order_relaxed) ? bvr::vr::sr_push_eye(+1) : 0;
     g_secondPassTid.store(GetCurrentThreadId(), std::memory_order_relaxed);
     LARGE_INTEGER t0, t1, freq;
     QueryPerformanceCounter(&t0);
@@ -839,8 +856,12 @@ void maybe_second_draw(void* ecx, void* edx, void* a1, void* a2, void* a3, void*
     // trace say whether the game is sitting inside the RE-ENTERED scene draw.
     bvr::vr::set_draw_stage("secondDraw");
     g_inSecondDraw.store(true, std::memory_order_relaxed);
-    bool ok = call_draw_guarded(reinterpret_cast<DrawFn>(g_draw.original), ecx, edx, a1,
-                                a2, a3, a4);
+    bool ok = false;
+    {
+        ScopedEyeBuild eyeBuild(1, rightBuildId);
+        ok = call_draw_guarded(reinterpret_cast<DrawFn>(g_draw.original), ecx, edx, a1,
+                               a2, a3, a4);
+    }
     g_inSecondDraw.store(false, std::memory_order_relaxed);
     bvr::vr::set_draw_stage(nullptr);
     QueryPerformanceCounter(&t1);
@@ -850,6 +871,7 @@ void maybe_second_draw(void* ecx, void* edx, void* a1, void* a2, void* a3, void*
         static_cast<uint32_t>((t1.QuadPart - t0.QuadPart) * 1000000 / freq.QuadPart),
         std::memory_order_relaxed);
     if (!ok) {
+        camera::invalidate_temporal_camera();
         g_poisoned.store(true, std::memory_order_relaxed);
         g_doubleCall.store(false, std::memory_order_relaxed);
         g_stereo.store(false, std::memory_order_relaxed);
@@ -1038,6 +1060,7 @@ void __fastcall DrawDetour(void* ecx, void* edx, void* a1, void* a2, void* a3, v
     g_drawEntries.fetch_add(1, std::memory_order_relaxed);
     int depth = g_activeDepth.fetch_add(1, std::memory_order_relaxed);
     uint32_t presentLowAtEntry = static_cast<uint32_t>(bvr::d3d11_hook::present_count());
+    uint64_t leftBuildId = 0;
     if (depth == 0) {
         g_activeTid.store(tid, std::memory_order_relaxed);
         probe_cam_actor(a1);
@@ -1048,12 +1071,15 @@ void __fastcall DrawDetour(void* ecx, void* edx, void* a1, void* a2, void* a3, v
         if (g_stereo.load(std::memory_order_relaxed) &&
             !g_poisoned.load(std::memory_order_relaxed) &&
             callerRva == patterns::kSceneBuildGameplayRetRva)
-            bvr::vr::sr_push_eye(-1);
+            leftBuildId = bvr::vr::sr_push_eye(-1);
     }
 
     LARGE_INTEGER t0, t1, freq;
     QueryPerformanceCounter(&t0);
-    reinterpret_cast<DrawFn>(g_draw.original)(ecx, edx, a1, a2, a3, a4);
+    {
+        ScopedEyeBuild eyeBuild(depth == 0 ? 0 : -1, leftBuildId);
+        reinterpret_cast<DrawFn>(g_draw.original)(ecx, edx, a1, a2, a3, a4);
+    }
     QueryPerformanceCounter(&t1);
     QueryPerformanceFrequency(&freq);
     g_drawUs.store(static_cast<uint32_t>((t1.QuadPart - t0.QuadPart) * 1000000 /
@@ -1097,6 +1123,7 @@ void __fastcall StreamViewDetour(void* ecx, void* edx, void* loc, void* rot, voi
 // the doubled draw WITHOUT 1t remains reachable via `reentry srdev on` (the
 // freeze-repro lane, dev only).
 void apply_vrstereo(bool on) {
+    camera::invalidate_temporal_camera();
     if (on && bvr::crash::teardown_seen()) {
         BVR_LOG("[reentry] VRSTEREO ON refused - window teardown in progress");
         return;
@@ -1456,6 +1483,13 @@ bool stereo_active() {
     return g_stereo.load(std::memory_order_relaxed) &&
            g_draw.enabled.load(std::memory_order_relaxed) &&
            !g_poisoned.load(std::memory_order_relaxed);
+}
+
+bool current_eye_build(int* eyeOut, uint64_t* buildIdOut) {
+    if (!t_eyeBuildId || t_eyeBuild < 0 || t_eyeBuild > 1) return false;
+    if (eyeOut) *eyeOut = t_eyeBuild;
+    if (buildIdOut) *buildIdOut = t_eyeBuildId;
+    return true;
 }
 
 bool second_pass_for_current_thread(float* yawDegOut) {

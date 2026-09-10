@@ -1,5 +1,8 @@
 #include "crash.h"
+#include "close_policy.h"
 #include "log.h"
+
+#include "game/adapter_registry.h"
 
 #include "bvr_version.h" // generated: BVR_VERSION / BVR_BUILD_ID
 
@@ -15,6 +18,13 @@ namespace {
 LPTOP_LEVEL_EXCEPTION_FILTER g_previous = nullptr;
 LONG g_inFilter = 0;
 LONG g_teardown = 0;
+close_policy::Host g_closeHost = close_policy::Host::Legacy;
+// Written once by the winning note_teardown caller, before CreateThread;
+// thereafter read only by that watchdog. No allocation/lock in the filter.
+ULONGLONG g_teardownStartedMs = 0;
+
+static_assert(close_policy::kTimeoutExitCode == WAIT_TIMEOUT);
+static_assert(close_policy::kMissingExceptionExitCode == ERROR_UNHANDLED_EXCEPTION);
 
 // Rich but not a 1.2 GB core: stacks plus the memory those stacks point at, plus
 // module data segments. That combination is what makes a smashed vtable slot or a
@@ -99,6 +109,14 @@ void log_registers_and_stack(const CONTEXT* ctx) {
 
 void report(EXCEPTION_POINTERS* info, const char* reason);
 
+void terminate_reported_fault(std::uint32_t exitCode) {
+    BVR_LOG("crash: fault during confirmed BS2 teardown was reported - emergency "
+            "process termination with original failure code 0x%08X (not a clean exit)",
+            static_cast<unsigned>(exitCode));
+    if (!TerminateProcess(GetCurrentProcess(), exitCode))
+        BVR_LOG("crash: emergency termination failed (winerr=%u)", GetLastError());
+}
+
 // Codes that are ALWAYS fatal and that never reach an unhandled-exception
 // filter: the heap manager and /GS fail fast, and a stack overflow usually has
 // no stack left to run a filter on. Deliberately NOT 0xC0000005 - our own
@@ -159,20 +177,22 @@ void report(EXCEPTION_POINTERS* info, const char* reason) {
     // A fault inside MiniDumpWriteDump used to recurse straight back into here.
     if (InterlockedCompareExchange(&g_inFilter, 1, 0) != 0) return;
 
-    // Exit-path fault (session 38): once the window began closing, a fault is
-    // the host's own teardown bug (BS2 faults at +0x4FF0FE on every close,
-    // reproduced with every mod hook skipped). A dump would be noise that eats
-    // the session cap, and returning to the chained filter spins the faulting
-    // instruction for seconds (86k retries observed). Log one line and end the
-    // process now - the user asked to close it.
-    if (InterlockedCompareExchange(&g_teardown, 0, 0) != 0) {
+    const EXCEPTION_RECORD* faultRecord = info ? info->ExceptionRecord : nullptr;
+    const auto faultDecision = close_policy::on_fault(
+        g_closeHost, InterlockedCompareExchange(&g_teardown, 0, 0) != 0,
+        faultRecord ? faultRecord->ExceptionCode : 0);
+
+    // Retain the released policy for other hosts in this multi-game module.
+    // BS2 instead reaches the ordinary report/dump path below: a close signal
+    // does not identify the cause of an exception and cannot turn it into 0.
+    if (!faultDecision.writeReport) {
         const EXCEPTION_RECORD* rec = info ? info->ExceptionRecord : nullptr;
         char where[160];
         describe(rec ? rec->ExceptionAddress : nullptr, where, sizeof(where));
         BVR_LOG("crash: fault during window teardown (code 0x%08X at %s) - known "
                 "host exit-path bug; no dump, terminating cleanly",
                 rec ? rec->ExceptionCode : 0, where);
-        TerminateProcess(GetCurrentProcess(), 0);
+        TerminateProcess(GetCurrentProcess(), faultDecision.exitCode);
     }
 
     // Repeat-fault suppressor (session 25): a chained filter (BS2's
@@ -194,6 +214,8 @@ void report(EXCEPTION_POINTERS* info, const char* reason) {
                     eip);
         else if (s_repeats % 500 == 0)
             BVR_LOG("crash: fault at %p repeated %u times", eip, s_repeats);
+        if (faultDecision.terminate)
+            terminate_reported_fault(faultDecision.exitCode);
         InterlockedExchange(&g_inFilter, 0);
         return;
     }
@@ -284,6 +306,11 @@ void report(EXCEPTION_POINTERS* info, const char* reason) {
     log_registers_and_stack(info ? info->ContextRecord : nullptr);
 #endif
 
+    // Prevent the chained CSERHelper filter from retrying a confirmed-close
+    // fault indefinitely, but only AFTER retaining its normal evidence. Never
+    // claim success merely because the process can be forcibly ended.
+    if (faultDecision.terminate)
+        terminate_reported_fault(faultDecision.exitCode);
     InterlockedExchange(&g_inFilter, 0);
 }
 
@@ -294,32 +321,54 @@ LONG WINAPI Filter(EXCEPTION_POINTERS* info) {
 
 } // namespace
 
-// Exit watchdog. The host's exit path can end two ways, and session 38 saw
-// both on BS2: a fault (absorbed above) or a DEADLOCK - the in-game quit
-// blocked after WM_DESTROY with zero CPU and one thread left, surviving well
-// past two minutes. Either way the user asked to close the game, so a close
-// that has not completed within the grace period is ended here. The grace is
-// deliberately longer than any healthy exit measured (vanilla BS2 takes 5-9 s;
-// BS1 exits well inside that), so this never truncates a working shutdown.
+// A bounded last resort, not evidence of a clean shutdown. In BS2 this clock
+// starts only when teardown is confirmed, never while a quit/save prompt may
+// still be cancelled. The historical 15 s bound remains; it does not prove
+// that every machine can always finish its shutdown work within that time.
 DWORD WINAPI TeardownWatchdog(LPVOID) {
-    constexpr DWORD kGraceMs = 15000;
-    Sleep(kGraceMs);
-    BVR_LOG("crash: still alive %u ms after the window began closing - the host "
-            "exit path is stuck; ending the process",
-            kGraceMs);
-    TerminateProcess(GetCurrentProcess(), 0);
+    const close_policy::State state{true, g_teardownStartedMs};
+    while (!close_policy::watchdog_due(state, GetTickCount64()))
+        Sleep(close_policy::remaining_grace_ms(state, GetTickCount64()));
+    const auto exitCode = close_policy::watchdog_exit_code(g_closeHost);
+    if (g_closeHost == close_policy::Host::Bioshock2)
+        BVR_LOG("crash: still alive %u ms after confirmed BS2 teardown - forced "
+                "termination for timeout (exit code %u, not a clean exit)",
+                close_policy::kGraceMs, static_cast<unsigned>(exitCode));
+    else
+        BVR_LOG("crash: still alive %u ms after the window began closing - the host "
+                "exit path is stuck; ending the process",
+                close_policy::kGraceMs);
+    if (!TerminateProcess(GetCurrentProcess(), exitCode))
+        BVR_LOG("crash: watchdog termination failed (winerr=%u)", GetLastError());
     return 0;
+}
+
+void note_close_request(const char* why) {
+    if (close_policy::confirms_teardown(g_closeHost, close_policy::Signal::CloseRequest)) {
+        note_teardown(why);
+        return;
+    }
+    BVR_LOG("crash: BS2 close requested (%s) - informational only; this request "
+            "does not confirm teardown or arm a watchdog", why);
 }
 
 void note_teardown(const char* why) {
     if (InterlockedExchange(&g_teardown, 1) != 0) return;
-    BVR_LOG("crash: window teardown noted (%s) - exit-path faults will be "
-            "logged without dumps and end the process directly",
-            why);
+    g_teardownStartedMs = GetTickCount64();
+    if (g_closeHost == close_policy::Host::Bioshock2)
+        BVR_LOG("crash: BS2 teardown confirmed (%s) - engine gates parked; "
+                "faults retain reports and failure codes; watchdog grace %u ms",
+                why, close_policy::kGraceMs);
+    else
+        BVR_LOG("crash: window teardown noted (%s) - exit-path faults will be "
+                "logged without dumps and end the process directly",
+                why);
     // Own thread: the close message runs on the game thread, which is exactly
     // the thread that can deadlock.
     HANDLE t = CreateThread(nullptr, 0, &TeardownWatchdog, nullptr, 0, nullptr);
     if (t) CloseHandle(t);
+    else BVR_LOG("crash: unable to create teardown watchdog (winerr=%u) - "
+                 "no timeout protection is active", GetLastError());
 }
 
 bool teardown_seen() {
@@ -327,6 +376,10 @@ bool teardown_seen() {
 }
 
 void install() {
+    // Host detection is silent and cached. Resolve before installing handlers;
+    // the exception path only reads the resulting immutable policy selection.
+    g_closeHost = game::detect_host_game() == game::HostGame::Bioshock2
+                      ? close_policy::Host::Bioshock2 : close_policy::Host::Legacy;
     g_previous = SetUnhandledExceptionFilter(Filter);
     g_vehObserve = GetEnvironmentVariableW(L"BVR_VEH", nullptr, 0) != 0;
     // Fatal-class codes (heap corruption, stack overflow, __fastfail) never

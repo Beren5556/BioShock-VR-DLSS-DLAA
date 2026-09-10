@@ -26,7 +26,7 @@ try {
         '(^|/)artifacts/',
         '(^|/)installer/Payload/',
         '(^|/)components/dlss-host/external/ngx/',
-        '(^|/)BioshockHD\.exe$',
+        '(^|/)Bioshock(2)?HD\.exe$',
         '(^|/)nvngx_dlss\.dll$'
     )
     foreach ($file in $tracked) {
@@ -53,7 +53,14 @@ try {
         'installer/msi/Build-Msi.ps1',
         'installer/msi/Package.wxs',
         'installer/msi/Interface.wxs',
-        'installer/msi/MsiActions.cs'
+        'installer/msi/MsiActions.cs',
+        'installer/msi/GamePackage.cs',
+        'installer/msi/LegacyMigration.cs',
+        'installer/unified/Bundle.cs',
+        'apps/launcher/src/GameProfile.cs',
+        'src/game/shared/temporal_adapter.cpp',
+        'src/game/shared/image_adapter.cpp',
+        'docs/INTEGRATION-0.2.13.md'
     )
     foreach ($file in $required) { $null = Read-Utf8 $file }
 
@@ -87,10 +94,33 @@ try {
     $sumLine = (Read-Utf8 'release/SHA256SUMS-v0.2.11.txt').Trim()
     $expectedSum = "$($msiManifest.sha256)  $($msiManifest.installer)"
     Assert-True ($sumLine -eq $expectedSum) 'Release checksum does not match the MSI manifest.'
+    $dualManifestPath = Join-Path $repoRoot 'release/manifest-v0.2.16.json'
+    if (Test-Path -LiteralPath $dualManifestPath) {
+        $dual = (Read-Utf8 'release/manifest-v0.2.16.json') | ConvertFrom-Json
+        $validated = (Read-Utf8 'release/validated-mods-v0.2.16.json') | ConvertFrom-Json
+        Assert-True ($dual.kind -eq 'native-single-game-msi' -and $dual.version -eq '0.2.16') 'Wrong final dual MSI identity.'
+        Assert-True ($dual.testFamily -eq '' -and $dual.releaseReady -eq $true) 'Only the production package can close the release.'
+        Assert-True ($dual.installer -eq 'BioShock-1-2-VR-DLSS-DLAA-0.2.16.msi' -and -not $dual.launcherAutoStart) 'Unexpected final asset/startup policy.'
+        Assert-True ((Read-Utf8 'release/SHA256SUMS-v0.2.16.txt').Trim() -eq "$($dual.sha256)  $($dual.installer)") 'Final MSI checksum mismatch.'
+        foreach ($id in @('bs1','bs2')) {
+            Assert-True (@($dual.games.$id.files).Count -eq 23) 'Each mod must contain exactly 23 inventoried files.'
+            Assert-True ($dual.games.$id.modBuild -eq $validated.modBuild -and $dual.games.$id.runtime -eq '310.7.0.0') 'Wrong tested core/runtime.'
+            foreach ($entry in $dual.games.$id.files) {
+                Assert-True (-not [IO.Path]::IsPathRooted($entry.path) -and $entry.path -notmatch '(^|[\\/])\.\.([\\/]|$)|Bioshock(2)?HD\.exe|:') 'Unsafe payload path or game executable.'
+                Assert-True ($entry.sha256 -match '^[0-9A-F]{64}$') 'Invalid final file hash.'
+            }
+            foreach ($entry in $validated.games.$id.files) {
+                $actual = @($dual.games.$id.files | Where-Object { $_.path.Replace('/', '\') -eq $entry.path.Replace('/', '\') })
+                Assert-True ($actual.Count -eq 1 -and $actual[0].sha256 -eq $entry.sha256) "Validated binary/fix missing: $id $($entry.path)"
+            }
+        }
+        Assert-True ($dual.games.bs1.productCode -ne $dual.games.bs2.productCode -and $dual.games.bs1.registration -ne $dual.games.bs2.registration) 'Game ownership must remain independent.'
+        foreach ($path in @('docs/releases/v0.2.16.md','docs/releases/v0.2.16-performance.md','docs/RELEASE-0.2.16.md','installer/single-game/Prepare-Release.ps1','installer/single-game/Build-Msi.ps1','installer/single-game/Verify-Package.ps1')) { $null = Read-Utf8 $path }
+    }
     $msiBuilder = Read-Utf8 'installer/msi/Build-Msi.ps1'
     Assert-True ($msiBuilder.Contains('ya se ha entregado. Usa una versión nueva')) 'Delivered MSI version guard is missing.'
     $preset = (Read-Utf8 'CMakePresets.json') | ConvertFrom-Json
-    $stable = @($preset.configurePresets | Where-Object name -eq 'stable-win32')[0]
+    $stable = @($preset.configurePresets | Where-Object name -eq 'integration-win32')[0]
     foreach ($flag in @('BVR_DLSS_OVERLAP','BVR_DEPTH_COPY_REUSE','BVR_DLSS_TAIL_OVERLAP','BVR_DLSS_EARLY_DELIVERY')) {
         Assert-True ($stable.cacheVariables.$flag -eq 'ON') "Stable optimization disabled: $flag"
     }
@@ -99,11 +129,11 @@ try {
     }
 
     $cmake = Read-Utf8 'CMakeLists.txt'
-    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.11")')) 'CMake distribution version is not 0.2.11.'
+    Assert-True ($cmake.Contains('set(BVR_DISTRIBUTION_VERSION "0.2.13")')) 'CMake distribution version is not 0.2.13.'
     Assert-True ($cmake.Contains('project(BioshockVR VERSION 0.8.2')) 'The upstream base must remain v0.8.2.'
 
     $launcher = Read-Utf8 'apps/launcher/src/BioshockVrLauncher.cs'
-    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.11.0")]')) 'Launcher version is not 0.2.11.0.'
+    Assert-True ($launcher.Contains('[assembly: AssemblyVersion("0.2.13.0")]')) 'Launcher version is not 0.2.13.0.'
     Assert-True ($launcher.Contains('private const bool FinalDlssEdition = true;')) 'Final launcher policy is not enabled.'
     Assert-True ($launcher.Contains('InitializeHiddenIniEditor();')) 'Hidden INI infrastructure is missing.'
     Assert-True ($launcher.Contains('fxaaGroup.Visible = !FinalDlssEdition;')) 'FXAA visibility guard is missing.'
@@ -112,14 +142,19 @@ try {
     Assert-True ($launcher.Contains('WarnAboutUntestedRuntime()')) 'Untested DLSS runtime warning is missing.'
     Assert-True ($launcher.Contains('status.RuntimeFound && status.RuntimeIs64Bit')) 'x64 alternate runtime acceptance is missing.'
     Assert-True ($launcher.Contains('string.Equals(status.RuntimeVersion, DlssConfigDocument.TestedRuntimeDisplay')) 'The tested runtime comparison must include all four version fields.'
-    Assert-True ($launcher.Contains('BeginSteamLaunchWatch();')) 'Steam launch confirmation is missing.'
-    Assert-True ($launcher.Contains('DateTime.UtcNow.AddSeconds(30)')) 'Steam launch timeout is not 30 seconds.'
-    Assert-True ($launcher.Contains('Steam ha aceptado la orden, pero BioShock no se ha abierto en 30 segundos.')) 'Steam timeout guidance is missing.'
-    Assert-True ($launcher.Contains('TryStartGameDirectly();')) 'Direct launch fallback is missing.'
-    Assert-True ($launcher.Contains('SetStatus("BioShock VR se ha iniciado mediante Steam.", Success);')) 'Confirmed Steam startup status is missing.'
-    Assert-True ($launcher.Contains('SetStatus("BioShock VR se está iniciando directamente.", Success);')) 'Direct startup status is missing.'
-    Assert-True ($launcher -match 'Process\.Start\(steam\);\s+BeginSteamLaunchWatch\(\);') 'The launcher closes or skips confirmation immediately after sending the Steam URI.'
-    Assert-True ([regex]::Matches($launcher, '^[ \t]*Close\(\);', [Text.RegularExpressions.RegexOptions]::Multiline).Count -ge 3) 'The launcher does not close after confirmed successful launch paths.'
+    $support = Read-Utf8 'apps/launcher/src/Bioshock2Support.cs'
+    Assert-True ($launcher.Contains('new GameLaunchTracker(')) 'Game launch confirmation is missing.'
+    Assert-True ($support.Contains('TotalSeconds >= 60')) 'Game launch timeout must be bounded to 60 seconds.'
+    Assert-True ($support.Contains('TotalSeconds >= 3')) 'Responsive-window stability check is missing.'
+    Assert-True ($support.Contains('GameLaunchEvidence.Matches(')) 'Exact game process evidence is missing.'
+    Assert-True ($launcher.Contains('LaunchOutcome.Started')) 'The launcher must close on confirmed startup.'
+    Assert-True ($launcher.Contains('GameProfile.VerifyExecutable(')) 'Compatible executable validation is missing.'
+    $profile = Read-Utf8 'apps/launcher/src/GameProfile.cs'
+    Assert-True ($profile.Contains('"409710"') -and $profile.Contains('"409720"')) 'Both game identities are required.'
+    Assert-True ($profile.Contains('Path.Combine(local, "bs2")')) 'BS2 profile must be isolated.'
+    $bundle = Read-Utf8 'installer/unified/Build-Bundle.ps1'
+    Assert-True ($bundle.Contains($msiManifest.sha256)) 'The selector must embed the exact accepted BS1 MSI.'
+    Assert-True ($bundle.Contains('$bs2.testFamily')) 'A test-family MSI must never be embedded.'
     $hiddenStart = $launcher.IndexOf('private void InitializeHiddenIniEditor()', [StringComparison]::Ordinal)
     $hiddenEnd = $launcher.IndexOf('private Label MakeToolbarLabel', $hiddenStart, [StringComparison]::Ordinal)
     Assert-True ($hiddenStart -ge 0 -and $hiddenEnd -gt $hiddenStart) 'Could not inspect hidden INI editor method.'
@@ -138,14 +173,15 @@ try {
     if ($BuildLauncher) {
         & (Join-Path $repoRoot 'apps\launcher\Build-Launcher.ps1') | Out-Host
         Assert-True ($LASTEXITCODE -eq 0) 'Launcher build failed.'
-        $launcherExe = Join-Path $repoRoot 'artifacts\launcher\Lanzador BioShock VR DLSS-DLAA.exe'
-        Assert-True (Test-Path -LiteralPath $launcherExe -PathType Leaf) 'Launcher build output is missing.'
-        $process = Start-Process -FilePath $launcherExe -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
-        try {
-            Assert-True ($process.ExitCode -eq 0) "Launcher self-test failed with exit code $($process.ExitCode)."
-        }
-        finally {
-            $process.Dispose()
+        foreach ($game in @('bs1','bs2')) {
+            $name = if ($game -eq 'bs2') { 'Lanzador BioShock 2 VR DLSS-DLAA.exe' } else { 'Lanzador BioShock VR DLSS-DLAA.exe' }
+            $launcherExe = Join-Path $repoRoot ('artifacts/integration-0.2.13/launcher/' + $game + '/' + $name)
+            Assert-True (Test-Path -LiteralPath $launcherExe -PathType Leaf) 'Launcher build output is missing.'
+            $process = Start-Process -FilePath $launcherExe -ArgumentList '--self-test' -WindowStyle Hidden -PassThru
+            try {
+                Assert-True ($process.WaitForExit(45000)) 'Launcher self-test did not complete in 45 seconds.'
+                Assert-True ($process.ExitCode -eq 0) "$game launcher self-test failed with exit code $($process.ExitCode)."
+            } finally { $process.Dispose() }
         }
     }
 

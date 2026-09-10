@@ -19,6 +19,13 @@ void init(const wchar_t* subdir) {
     std::lock_guard lock(g_mutex);
     if (g_file) return;
 
+#ifdef BVR_BS2_TEST_ISOLATION
+    // The test proxy has already verified that this process and all redirected
+    // folders belong to the physical test copy. No real profile fallback.
+    const DWORD length = GetEnvironmentVariableW(L"BVR_LAB_DATA_DIR", g_dataDir, MAX_PATH);
+    if (!length || length >= MAX_PATH) return;
+    CreateDirectoryW(g_dataDir, nullptr);
+#else
     wchar_t local[MAX_PATH];
     if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, local)))
         return;
@@ -31,6 +38,7 @@ void init(const wchar_t* subdir) {
         CreateDirectoryW(g_dataDir, nullptr);
     }
 
+#endif
     wchar_t path[MAX_PATH];
     swprintf_s(path, L"%s\\bioshockvr.log", g_dataDir);
 

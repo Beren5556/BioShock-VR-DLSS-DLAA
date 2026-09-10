@@ -1,0 +1,70 @@
+{
+  "version": "0.2.16",
+  "closedOn": "2026-09-10",
+  "localReleaseReady": true,
+  "recordKind": "technical-validation-at-local-release-closure",
+  "githubPublishedAtLocalClosure": false,
+  "installer": "BioShock-1-2-VR-DLSS-DLAA-0.2.16.msi",
+  "installerSha256": "1C881F0A27416198FC25A068A79044BEED7FCC37160F38E7AFE2AE09CE9A2371",
+  "installerBytes": 38465536,
+  "authenticode": "NotSigned",
+  "modBuild": "beren5556-bs12-v0.2.13-candidate2-sr-range-audit",
+  "modInternalVersion": "0.2.13",
+  "runtimeRecompiledDuringPackaging": false,
+  "gameplayAcceptance": {
+    "bs1": "Usuario: «el uno funcionando»; registro confirma candidate2 y cambios DLSS/DLAA aplicados.",
+    "bs2": "Usuario: «el 2 va perfecto»; registro confirma candidate2 y cambios DLSS/DLAA aplicados.",
+    "testedOnAnotherComputer": false
+  },
+  "checks": {
+    "embeddedFiles": 46,
+    "historicalComponentIdentities": 46,
+    "installedRuntimeFilesAndProfilesIdentical": 16,
+    "coreTestExecutablesPassed": 12,
+    "launcherSelfTestsPassed": 2,
+    "payloadProfileChecksPassed": 27,
+    "legacyMigrationUnitChecksPassed": 40,
+    "historicalSnapshotRegressionPassed": true,
+    "isolatedInstaller": {
+      "sameSourceAndPayloadAsProduction": true,
+      "family": "11613fb649a94bc1b669d4705621da11",
+      "standard": {
+        "passed": true,
+        "checks": 74,
+        "operations": 12
+      },
+      "upgradeFrom0215": {
+        "passed": true,
+        "checks": 56,
+        "operations": 10
+      },
+      "totalChecks": 130,
+      "totalOperations": 22,
+      "sameUserElevated": true,
+      "testProductsLeftRegistered": 0,
+      "realGameFilesProfilesAndRegistrationsUnchanged": true
+    }
+  },
+  "initialUnelevatedTest": {
+    "passed": false,
+    "reason": "El ensayo silencioso no pudo reconstruir el registro nativo durante una desinstalación fallida (1401/1406).",
+    "isolatedFixtureRecoveredAndRemoved": true,
+    "windowsPermissionsOrPoliciesChanged": false,
+    "preflightGuardAddedToTestHarness": true
+  },
+  "limits": [
+    "No se ha validado en otro ordenador.",
+    "En BS2, los efectos gráficos se guardan desde el lanzador y requieren reinicio.",
+    "No se garantiza igualdad de FPS entre los dos juegos ni en todas las escenas.",
+    "BS1 conserva la guarda heredada ante un fallo del host al destruir su ventana; no se afirma una salida nativa libre de fallos.",
+    "Las pruebas e instalaciones silenciosas requieren elevación normal de la misma cuenta. El uso previsto es el MSI interactivo.",
+    "El MSI no está firmado digitalmente; se proporciona SHA-256."
+  ],
+  "localEvidence": [
+    "artifacts/integration-0.2.16/msi/single-game/package-verification.json",
+    "artifacts/single-game-isolated/11613fb649a94bc1b669d4705621da11/single-game-0.2.16/test-result.json",
+    "artifacts/single-game-isolated/11613fb649a94bc1b669d4705621da11/single-game-0.2.16/test-result-instance-upgrade.json",
+    "artifacts/integration-0.2.13/tests/20260910-194306/results.json",
+    "artifacts/distribution-0.2.16/acceptance-evidence"
+  ]
+}

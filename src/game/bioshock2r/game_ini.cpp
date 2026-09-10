@@ -1,12 +1,14 @@
 #include "game/bioshock2r/game_ini.h"
 
 #include "core/util/log.h"
+#include "core/util/config_batch.h"
 
 #include <windows.h>
 #include <shlobj.h>
 
 #include <cstdio>
 #include <cstring>
+#include <cerrno>
 #include <string>
 
 namespace bvr::b2r::game_ini {
@@ -55,101 +57,71 @@ bool read_all(const wchar_t* p, std::string& out) {
     return ok;
 }
 
-bool write_all(const wchar_t* p, const std::string& data) {
-    HANDLE h = CreateFileW(p, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
-                           nullptr);
-    if (h == INVALID_HANDLE_VALUE) return false;
-    DWORD wrote = 0;
-    bool ok = WriteFile(h, data.data(), static_cast<DWORD>(data.size()), &wrote, nullptr) &&
-              wrote == data.size();
-    // Flush before the rename: a crash between the two would otherwise leave a
-    // zero-length temp file to be promoted over the real config.
-    if (ok) FlushFileBuffers(h);
-    CloseHandle(h);
-    return ok;
+// Match complete, unique sections/keys; retain whitespace, comments and CRLF.
+std::string trimmed(std::string value) {
+    auto first = value.find_first_not_of(" \t\r");
+    if (first == std::string::npos) return {};
+    return value.substr(first, value.find_last_not_of(" \t\r") - first + 1);
 }
-
-// [start, end) byte span of `section`'s BODY, or false. Scoping every read and
-// every write through this is the whole defence against the decoy sections.
 bool section_span(const std::string& text, const char* section, size_t& start, size_t& end) {
-    size_t at = text.find(section);
-    if (at == std::string::npos) return false;
-    size_t bodyStart = text.find('\n', at);
-    if (bodyStart == std::string::npos) return false;
-    ++bodyStart;
-    // The section ends at the next line that begins a new section.
-    size_t p = bodyStart;
-    while (p < text.size()) {
-        if (text[p] == '[') break;
+    if (text.find('\0') != std::string::npos) return false; // never rewrite UTF-16 as ANSI
+    bool found = false, inSection = false;
+    for (size_t p = 0; p < text.size();) {
         size_t nl = text.find('\n', p);
-        if (nl == std::string::npos) {
-            p = text.size();
-            break;
+        const size_t next = nl == std::string::npos ? text.size() : nl + 1;
+        std::string line = text.substr(p, (nl == std::string::npos ? text.size() : nl) - p);
+        if (p == 0 && line.compare(0, 3, "\xEF\xBB\xBF") == 0) line.erase(0, 3);
+        line = trimmed(line.substr(0, line.find(';')));
+        if (!line.empty() && line.front() == '[') {
+            if (inSection) { end = p; inSection = false; }
+            if (line == section) {
+                if (found) return false;
+                found = inSection = true; start = next; end = text.size();
+            }
         }
-        p = nl + 1;
+        p = next;
     }
-    start = bodyStart;
-    end = p;
+    return found;
+}
+bool key_span(const std::string& text, size_t start, size_t end, const char* key,
+              size_t& valueStart, size_t& valueEnd) {
+    bool found = false;
+    for (size_t p = start; p < end;) {
+        const size_t nl = text.find('\n', p);
+        const size_t lineEnd = nl == std::string::npos || nl > end ? end : nl;
+        size_t eq = text.find('=', p);
+        if (eq < lineEnd && trimmed(text.substr(p, eq - p)) == key) {
+            if (found) return false;
+            found = true; valueStart = eq + 1; valueEnd = lineEnd;
+            size_t comment = text.find(';', valueStart);
+            if (comment < valueEnd) valueEnd = comment;
+            while (valueStart < valueEnd && (text[valueStart] == ' ' || text[valueStart] == '\t')) ++valueStart;
+            while (valueEnd > valueStart && (text[valueEnd-1] == ' ' || text[valueEnd-1] == '\t' || text[valueEnd-1] == '\r')) --valueEnd;
+        }
+        p = lineEnd == text.size() ? lineEnd : lineEnd + 1;
+    }
+    return found && valueEnd > valueStart;
+}
+long section_value(const std::string& text, size_t start, size_t end, const char* key) {
+    size_t a = 0, b = 0;
+    if (!key_span(text, start, end, key, a, b)) return -1;
+    char* tail = nullptr; errno = 0;
+    const long value = strtol(text.c_str() + a, &tail, 10);
+    return errno == 0 && tail == text.c_str() + b ? value : -1;
+}
+bool set_section_value(std::string& text, size_t start, size_t& end, const char* key, uint32_t value) {
+    size_t a = 0, b = 0;
+    if (section_value(text, start, end, key) < 0 || !key_span(text, start, end, key, a, b)) return false;
+    const auto number = std::to_string(value);
+    text.replace(a, b - a, number);
+    end = end - (b - a) + number.size();
     return true;
 }
-
-// Value of `key` inside [start, end), or -1. Key must match at a line start.
-long section_value(const std::string& text, size_t start, size_t end, const char* key) {
-    const size_t keyLen = strlen(key);
-    size_t p = start;
-    while (p < end) {
-        size_t nl = text.find('\n', p);
-        size_t lineEnd = (nl == std::string::npos || nl > end) ? end : nl;
-        if (lineEnd - p > keyLen && text.compare(p, keyLen, key) == 0 && text[p + keyLen] == '=') {
-            return strtol(text.c_str() + p + keyLen + 1, nullptr, 10);
-        }
-        if (nl == std::string::npos) break;
-        p = nl + 1;
-    }
-    return -1;
-}
-
-// Replace `key`'s value inside [start, end) in place. Returns false if the key
-// is not present in that section - this code never ADDS keys. The shipped file
-// has all of them, and inventing one is how a config stops loading.
-bool set_section_value(std::string& text, size_t start, size_t& end, const char* key,
-                       uint32_t value) {
-    const size_t keyLen = strlen(key);
-    size_t p = start;
-    while (p < end) {
-        size_t nl = text.find('\n', p);
-        size_t lineEnd = (nl == std::string::npos || nl > end) ? end : nl;
-        if (lineEnd - p > keyLen && text.compare(p, keyLen, key) == 0 && text[p + keyLen] == '=') {
-            // Keep the line's terminator (CR and/or LF) exactly as it was.
-            size_t valStart = p + keyLen + 1;
-            size_t valEnd = valStart;
-            while (valEnd < lineEnd && text[valEnd] != '\r' && text[valEnd] != '\n') ++valEnd;
-            char buf[16];
-            int n = _snprintf_s(buf, sizeof buf, _TRUNCATE, "%u", value);
-            if (n <= 0) return false;
-            const size_t oldLen = valEnd - valStart;
-            text.replace(valStart, oldLen, buf, static_cast<size_t>(n));
-            end += static_cast<size_t>(n) - oldLen; // span shifts with the edit
-            return true;
-        }
-        if (nl == std::string::npos) break;
-        p = nl + 1;
-    }
-    return false;
-}
-
 bool section_bool(const std::string& text, size_t start, size_t end, const char* key) {
-    const size_t keyLen = strlen(key);
-    size_t p = start;
-    while (p < end) {
-        size_t nl = text.find('\n', p);
-        size_t lineEnd = (nl == std::string::npos || nl > end) ? end : nl;
-        if (lineEnd - p > keyLen && text.compare(p, keyLen, key) == 0 && text[p + keyLen] == '=')
-            return _strnicmp(text.c_str() + p + keyLen + 1, "True", 4) == 0;
-        if (nl == std::string::npos) break;
-        p = nl + 1;
-    }
-    return false;
+    size_t a = 0, b = 0;
+    if (!key_span(text, start, end, key, a, b)) return false;
+    const auto value = text.substr(a, b - a);
+    return _stricmp(value.c_str(), "True") == 0 || value == "1";
 }
 
 // A candidate only wins if it EXISTS and actually carries the named section.
@@ -157,11 +129,39 @@ bool candidate_has(const wchar_t* p, const char* section) {
     if (!file_exists(p)) return false;
     std::string text;
     if (!read_all(p, text)) return false;
-    return text.find(section) != std::string::npos;
+    size_t start = 0, end = 0;
+    return section_span(text, section, start, end);
 }
 
 void search() {
     g_searched = true;
+#ifdef BVR_BS2_TEST_ISOLATION
+    // Test-only physical game copies must never discover a user profile.
+    wchar_t sp[MAX_PATH]{};
+    const DWORD count = GetEnvironmentVariableW(L"BVR_LAB_GAME_INI", sp, MAX_PATH);
+    const bool absolute = (count > 3 && sp[1] == L':' && sp[2] == L'\\') ||
+                          (count > 2 && sp[0] == L'\\' && sp[1] == L'\\');
+    if (!count || count >= MAX_PATH || !absolute || !candidate_has(sp, kPcSection)) {
+        BVR_LOG("[b2r] test isolation: BVR_LAB_GAME_INI missing/invalid; config access disabled");
+        return;
+    }
+    wchar_t shared[MAX_PATH]{};
+    wcscpy_s(shared, sp);
+    wchar_t* last = wcsrchr(shared, L'\\');
+    if (!last || _wcsicmp(last + 1, L"Bioshock2SP.ini") != 0) {
+        BVR_LOG("[b2r] test isolation: expected absolute Bioshock2SP.ini path");
+        return;
+    }
+    *(last + 1) = L'\0';
+    if (wcscat_s(shared, L"Shared.ini") != 0 || !candidate_has(shared, kSharedSection)) {
+        BVR_LOG("[b2r] test isolation: sibling Shared.ini missing; config access disabled");
+        return;
+    }
+    wcscpy_s(g_spPath, sp);
+    wcscpy_s(g_path, shared);
+    BVR_LOG("[b2r] test isolation: config files restricted to %ls", g_path);
+    return;
+#else
     wchar_t roaming[MAX_PATH]{}, docs[MAX_PATH]{};
     SHGetFolderPathW(nullptr, CSIDL_APPDATA, nullptr, 0, roaming);
     SHGetFolderPathW(nullptr, CSIDL_PERSONAL, nullptr, 0, docs);
@@ -189,10 +189,10 @@ void search() {
             continue;
         }
         wcscpy_s(g_path, shared);
-        // The secondary file is optional: it is kept in sync when present and
-        // its absence must never block the write that actually matters.
+        // The secondary file is optional. If present but malformed, retain its
+        // path so a save is rejected before either file is changed.
         if (_snwprintf_s(sp, MAX_PATH, _TRUNCATE, L"%s%s\\Bioshock2SP.ini", d[0], d[1]) > 0 &&
-            candidate_has(sp, kPcSection)) {
+            file_exists(sp)) {
             wcscpy_s(g_spPath, sp);
         }
         bool marker = g_spPath[0] && candidate_has(g_spPath, kBs2Marker);
@@ -205,54 +205,29 @@ void search() {
         return;
     }
     BVR_LOG("[b2r] game ini: Shared.ini NOT FOUND - resolution cannot be set from the mod");
+#endif
 }
 
-// Replace one key inside one section of one file, with the whole safety chain:
-// section-scoped, never adds a key, one-time backup, temp + ReplaceFileW.
-// `keys`/`values` are parallel arrays so a file is rewritten exactly once.
-bool edit_section_keys(const wchar_t* file, const char* section, const char* const* keys,
-                       const uint32_t* values, int n) {
-    std::string text;
-    if (!read_all(file, text)) {
-        BVR_LOG("[b2r] game ini: read failed on %ls (err %lu)", file, GetLastError());
-        return false;
-    }
+bool prepare_section(config_batch::Batch& batch, const wchar_t* file, const char* section,
+                     const char* const* keys, const uint32_t* values, int count) {
+    std::string before; bool exists = false;
+    if (!config_batch::read(file, before, exists) || !exists) return false;
+    std::string after = before;
     size_t start = 0, end = 0;
-    if (!section_span(text, section, start, end)) {
-        BVR_LOG("[b2r] game ini: %s not found in %ls - refusing to guess", section, file);
-        return false;
-    }
-    for (int i = 0; i < n; ++i) {
-        if (!set_section_value(text, start, end, keys[i], values[i])) {
-            BVR_LOG("[b2r] game ini: key %s missing from %s in %ls - nothing written", keys[i],
-                    section, file);
-            return false;
-        }
-    }
-
-    // One-time backup, matching the existing .bvr-bak-* convention. Never
-    // overwritten, so the first backup is always the user's original.
-    wchar_t bak[MAX_PATH];
-    if (_snwprintf_s(bak, MAX_PATH, _TRUNCATE, L"%s.bvr-bak-res", file) > 0 && !file_exists(bak)) {
-        if (CopyFileW(file, bak, TRUE))
-            BVR_LOG("[b2r] game ini: original backed up to %ls", bak);
-        else
-            BVR_LOG("[b2r] game ini: backup FAILED (err %lu) - writing anyway", GetLastError());
-    }
-
-    // Temp file then ReplaceFileW, so an interrupted write cannot truncate the
-    // user's config.
-    wchar_t tmp[MAX_PATH];
-    if (_snwprintf_s(tmp, MAX_PATH, _TRUNCATE, L"%s.bvr-tmp", file) < 0) return false;
-    if (!write_all(tmp, text)) {
-        BVR_LOG("[b2r] game ini: temp write failed (err %lu)", GetLastError());
-        return false;
-    }
-    if (!ReplaceFileW(file, tmp, nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
-        DWORD err = GetLastError();
-        DeleteFileW(tmp);
-        BVR_LOG("[b2r] game ini: replace failed on %ls (err %lu) - config untouched", file, err);
-        return false;
+    if (!section_span(after, section, start, end)) return false;
+    for (int i = 0; i < count; ++i)
+        if (!set_section_value(after, start, end, keys[i], values[i])) return false;
+    return batch.add(file, true, before, after, L".bvr-bak-res");
+}
+bool prepare_viewport(config_batch::Batch& batch, uint32_t w, uint32_t h) {
+    if (w < 640 || h < 480 || w > 16384 || h > 16384 || (w & 1) || (h & 1) || !path()[0]) return false;
+    const char* sharedKeys[] = {"ViewportX", "ViewportY"};
+    const uint32_t sharedValues[] = {w, h};
+    if (!prepare_section(batch, g_path, kSharedSection, sharedKeys, sharedValues, 2)) return false;
+    if (g_spPath[0]) {
+        const char* keys[] = {"WindowedViewportX", "WindowedViewportY", "FullscreenViewportX", "FullscreenViewportY"};
+        const uint32_t values[] = {w, h, w, h};
+        if (!prepare_section(batch, g_spPath, kPcSection, keys, values, 4)) return false;
     }
     return true;
 }
@@ -262,6 +237,10 @@ bool edit_section_keys(const wchar_t* file, const char* section, const char* con
 const wchar_t* path() {
     if (!g_searched) search();
     return g_path;
+}
+const wchar_t* sp_path() {
+    if (!g_searched) search();
+    return g_spPath;
 }
 
 Viewport read_viewport() {
@@ -300,52 +279,20 @@ Viewport read_viewport() {
 }
 
 bool write_viewport(uint32_t w, uint32_t h) {
-    if (w < 640 || h < 480 || w > 16384 || h > 16384) {
-        BVR_LOG("[b2r] game ini: refusing %ux%u (outside 640x480..16384x16384)", w, h);
-        return false;
-    }
-    if (!path()[0]) {
-        BVR_LOG("[b2r] game ini: cannot write - no Shared.ini located");
-        return false;
-    }
-
-    // 1. The pair that actually governs.
-    const char* sharedKeys[] = {"ViewportX", "ViewportY"};
-    const uint32_t sharedVals[] = {w, h};
-    if (!edit_section_keys(g_path, kSharedSection, sharedKeys, sharedVals, 2)) return false;
-
-    // 2. Keep the ignored pair in sync. Best effort: a failure here cannot undo
-    // the write that matters, so it is logged and swallowed rather than
-    // reported as failure. Both windowed and fullscreen, because UE2 keeps two
-    // and reads whichever mode it starts in.
-    if (g_spPath[0]) {
-        const char* spKeys[] = {"WindowedViewportX", "WindowedViewportY",
-                                "FullscreenViewportX", "FullscreenViewportY"};
-        const uint32_t spVals[] = {w, h, w, h};
-        if (!edit_section_keys(g_spPath, kPcSection, spKeys, spVals, 4))
-            BVR_LOG("[b2r] game ini: Bioshock2SP.ini not synced - harmless (the engine ignores "
-                    "those keys on BS2), but a config regeneration could revert the resolution");
-    }
-
-    // 3. READ BACK. A write that reports success and changes nothing is the
-    // failure mode worth catching by hand - it is what UAC redirection looks
-    // like. Note this proves the FILE took the value, never that the ENGINE
-    // honours it: on BS2 the WinDrv keys verify perfectly and do nothing, which
-    // is how they were caught. The only real acceptance is the backbuffer at
-    // first Present after a relaunch.
-    Viewport after = read_viewport();
-    if (!after.valid || after.w != w || after.h != h) {
-        BVR_LOG("[b2r] game ini: WROTE %ux%u but it reads back %ux%u - the write did not stick",
-                w, h, after.w, after.h);
-        return false;
-    }
-    // Deliberately does NOT spell out the startup line's exact wording: quoting
-    // it here made this message match every `grep "first Present: backbuffer"`
-    // and hid the real one.
-    BVR_LOG("[b2r] game ini: viewport set to %ux%u in Shared.ini [SharedOptions] (verified) "
-            "- takes effect on the NEXT launch; confirm against the startup backbuffer line",
-            w, h);
-    return true;
+    config_batch::Batch batch;
+    const bool ok = prepare_viewport(batch, w, h) && batch.commit();
+    BVR_LOG("[b2r] game ini: coordinated viewport save %ux%u %s", w, h, ok ? "verified" : "FAILED");
+    return ok;
+}
+bool write_viewport_and_settings(uint32_t w, uint32_t h, const std::wstring& settings,
+                                 bool existed, const std::string& before, const std::wstring& staged) {
+    config_batch::Batch batch;
+    std::string after; bool hasStage = false;
+    const bool ok = prepare_viewport(batch, w, h) &&
+        config_batch::read(staged, after, hasStage) && hasStage &&
+        batch.add(settings, existed, before, after, L".bvr-bak-controls") && batch.commit();
+    BVR_LOG("[b2r] game ini: Shared/SP/DLSS save %s", ok ? "verified" : "FAILED; see recovery log if present");
+    return ok;
 }
 
 void log_status(uint32_t liveW, uint32_t liveH) {

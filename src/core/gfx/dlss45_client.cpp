@@ -1,4 +1,5 @@
 #include "core/gfx/dlss45_client.h"
+#include "game/adapter_registry.h"
 #include "core/gfx/dlss_sharpen.h"
 #include "core/gfx/sampled_gpu_timer.h"
 #include "core/gfx/input_wait_probe.h"
@@ -167,6 +168,7 @@ bool g_diagnosticTransport = false;
 bool g_isReady = false;
 bool g_faulted = false;
 char g_status[512] = "desactivado";
+bool g_srRangeRejected = false;
 
 void set_status_v(const char* format, va_list args) noexcept {
     _vsnprintf_s(g_status, sizeof(g_status), _TRUNCATE, format, args);
@@ -274,13 +276,27 @@ bool is_dlss_310_7_0(const std::wstring& path,
 bool capabilities_are_dlss45(const std::wstring& path) noexcept {
     wchar_t phase[32]{};
     wchar_t runtime[32]{};
+    wchar_t game[32]{};
+    wchar_t adapter[32]{};
     GetPrivateProfileStringW(L"backend", L"phase", L"", phase,
                              static_cast<DWORD>(_countof(phase)), path.c_str());
     GetPrivateProfileStringW(L"backend", L"runtime", L"", runtime,
                              static_cast<DWORD>(_countof(runtime)), path.c_str());
+    GetPrivateProfileStringW(L"backend", L"game", L"", game,
+                             static_cast<DWORD>(_countof(game)), path.c_str());
+    GetPrivateProfileStringW(L"backend", L"adapter", L"", adapter,
+                             static_cast<DWORD>(_countof(adapter)), path.c_str());
     const UINT eyeHosts = GetPrivateProfileIntW(L"backend", L"eyeHosts", 0, path.c_str());
     const UINT protocol = GetPrivateProfileIntW(L"backend", L"protocol", 0, path.c_str());
-    return _wcsicmp(phase, L"DLSS45") == 0 && eyeHosts >= 2 &&
+    const auto hostGame = bvr::game::detect_host_game();
+    // The accepted BS1 payload predates explicit game/adapter keys. Missing
+    // identity remains a BS1-only legacy contract, never valid for BS2.
+    const bool identity = hostGame == bvr::game::HostGame::Bioshock2
+        ? wcscmp(game, L"bs2") == 0 && wcscmp(adapter, L"bioshock2r") == 0
+        : hostGame == bvr::game::HostGame::Bioshock1 &&
+          ((!game[0] && !adapter[0]) ||
+           (wcscmp(game, L"bs1") == 0 && wcscmp(adapter, L"bioshock1r") == 0));
+    return identity && _wcsicmp(phase, L"DLSS45") == 0 && eyeHosts >= 2 &&
            wcscmp(runtime, L"310.7.0") == 0 && protocol == kIpcVersion;
 }
 
@@ -541,7 +557,7 @@ bool stage_runtime(const std::wstring& hostSource) {
         BVR_LOG("[dlss45] nvngx_dlss.dll FileVersion 310.7.0.0 matches the tested runtime");
     }
     if (!capabilities_are_dlss45(capabilitiesSource))
-        return prepare_failure("dlss-capabilities.ini no declara DLSS45, dos hosts, runtime 310.7.0 e IPC v8");
+        return prepare_failure("dlss-capabilities.ini no corresponde al juego, DLSS45, dos hosts, runtime 310.7.0 e IPC v8");
 
     const wchar_t* offending = nullptr;
     if (!package_is_clean(packageDirectory, &offending)) {
@@ -550,13 +566,10 @@ bool stage_runtime(const std::wstring& hostSource) {
                                "ReShade incompatibles con la fase DLSS 4.5");
     }
 
-    const DWORD required = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
-    if (!required) return prepare_failure("LOCALAPPDATA no esta disponible para aislar los hosts");
-    std::vector<wchar_t> localBuffer(required);
-    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", localBuffer.data(), required))
-        return prepare_failure("no se pudo leer LOCALAPPDATA");
-
-    const std::wstring bioshockDir = join_path(localBuffer.data(), L"BioshockVR");
+    const wchar_t* gameDataDir = bvr::log::data_dir();
+    if (!gameDataDir || !*gameDataDir)
+        return prepare_failure("no se pudo resolver la carpeta de datos del juego");
+    const std::wstring bioshockDir(gameDataDir);
 #ifdef BVR_LATENCY_PROBE
     const std::wstring runtimeRoot = join_path(bioshockDir, L"DLSS45Host-Latency1");
 #else
@@ -835,8 +848,10 @@ bool build_host(EyeState& eye) noexcept {
         BVR_LOG("[dlss45] eye%d build rejected: ok=%d ngx=0x%08X flags=0x%X "
                 "output=%u expected=%u", eye.index, ack.ok, ack.ngxResult, ack.flags,
                 ack.outputFormat, static_cast<unsigned>(g_outputFormat));
-        if (ack.flags & kAckSrUnavailable)
+        if (ack.flags & kAckSrUnavailable) {
+            g_srRangeRejected = true;
             BVR_LOG("[dlss45] requested SR ratio is not offered by the DLSS runtime");
+        }
         close_ack_handles();
         return false;
     }
@@ -969,6 +984,7 @@ bool prepare_impl(ID3D11Device* device,
                   const wchar_t* hostExePath) {
     cleanup(false);
     set_status("preparando DLSS 4.5");
+    g_srRangeRejected = false;
 
     if (mode == Mode::Off) return prepare_failure("DLSS 4.5 desactivado");
     if (mode != Mode::Dlaa && mode != Mode::SuperResolution)
@@ -1026,7 +1042,9 @@ bool prepare_impl(ID3D11Device* device,
     if (!hello_host(g_eyes[0], gamePid) || !hello_host(g_eyes[1], gamePid))
         return prepare_failure("handshake IPC v8 rechazado por uno de los hosts");
     if (!build_host(g_eyes[0]) || !build_host(g_eyes[1]))
-        return prepare_failure("NGX no pudo crear dos features temporales independientes");
+        return prepare_failure(g_srRangeRejected
+            ? "Esta resolucion/calidad DLSS queda fuera del rango admitido por NVIDIA"
+            : "NGX no pudo crear dos features temporales independientes");
 
     g_isReady = true;
     g_faulted = false;

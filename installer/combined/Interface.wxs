@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <UI Id="BioShockSuiteUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="10" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="InstallDir" />
+      <DialogRef Id="BrowseDlg" />
+      <DialogRef Id="DiskCostDlg" />
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="UserExit" />
+      <Dialog Id="GameChoiceDlg" Width="370" Height="300" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="15" Y="12" Width="340" Height="24" Text="{\WixUI_Font_Title}BioShock 1-2 VR · DLSS/DLAA [ProductVersion]" />
+        <Control Id="Description" Type="Text" X="15" Y="43" Width="340" Height="34"
+                 Text="Selecciona los mods que quieres tener instalados. Puedes instalar uno ahora y volver a abrir este MSI para añadir el otro." />
+        <Control Id="BS1" Type="CheckBox" X="15" Y="87" Width="340" Height="18" Property="BVR_BS1_SELECTED" CheckBoxValue="1"
+                 Text="BioShock Remastered (1)" DisableCondition="BVR_LEGACY_BS1" />
+        <Control Id="BS1Status" Type="Text" X="29" Y="108" Width="326" Height="26" Text="[BVR_BS1_STATUS]" />
+        <Control Id="BS2" Type="CheckBox" X="15" Y="143" Width="340" Height="18" Property="BVR_BS2_SELECTED" CheckBoxValue="1"
+                 Text="BioShock 2 Remastered" DisableCondition="BVR_LEGACY_BS2" />
+        <Control Id="BS2Status" Type="Text" X="29" Y="164" Width="326" Height="26" Text="[BVR_BS2_STATUS]" />
+        <Control Id="Warning" Type="Text" X="15" Y="201" Width="340" Height="30"
+                 Text="Desmarcar un mod ya instalado lo desinstala. Los juegos de Steam, las partidas y tus preferencias se conservan." />
+        <Control Id="Legacy" Type="Text" X="15" Y="235" Width="340" Height="26" Hidden="yes"
+                 Text="Los MSI anteriores se integran juntos esta primera vez. Después podrás gestionar cada mod por separado."
+                 ShowCondition="BVR_LEGACY_BS1 OR BVR_LEGACY_BS2" />
+        <Control Id="Line" Type="Line" X="0" Y="265" Width="370" Height="0" />
+        <Control Id="Next" Type="PushButton" X="226" Y="273" Width="62" Height="18" Default="yes" Text="Siguiente">
+          <Publish Event="DoAction" Value="ApplySelection" Order="1" />
+          <Publish Event="SpawnDialog" Value="SuiteErrorDlg" Order="2" Condition="BVR_VALID &lt;&gt; &quot;1&quot;" />
+          <Publish Event="NewDialog" Value="Folder_bs1" Order="3" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS1_SELECTED = &quot;1&quot;" />
+          <Publish Event="NewDialog" Value="Folder_bs2" Order="4" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS1_SELECTED &lt;&gt; &quot;1&quot; AND BVR_BS2_SELECTED = &quot;1&quot;" />
+          <Publish Event="NewDialog" Value="SuiteReadyDlg" Order="5" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS1_SELECTED &lt;&gt; &quot;1&quot; AND BVR_BS2_SELECTED &lt;&gt; &quot;1&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="273" Width="62" Height="18" Cancel="yes" Text="Cancelar">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+      <Dialog Id="SuiteReadyDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="15" Y="12" Width="340" Height="24" Text="{\WixUI_Font_Title}Confirmar los cambios" />
+        <Control Id="Info" Type="Text" X="15" Y="46" Width="340" Height="40"
+                 Text="Se instalarán los mods nuevos que has marcado. Los ya instalados se conservarán, salvo que hayas elegido repararlos o desmarcarlos." />
+        <Control Id="One" Type="Text" X="15" Y="94" Width="340" Height="45" NoPrefix="yes"
+                 Text="BioShock 1: [BVR_BS1_SUMMARY]&#13;&#10;[BS1DIR]" />
+        <Control Id="Two" Type="Text" X="15" Y="143" Width="340" Height="45" NoPrefix="yes"
+                 Text="BioShock 2: [BVR_BS2_SUMMARY]&#13;&#10;[BS2DIR]" />
+        <Control Id="NoAutoStart" Type="Text" X="15" Y="199" Width="340" Height="27"
+                 Text="Se conservarán copias recuperables. El instalador no abrirá los lanzadores ni los juegos al terminar." />
+        <Control Id="Line" Type="Line" X="0" Y="235" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="156" Y="243" Width="62" Height="18" Text="Atrás">
+          <Publish Event="NewDialog" Value="GameChoiceDlg" />
+        </Control>
+        <Control Id="Install" Type="PushButton" X="226" Y="243" Width="62" Height="18" Default="yes" Text="Aplicar">
+          <Publish Event="DoAction" Value="ApplySelection" Order="1" />
+          <Publish Event="SpawnDialog" Value="SuiteErrorDlg" Order="2" Condition="BVR_VALID &lt;&gt; &quot;1&quot;" />
+          <Publish Event="ReinstallMode" Value="amus" Order="3" Condition="BVR_VALID = &quot;1&quot;" />
+          <Publish Event="Reinstall" Value="Game_bs1" Order="4" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS1_REPAIR = &quot;1&quot; AND BVR_BS1_SELECTED = &quot;1&quot;" />
+          <Publish Event="Reinstall" Value="Desktop_bs1" Order="5" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS1_REPAIR = &quot;1&quot; AND BVR_BS1_SELECTED = &quot;1&quot; AND BVR_BS1_DESKTOPSHORTCUT = &quot;1&quot;" />
+          <Publish Event="Reinstall" Value="Game_bs2" Order="6" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS2_REPAIR = &quot;1&quot; AND BVR_BS2_SELECTED = &quot;1&quot;" />
+          <Publish Event="Reinstall" Value="Desktop_bs2" Order="7" Condition="BVR_VALID = &quot;1&quot; AND BVR_BS2_REPAIR = &quot;1&quot; AND BVR_BS2_SELECTED = &quot;1&quot; AND BVR_BS2_DESKTOPSHORTCUT = &quot;1&quot;" />
+          <Publish Event="EndDialog" Value="Return" Order="8" Condition="BVR_VALID = &quot;1&quot;" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="243" Width="62" Height="18" Cancel="yes" Text="Cancelar">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+      <Dialog Id="SuiteProgressDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]" Modeless="yes">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24" Text="{\WixUI_Font_Title}Aplicando los cambios" />
+        <Control Id="Line" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="Info" Type="Text" X="20" Y="57" Width="330" Height="30" Text="Espera mientras Windows instala, repara o retira los mods seleccionados." />
+        <Control Id="ActionText" Type="Text" X="20" Y="107" Width="330" Height="38" NoPrefix="yes"><Subscribe Event="ActionText" Attribute="Text" /></Control>
+        <Control Id="ProgressBar" Type="ProgressBar" X="20" Y="157" Width="330" Height="12" ProgressBlocks="yes"><Subscribe Event="SetProgress" Attribute="Progress" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="243" Width="62" Height="18" Default="yes" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+      </Dialog>
+      <Dialog Id="SuiteExitDlg" Width="370" Height="270" Title="[ProductName] [ProductVersion]">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="24" Text="{\WixUI_Font_Title}Operación completada" />
+        <Control Id="Info" Type="Text" X="20" Y="59" Width="330" Height="62"
+                 Text="Windows ha terminado correctamente. Los lanzadores de los mods instalados están en la carpeta Build\Final de cada juego y, si lo elegiste, tienen un acceso directo en el escritorio." />
+        <Control Id="Preserved" Type="Text" X="20" Y="133" Width="330" Height="52"
+                 Text="Las partidas y preferencias se conservan. Al desinstalar se recuperan los archivos previos cuando su copia es válida; las copias de seguridad no se borran." />
+        <Control Id="Line" Type="Line" X="0" Y="235" Width="370" Height="0" />
+        <Control Id="Finish" Type="PushButton" X="296" Y="243" Width="62" Height="18" Default="yes" Cancel="yes" Text="Finalizar"><Publish Event="EndDialog" Value="Return" Order="999" /></Control>
+      </Dialog>
+      <Dialog Id="SuiteErrorDlg" Width="300" Height="135" Title="BioShock 1-2 VR">
+        <Control Id="Message" Type="Text" X="15" Y="15" Width="270" Height="80" Text="[BVR_ERROR]" />
+        <Control Id="OK" Type="PushButton" X="118" Y="106" Width="64" Height="18" Default="yes" Cancel="yes" Text="Aceptar"><Publish Event="EndDialog" Value="Return" /></Control>
+      </Dialog>
+      <Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="1" />
+      <Publish Dialog="BrowseDlg" Control="OK" Property="BVR_BS1_GAMEPATH" Value="[BS1DIR]" Order="2" Condition="_BrowseProperty = &quot;BS1DIR&quot;" />
+      <Publish Dialog="BrowseDlg" Control="OK" Property="BVR_BS2_GAMEPATH" Value="[BS2DIR]" Order="3" Condition="_BrowseProperty = &quot;BS2DIR&quot;" />
+      <Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="4" />
+      <InstallUISequence>
+        <Show Dialog="override ExitDialog" Sequence="1250" Condition="0" />
+        <Show Dialog="SuiteExitDlg" OnExit="success" />
+        <Show Dialog="GameChoiceDlg" Before="ProgressDlg" />
+        <Show Dialog="override ProgressDlg" Sequence="1298" Condition="0" />
+        <Show Dialog="SuiteProgressDlg" Sequence="1299" />
+      </InstallUISequence>
+    </UI>
+    <UIRef Id="GameUI_bs1" />
+    <UIRef Id="GameUI_bs2" />
+    <UIRef Id="WixUI_Common" />
+  </Fragment>
+</Wix>
