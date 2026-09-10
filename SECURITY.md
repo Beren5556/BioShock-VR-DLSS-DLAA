@@ -1,26 +1,41 @@
-# Seguridad
+# Security
 
-## Versiones con soporte
+## Supported versions
 
-Durante la beta pública solo se atiende la última prepublicación disponible. Las versiones anteriores se consideran sin soporte.
+Please reproduce reports with the latest public release. Historical releases
+are preserved for reference; they are not maintained as separate security branches.
 
-## Comunicar una vulnerabilidad
+## Reporting a vulnerability
 
-No publiques datos sensibles, volcados de memoria ni rutas personales en una incidencia. Utiliza la sección privada **Security > Advisories > Report a vulnerability** del repositorio o contacta directamente con su propietario.
+Do not post sensitive information, memory dumps or personal paths in a public
+issue. Use the repository's private **Security > Advisories > Report a
+vulnerability** option where available, or contact the owner privately.
 
-Incluye, cuando sea posible:
+Include, where possible:
 
-- versión exacta y SHA-256 del instalador;
-- versión de Windows, GPU, controlador y runtime VR;
-- pasos mínimos para reproducir el problema;
-- registro recortado, revisado para retirar información personal.
+- Exact version and installer SHA-256.
+- Windows version, GPU, driver and VR runtime.
+- Minimal reproduction steps.
+- A trimmed log reviewed to remove personal information.
 
-No adjuntes BioshockHD.exe, archivos del juego, tokens, credenciales ni el SDK de NVIDIA.
+Do not attach BioshockHD.exe, Bioshock2HD.exe, game assets, tokens, credentials
+or the NVIDIA SDK.
 
-## Modelo de confianza del instalador
+## Installer trust model
 
-El instalador v0.2.3-beta valida un ejecutable de juego conocido, verifica por SHA-256 todos sus recursos, escribe mediante reemplazos transaccionales y conserva copias de recuperación. El ejecutable beta no está firmado digitalmente; verifica su hash con release/SHA256SUMS-v0.2.3-beta.txt antes de ejecutarlo.
+The dual-game MSI validates known compatible game executables, verifies
+payload SHA-256 hashes, uses transactional installation and retains recovery
+backups. It manages only the selected game's mod. Game files and executables
+are not distributed in the package.
 
-Si SmartScreen o un antivirus bloquean el instalador, no desactives la protección ni añadas una exclusión. Conserva el archivo en cuarentena y comunica el producto, el nombre exacto de la detección, la hora y el SHA-256 para investigarlo.
+The installer is **not digitally signed**. Check its SHA-256 against the
+checksum published with the matching release before running it.
 
-El paquete instala NVIDIA DLSS 310.7.0.0. El proyecto permite que un usuario avanzado sustituya manualmente esa DLL por otra versión x64, pero solo 310.7.0.0 forma parte del artefacto verificado. Cualquier DLL distinta queda fuera de la garantía de integridad y compatibilidad de esta versión.
+If SmartScreen or an antivirus blocks the installer, do not disable protection
+or add an exclusion. Leave a quarantined file quarantined and report the
+security product, exact detection name, time and SHA-256 for investigation.
+
+The package installs NVIDIA DLSS 310.7.0.0. Advanced users may manually replace
+it with another x64 runtime, but only 310.7.0.0 is part of the verified artifact.
+Any different DLL falls outside this release's integrity and compatibility
+assurances. Repair restores the bundled runtime.

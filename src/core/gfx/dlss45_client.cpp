@@ -167,7 +167,7 @@ bool g_depthInverted = false;
 bool g_diagnosticTransport = false;
 bool g_isReady = false;
 bool g_faulted = false;
-char g_status[512] = "desactivado";
+char g_status[512] = "disabled";
 bool g_srRangeRejected = false;
 
 void set_status_v(const char* format, va_list args) noexcept {
@@ -482,7 +482,7 @@ void cleanup(bool resetStatus) noexcept {
     stop_helpers_bounded();
     release_resources();
     g_faulted = false;
-    if (resetStatus) set_status("desactivado");
+    if (resetStatus) set_status("disabled");
 }
 
 bool prepare_failure(const char* format, ...) noexcept {
@@ -534,15 +534,15 @@ bool stage_runtime(const std::wstring& hostSource) {
     const std::wstring capabilitiesSource =
         join_path(packageDirectory, L"dlss-capabilities.ini");
     if (!file_exists(hostSource))
-        return prepare_failure("no se encuentra BioShockVR-DLSS45-Host64.exe");
+        return prepare_failure("BioShockVR-DLSS45-Host64.exe was not found");
     if (!file_exists(dlssSource))
-        return prepare_failure("falta nvngx_dlss.dll junto al host DLSS 4.5");
+        return prepare_failure("nvngx_dlss.dll missing beside the DLSS 4.5 host");
     if (!file_exists(capabilitiesSource))
-        return prepare_failure("falta dlss-capabilities.ini junto al host DLSS 4.5");
+        return prepare_failure("dlss-capabilities.ini missing beside the DLSS 4.5 host");
     if (!is_x64_pe(hostSource))
-        return prepare_failure("el host indicado no es un ejecutable x64");
+        return prepare_failure("the selected host is not an x64 executable");
     if (!is_x64_pe(dlssSource))
-        return prepare_failure("nvngx_dlss.dll no es la version x64 requerida");
+        return prepare_failure("nvngx_dlss.dll is not the required x64 version");
     DWORD versionMajor = 0, versionMinor = 0, versionBuild = 0, versionRevision = 0;
     if (!is_dlss_310_7_0(dlssSource, &versionMajor, &versionMinor,
                          &versionBuild, &versionRevision)) {
@@ -557,18 +557,18 @@ bool stage_runtime(const std::wstring& hostSource) {
         BVR_LOG("[dlss45] nvngx_dlss.dll FileVersion 310.7.0.0 matches the tested runtime");
     }
     if (!capabilities_are_dlss45(capabilitiesSource))
-        return prepare_failure("dlss-capabilities.ini no corresponde al juego, DLSS45, dos hosts, runtime 310.7.0 e IPC v8");
+        return prepare_failure("dlss-capabilities.ini does not match the game, DLSS45, two hosts, runtime 310.7.0 and IPC v8");
 
     const wchar_t* offending = nullptr;
     if (!package_is_clean(packageDirectory, &offending)) {
         BVR_LOG("[dlss45] rejected contaminated source package: %ls", offending);
-        return prepare_failure("paquete rechazado: contiene componentes de Neural Rendering/"
-                               "ReShade incompatibles con la fase DLSS 4.5");
+        return prepare_failure("package rejected: contains Neural Rendering/"
+                               "ReShade components incompatible with DLSS 4.5");
     }
 
     const wchar_t* gameDataDir = bvr::log::data_dir();
     if (!gameDataDir || !*gameDataDir)
-        return prepare_failure("no se pudo resolver la carpeta de datos del juego");
+        return prepare_failure("could not resolve the game data directory");
     const std::wstring bioshockDir(gameDataDir);
 #ifdef BVR_LATENCY_PROBE
     const std::wstring runtimeRoot = join_path(bioshockDir, L"DLSS45Host-Latency1");
@@ -576,7 +576,7 @@ bool stage_runtime(const std::wstring& hostSource) {
     const std::wstring runtimeRoot = join_path(bioshockDir, L"DLSS45Host");
 #endif
     if (!ensure_directory(bioshockDir) || !ensure_directory(runtimeRoot))
-        return prepare_failure("no se pudo crear el runtime local aislado para DLSS 4.5");
+        return prepare_failure("could not create the isolated local DLSS 4.5 runtime");
 
     for (int index = 0; index < 2; ++index) {
         EyeState& eye = g_eyes[index];
@@ -586,12 +586,12 @@ bool stage_runtime(const std::wstring& hostSource) {
             : (index == 0 ? L"eye0" : L"eye1"));
         eye.executable = join_path(eye.directory, L"BioShockVR-DLSS45-Host64.exe");
         if (!ensure_directory(eye.directory))
-            return prepare_failure("no se pudo crear la carpeta aislada de un ojo");
+            return prepare_failure("could not create an isolated eye directory");
 
         offending = nullptr;
         if (!package_is_clean(eye.directory, &offending)) {
             BVR_LOG("[dlss45] rejected contaminated eye%d runtime: %ls", index, offending);
-            return prepare_failure("runtime local rechazado: conserva componentes de Neural Rendering/ReShade");
+            return prepare_failure("local runtime rejected: Neural Rendering/ReShade components remain");
         }
         if (!copy_unless_same(hostSource, eye.executable) ||
             !copy_unless_same(dlssSource, join_path(eye.directory, L"nvngx_dlss.dll")) ||
@@ -599,7 +599,7 @@ bool stage_runtime(const std::wstring& hostSource) {
                               join_path(eye.directory, L"dlss-capabilities.ini"))) {
             BVR_LOG("[dlss45] CopyFile failed for eye%d: %lu", index,
                     static_cast<unsigned long>(GetLastError()));
-            return prepare_failure("no se pudieron preparar los binarios limpios de los hosts");
+            return prepare_failure("could not prepare clean host binaries");
         }
     }
     return true;
@@ -983,36 +983,36 @@ bool prepare_impl(ID3D11Device* device,
                   UINT outputWidth, UINT outputHeight, Mode mode, bool depthInverted,
                   const wchar_t* hostExePath) {
     cleanup(false);
-    set_status("preparando DLSS 4.5");
+    set_status("preparing DLSS 4.5");
     g_srRangeRejected = false;
 
-    if (mode == Mode::Off) return prepare_failure("DLSS 4.5 desactivado");
+    if (mode == Mode::Off) return prepare_failure("DLSS 4.5 disabled");
     if (mode != Mode::Dlaa && mode != Mode::SuperResolution)
-        return prepare_failure("modo DLSS 4.5 no valido");
+        return prepare_failure("invalid DLSS 4.5 mode");
     if (!device || !renderWidth || !renderHeight || !outputWidth || !outputHeight)
-        return prepare_failure("parametros D3D11 o dimensiones no validos");
+        return prepare_failure("invalid D3D11 parameters or dimensions");
     if (renderWidth > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         renderHeight > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         outputWidth > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         outputHeight > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION)
-        return prepare_failure("las dimensiones superan el limite D3D11");
+        return prepare_failure("dimensions exceed the D3D11 limit");
     if (mode == Mode::Dlaa && (renderWidth != outputWidth || renderHeight != outputHeight))
-        return prepare_failure("DLAA requiere salida igual a la resolucion de render");
+        return prepare_failure("DLAA requires matching output and render resolutions");
     if (mode == Mode::SuperResolution &&
         (outputWidth <= renderWidth || outputHeight <= renderHeight))
-        return prepare_failure("DLSS SR requiere una salida mayor que el render");
+        return prepare_failure("DLSS SR requires output larger than the render resolution");
     if (static_cast<std::uint64_t>(renderWidth) * outputHeight !=
         static_cast<std::uint64_t>(renderHeight) * outputWidth)
-        return prepare_failure("render y salida deben conservar la relacion de aspecto");
+        return prepare_failure("render and output must have the same aspect ratio");
 
     const DXGI_FORMAT colorFormat = typed_color_format(backbufferFormat);
     if (colorFormat == DXGI_FORMAT_UNKNOWN)
-        return prepare_failure("formato de backbuffer no compatible con DLSS 4.5");
+        return prepare_failure("backbuffer format is not supported by DLSS 4.5");
 
     g_device = device;
     g_device->AddRef();
     if (FAILED(device->QueryInterface(IID_PPV_ARGS(&g_device5))) || !g_device5)
-        return prepare_failure("ID3D11Device5 no disponible: no se pueden compartir fences");
+        return prepare_failure("ID3D11Device5 unavailable: shared fences are not supported");
     g_renderWidth = renderWidth;
     g_renderHeight = renderHeight;
     g_outputWidth = outputWidth;
@@ -1026,31 +1026,31 @@ bool prepare_impl(ID3D11Device* device,
     g_eyes[1].index = 1;
 
     const std::wstring hostSource = absolute_path(hostExePath);
-    if (hostSource.empty()) return prepare_failure("ruta del host DLSS 4.5 no valida");
+    if (hostSource.empty()) return prepare_failure("invalid DLSS 4.5 host path");
     if (!stage_runtime(hostSource)) return false;
 
     if (!create_eye_resources(g_eyes[0]) || !create_eye_resources(g_eyes[1]))
-        return prepare_failure("fallo al crear las texturas D3D11 compartidas por ojo");
+        return prepare_failure("failed to create shared D3D11 textures for each eye");
     if (!create_job())
-        return prepare_failure("no se pudo crear el guard de procesos de los hosts");
+        return prepare_failure("could not create the host process guard");
 
     const DWORD gamePid = GetCurrentProcessId();
     if (!launch_host(g_eyes[0], gamePid) || !launch_host(g_eyes[1], gamePid))
-        return prepare_failure("no se pudieron iniciar los dos hosts x64 aislados");
+        return prepare_failure("could not start both isolated x64 hosts");
     if (!connect_pipe(g_eyes[0], gamePid) || !connect_pipe(g_eyes[1], gamePid))
-        return prepare_failure("timeout conectando los pipes independientes de ambos ojos");
+        return prepare_failure("timeout connecting the independent pipes for both eyes");
     if (!hello_host(g_eyes[0], gamePid) || !hello_host(g_eyes[1], gamePid))
-        return prepare_failure("handshake IPC v8 rechazado por uno de los hosts");
+        return prepare_failure("IPC v8 handshake rejected by one of the hosts");
     if (!build_host(g_eyes[0]) || !build_host(g_eyes[1]))
         return prepare_failure(g_srRangeRejected
-            ? "Esta resolucion/calidad DLSS queda fuera del rango admitido por NVIDIA"
-            : "NGX no pudo crear dos features temporales independientes");
+            ? "This DLSS resolution/quality is outside the NVIDIA supported range"
+            : "NGX could not create two independent temporal features");
 
     g_isReady = true;
     g_faulted = false;
     for (auto& timer : g_inputTimers) timer.prepare(g_device);
-    set_status("%s activo: %ux%u -> %ux%u, dos ojos, same-frame",
-               g_diagnosticTransport ? "PRUEBA PUENTE SIN DLAA" :
+    set_status("%s active: %ux%u -> %ux%u, two eyes, same-frame",
+               g_diagnosticTransport ? "BRIDGE TEST WITHOUT DLAA" :
                mode == Mode::Dlaa ? "DLAA 4.5" : "DLSS 4.5 SR",
                renderWidth, renderHeight, outputWidth, outputHeight);
     BVR_LOG("[dlss45] %s", g_status);
@@ -1066,15 +1066,15 @@ bool prepare(ID3D11Device* device,
     try {
         g_diagnosticTransport = diagnosticTransport;
 #ifndef BVR_LATENCY_PROBE
-        if (diagnosticTransport) return prepare_failure("prueba de puente no disponible en esta version");
+        if (diagnosticTransport) return prepare_failure("bridge test not available in this version");
 #endif
         if (diagnosticTransport && (mode != Mode::Dlaa || renderWidth != outputWidth || renderHeight != outputHeight))
-            return prepare_failure("la prueba de puente requiere resolucion nativa identica");
+            return prepare_failure("the bridge test requires matching native resolution");
         return prepare_impl(device, renderWidth, renderHeight, backbufferFormat,
                             outputWidth, outputHeight, mode, depthInverted,
                             hostExePath);
     } catch (...) {
-        set_status("excepcion preparando el puente DLSS 4.5");
+        set_status("exception preparing the DLSS 4.5 bridge");
         BVR_LOG("[dlss45] %s", g_status);
         cleanup(false);
         return false;
@@ -1090,27 +1090,27 @@ bool submit_eye(ID3D11DeviceContext* context, int eyeIndex,
     try {
         if (!g_isReady || g_faulted) return false;
         if (eyeIndex < 0 || eyeIndex > 1) {
-            runtime_failure("indice de ojo no valido: %d", eyeIndex);
+            runtime_failure("invalid eye index: %d", eyeIndex);
             return false;
         }
         if (g_eyes[eyeIndex].pendingDestination) {
-            runtime_failure("entrada de ojo %d reutilizada antes de completar", eyeIndex);
+            runtime_failure("eye %d input reused before completion", eyeIndex);
             return false;
         }
         if (!context_uses_device(context) ||
             !validate_frame_resources(destination, backbuffer, depth, motion)) {
-            runtime_failure("recursos incompatibles en process_eye(%d)", eyeIndex);
+            runtime_failure("incompatible resources in process_eye(%d)", eyeIndex);
             return false;
         }
         if (!std::isfinite(jitterX) || !std::isfinite(jitterY) ||
             std::abs(jitterX) > 1.0f || std::abs(jitterY) > 1.0f) {
-            runtime_failure("jitter no valido en process_eye(%d)", eyeIndex);
+            runtime_failure("invalid jitter in process_eye(%d)", eyeIndex);
             return false;
         }
 
         ID3D11DeviceContext4* context4 = nullptr;
         if (FAILED(context->QueryInterface(IID_PPV_ARGS(&context4))) || !context4) {
-            runtime_failure("ID3D11DeviceContext4 no disponible");
+            runtime_failure("ID3D11DeviceContext4 unavailable");
             return false;
         }
 
@@ -1130,7 +1130,7 @@ bool submit_eye(ID3D11DeviceContext* context, int eyeIndex,
         const HRESULT signalResult = context4->Signal(eye.fenceIn, value);
         if (FAILED(signalResult)) {
             release_one(context4);
-            runtime_failure("fallo Signal de entrada en ojo %d: 0x%08X", eyeIndex,
+            runtime_failure("input Signal failed for eye %d: 0x%08X", eyeIndex,
                             static_cast<unsigned>(signalResult));
             return false;
         }
@@ -1162,7 +1162,7 @@ bool submit_eye(ID3D11DeviceContext* context, int eyeIndex,
         }
         if (!sent) {
             release_one(context4);
-            runtime_failure("se perdio el pipe del host del ojo %d", eyeIndex);
+            runtime_failure("host pipe lost for eye %d", eyeIndex);
             return false;
         }
 
@@ -1170,7 +1170,7 @@ bool submit_eye(ID3D11DeviceContext* context, int eyeIndex,
         release_one(context4);
         return true;
     } catch (...) {
-        runtime_failure("excepcion enviando un ojo con DLSS 4.5");
+        runtime_failure("exception submitting an eye with DLSS 4.5");
         return false;
     }
 }
@@ -1182,17 +1182,17 @@ bool resolve_eye(ID3D11DeviceContext* context, int eyeIndex,
     try {
         if (!g_isReady || g_faulted) return false;
         if (eyeIndex < 0 || eyeIndex > 1 || !destination || !context_uses_device(context)) {
-            runtime_failure("recursos no validos al completar ojo %d", eyeIndex);
+            runtime_failure("invalid resources when completing eye %d", eyeIndex);
             return false;
         }
         EyeState& eye = g_eyes[eyeIndex];
         if (eye.pendingDestination != destination) {
-            runtime_failure("salida pendiente no coincide en ojo %d", eyeIndex);
+            runtime_failure("pending output mismatch for eye %d", eyeIndex);
             return false;
         }
         ID3D11DeviceContext4* context4 = nullptr;
         if (FAILED(context->QueryInterface(IID_PPV_ARGS(&context4))) || !context4) {
-            runtime_failure("ID3D11DeviceContext4 no disponible al completar");
+            runtime_failure("ID3D11DeviceContext4 unavailable at completion");
             return false;
         }
         const auto value = eye.frame;
@@ -1208,7 +1208,7 @@ bool resolve_eye(ID3D11DeviceContext* context, int eyeIndex,
         }
         if (!completed) {
             release_one(context4);
-            runtime_failure("timeout esperando DLSS 4.5 en ojo %d, frame %llu",
+            runtime_failure("timeout waiting for DLSS 4.5 on eye %d, frame %llu",
                             eyeIndex, static_cast<unsigned long long>(value));
             return false;
         }
@@ -1218,7 +1218,7 @@ bool resolve_eye(ID3D11DeviceContext* context, int eyeIndex,
             const HRESULT waitResult = context4->Wait(eye.fenceOut, value);
             if (FAILED(waitResult)) {
                 release_one(context4);
-                runtime_failure("fallo Wait de salida en ojo %d: 0x%08X", eyeIndex,
+                runtime_failure("output Wait failed for eye %d: 0x%08X", eyeIndex,
                                 static_cast<unsigned>(waitResult));
                 return false;
             }
@@ -1227,7 +1227,7 @@ bool resolve_eye(ID3D11DeviceContext* context, int eyeIndex,
             else if (!bvr::dlss_sharpen::render(context, eyeIndex, destination, g_sharpnessPercent)) {
                 // Do not publish a pair with one sharpened eye and one unfiltered eye.
                 release_one(context4);
-                runtime_failure("no se pudo aplicar nitidez en el ojo %d", eyeIndex);
+                runtime_failure("could not apply sharpening to eye %d", eyeIndex);
                 return false;
             }
         }
@@ -1242,7 +1242,7 @@ bool resolve_eye(ID3D11DeviceContext* context, int eyeIndex,
         release_one(context4);
         return true;
     } catch (...) {
-        runtime_failure("excepcion procesando un ojo con DLSS 4.5");
+        runtime_failure("exception processing an eye with DLSS 4.5");
         return false;
     }
 }
@@ -1258,7 +1258,7 @@ bool process_eye(ID3D11DeviceContext* context, int eye,
     try {
         if (beforeResolve.run) beforeResolve.run(beforeResolve.context);
     } catch (...) {
-        runtime_failure("excepcion preparando la entrega mientras DLSS procesa el ojo %d", eye);
+        runtime_failure("exception preparing submission while DLSS processes eye %d", eye);
         return false;
     }
     return resolve_eye(context, eye, destination);
@@ -1277,7 +1277,7 @@ bool discard_pending() noexcept {
     for (EyeState& eye : g_eyes) {
         if (!eye.pendingDestination) continue;
         if (ok && !wait_for_output(eye, eye.frame)) {
-            runtime_failure("timeout descartando ojo pendiente %d", eye.index);
+            runtime_failure("timeout discarding pending eye %d", eye.index);
             ok = false;
         }
         eye.pendingDestination = nullptr;

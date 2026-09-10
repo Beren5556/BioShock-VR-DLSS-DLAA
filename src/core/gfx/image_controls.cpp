@@ -109,7 +109,7 @@ void on_key(unsigned key) noexcept {
             if (!g_known) return;
             g_graphicsToggleIndex = g_graphicsSelection;
             g_graphicsToggle = true;
-            g_graphicsMessage = "Comprobando cambio...";
+            g_graphicsMessage = "Checking change...";
         } else g_graphicsSelection = graphics::move_selection(g_graphicsSelection, key == VK_F2 ? -1 : 1);
         return;
     }
@@ -119,28 +119,28 @@ void on_key(unsigned key) noexcept {
         Settings next;
         if (!next_probe(g_applied, g_beforeProbe, next)) return;
         g_requested = next; g_pending = g_transientRequest = true;
-        g_panel = Panel::Mode; g_message = "Preparando prueba...";
+        g_panel = Panel::Mode; g_message = "Preparing test...";
         return;
     }
     if (key == VK_F1) {
         g_panel = g_applied.probe != Probe::Off
             ? (g_panel == Panel::Hidden ? Panel::Mode : Panel::Hidden)
             : next_panel(g_panel, g_applied.mode);
-        if (g_panel == Panel::Graphics) { g_graphicsRefresh = true; g_graphicsMessage = "Leyendo opciones del motor..."; }
+        if (g_panel == Panel::Graphics) { g_graphicsRefresh = true; g_graphicsMessage = "Reading engine options..."; }
         return;
     }
     if (key != VK_F2 && key != VK_F3) return;
     if (g_applied.probe != Probe::Off) return; // Keep the comparison geometry fixed.
     if (g_panel == Panel::Hidden) return;
     if (!g_known) return;
-    if (g_busy || g_pending || g_savePending || g_graphicsBusy || g_graphicsToggle) { g_message = "Aplicando cambio..."; return; }
+    if (g_busy || g_pending || g_savePending || g_graphicsBusy || g_graphicsToggle) { g_message = "Applying change..."; return; }
     Settings next = g_applied;
     bool changed = false;
     const int direction = key == VK_F2 ? -1 : 1;
     if (g_panel == Panel::Mode) {
         changed = step_mode(next, direction);
         if (!changed) {
-            g_message = "Resolucion demasiado baja para esta calidad DLSS";
+            g_message = "Resolution too low for this DLSS quality";
             return;
         }
     } else if (g_panel == Panel::Resolution) {
@@ -150,14 +150,14 @@ void on_key(unsigned key) noexcept {
     } else if (g_panel == Panel::Sharpness) {
         changed = step_sharpness(next, direction);
     }
-    if (changed) { g_requested = next; g_pending = true; g_transientRequest = false; g_message = "Cambio solicitado..."; }
+    if (changed) { g_requested = next; g_pending = true; g_transientRequest = false; g_message = "Change requested..."; }
 }
 
 bool take_request(Settings& requested, Settings& previous) noexcept {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!enabled() || !g_pending || g_busy) return false;
     requested = g_requested; previous = g_applied;
-    g_pending = false; g_busy = true; g_message = "Aplicando cambio...";
+    g_pending = false; g_busy = true; g_message = "Applying change...";
     return true;
 }
 void confirm(const Settings& effective) noexcept {
@@ -168,7 +168,7 @@ void confirm(const Settings& effective) noexcept {
         g_panel = Panel::Resolution;
     g_pending = g_busy = false;
     g_savePending = !g_transientRequest && effective.probe == Probe::Off;
-    g_message = g_savePending ? "Aplicado; guardando..." : "";
+    g_message = g_savePending ? "Applied; saving..." : "";
     if (g_transientRequest) {
         BVR_LOG("[perf-probe] APPLIED %s render=%ux%u output=%ux%u; session-only, no INI writes",
                 probe_name(effective.probe), effective.renderWidth, effective.renderHeight,
@@ -183,7 +183,7 @@ void confirm(const Settings& effective) noexcept {
 void reject(const char* reason) noexcept {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_requested = g_applied; g_pending = g_busy = g_transientRequest = false;
-    g_message = reason ? reason : "No aplicado; se conserva el ajuste anterior";
+    g_message = reason ? reason : "Not applied; previous setting retained";
     BVR_LOG("[image-controls] rejected: %s", g_message.c_str());
 }
 void report_effective(const Settings& effective, const char* reason, bool spatialFallback) noexcept {
@@ -204,7 +204,7 @@ void report_effective(const Settings& effective, const char* reason, bool spatia
 void unavailable(const char* reason) noexcept {
     std::lock_guard<std::mutex> lock(g_mutex);
     g_known = false; g_pending = g_busy = g_savePending = false;
-    g_message = reason ? reason : "VR no disponible; reinicia el juego";
+    g_message = reason ? reason : "VR unavailable; restart the game";
 }
 namespace {
 void graphics_tick() {
@@ -234,16 +234,16 @@ void graphics_tick() {
         if (toggle) {
             if (result != graphics::Change::RestartRequired) g_graphics[index] = observed;
             else g_graphics[index].live = false;
-            g_graphicsMessage = result == graphics::Change::Applied ? "Guardado. Si el efecto no cambia, reinicia el juego." :
-                result == graphics::Change::AppliedNotSaved ? "Aplicado al motor, pero no se pudo guardar." :
-                result == graphics::Change::RestartRequired ? "No disponible en caliente: cambia esta opcion en el lanzador y reinicia." :
-                "Cambio no confirmado; no se ha guardado. Revisa el valor o reinicia.";
+            g_graphicsMessage = result == graphics::Change::Applied ? "Saved. If the effect does not change, restart the game." :
+                result == graphics::Change::AppliedNotSaved ? "Applied to the engine, but could not save." :
+                result == graphics::Change::RestartRequired ? "No live changes: use the launcher and restart the game." :
+                "Change not confirmed or saved. Check the value or restart.";
         } else {
             bool needsRestart = false;
             for (const auto& value : g_graphics) needsRestart |= !value.live;
-            g_graphicsMessage = !readOk ? "No se pudieron leer las opciones." : needsRestart ?
-                "[Reinicio]: no disponible en caliente; usar el lanzador." :
-                "F4 cambia solo la opcion seleccionada.";
+            g_graphicsMessage = !readOk ? "Could not read the options." : needsRestart ?
+                "[Restart]: no live changes; use the launcher." :
+                "F4 toggles only the selected option.";
         }
         g_graphicsBusy = false;
     }
@@ -262,26 +262,26 @@ void game_tick() noexcept {
     {
         std::lock_guard<std::mutex> lock(g_mutex);
         g_savePending = false;
-        g_message = ok ? "" : "Aplicado, pero no se pudo guardar para el siguiente inicio";
+        g_message = ok ? "" : "Applied, but could not save for the next launch";
     }
     BVR_LOG("[image-controls] save confirmed settings: %s", ok ? "OK" : "FAILED");
 }
 std::string panel_status() {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (!enabled() || !g_initialized || g_panel == Panel::Hidden) return {};
-    if (!g_known) return std::string("ESTADO VR NO DISPONIBLE\n") + g_message;
+    if (!g_known) return std::string("VR STATUS UNAVAILABLE\n") + g_message;
     if (g_panel == Panel::Graphics) {
-        std::string panel = "OPCIONES GRAFICAS\nF2 anterior | F3 siguiente | F4 cambiar | F1 cerrar\n";
+        std::string panel = "GRAPHICS OPTIONS\nF2 previous | F3 next | F4 toggle | F1 close\n";
         for (size_t i = 0; i < graphics::kCount; ++i) {
             const auto& v = g_graphics[i];
             panel += i == g_graphicsSelection ? "> " : "  ";
             panel += graphics::kOptions[i].label;
             if (graphics::kOptions[i].impact) panel += " *";
             panel += ": ";
-            panel += !v.known ? "?" : i == graphics::kCount - 1 ? (v.on ? "Alto" : "Bajo") : (v.on ? "Si" : "No");
-            panel += v.live ? "  [F4: cambiar]\n" : "  [F4: cambiar / Reinicio]\n";
+            panel += !v.known ? "?" : i == graphics::kCount - 1 ? (v.on ? "High" : "Low") : (v.on ? "Yes" : "No");
+            panel += v.live ? "  [F4: toggle]\n" : "  [F4: toggle / Restart]\n";
         }
-        panel += "* Alto impacto en el rendimiento\n";
+        panel += "* High performance impact\n";
         panel += g_graphicsMessage;
         return panel;
     }
@@ -289,28 +289,28 @@ std::string panel_status() {
     const auto& s = g_applied;
     if (s.probe != Probe::Off) {
         _snprintf_s(text, sizeof(text), _TRUNCATE,
-            "PRUEBA: %s\n%u x %u por ojo | Ajustes temporales\n"
-            "F4 Siguiente / salir tras C | F1 Ocultar\n"
-            "Misma vista 15 s: observa la latencia de VD\n%s",
+            "TEST: %s\n%u x %u per eye | Temporary settings\n"
+            "F4 Next / exit after C | F1 Hide\n"
+            "Same view for 15 s: watch VD latency\n%s",
             probe_name(s.probe), s.renderWidth, s.renderHeight, g_message.c_str());
         return text;
     }
     const double percent = s.outputWidth ? 100.0 * s.renderWidth / s.outputWidth : 100.0;
-    const char* selection = g_panel == Panel::Quality ? "CALIDAD DLSS" :
-                            g_panel == Panel::Resolution ? "RESOLUCION POR OJO" :
-                            g_panel == Panel::Sharpness ? "SHARPNESS DLSS" : "MODO DE RENDERIZADO";
+    const char* selection = g_panel == Panel::Quality ? "DLSS QUALITY" :
+                            g_panel == Panel::Resolution ? "PER-EYE RESOLUTION" :
+                            g_panel == Panel::Sharpness ? "SHARPNESS DLSS" : "RENDER MODE";
     char value[192];
     if (g_panel == Panel::Mode) _snprintf_s(value, sizeof(value), _TRUNCATE, "%s", name(s.mode));
     else if (g_panel == Panel::Resolution) _snprintf_s(value, sizeof(value), _TRUNCATE,
-        "%u x %u por ojo", s.outputWidth, s.outputHeight);
+        "%u x %u per eye", s.outputWidth, s.outputHeight);
     else if (g_panel == Panel::Quality) _snprintf_s(value, sizeof(value), _TRUNCATE,
         "%.1f%%  |  Render: %u x %u", 100.0 * s.srScale.numerator / s.srScale.denominator,
         s.renderWidth, s.renderHeight);
     else _snprintf_s(value, sizeof(value), _TRUNCATE, "%u%%", s.sharpnessPercent);
     _snprintf_s(text, sizeof(text), _TRUNCATE,
-                "%s  |  %s\n%s\nSalida: %u x %u  |  Render: %u x %u (%.1f%%)\n"
-                "F1 Siguiente / ocultar   F2 -   F3 +%s%s",
-                g_spatialFallback ? "RESPALDO (DLSS inactivo)" : name(s.mode),
+                "%s  |  %s\n%s\nOutput: %u x %u  |  Render: %u x %u (%.1f%%)\n"
+                "F1 Next / hide   F2 -   F3 +%s%s",
+                g_spatialFallback ? "FALLBACK (DLSS inactive)" : name(s.mode),
                 selection, value, s.outputWidth, s.outputHeight,
                 s.renderWidth, s.renderHeight, percent,
                 g_message.empty() ? "" : "\n", g_message.c_str());

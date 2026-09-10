@@ -32,7 +32,8 @@ try {
     if (@($database.ExecuteStringQuery('SELECT `Feature` FROM `Feature`')).Count -ne 4) { throw 'Expected two mods and two optional shortcuts.' }
     if([version]$manifest.version -ge [version]'0.2.15'){
         $selectorText=$database.ExecuteStringQuery("SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_``='GameSelectorDlg' AND ``Type``='Text'")
-        if($selectorText.Count -ne 1 -or $selectorText[0] -notlike '*Selecciona el juego'){throw 'Selector should contain only its short title and game control.'}
+        if($selectorText.Count -ne 1 -or $selectorText[0] -notlike '*Select a game'){throw 'Selector should contain only its short title and game control.'}
+        if($database.ExecuteStringQuery("SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ProductLanguage'")[0] -ne '1033'){throw 'English MSI language is required.'}
         $bs1Label=$database.ExecuteStringQuery("SELECT ``Text`` FROM ``ComboBox`` WHERE ``Property``='BVR_GAME' AND ``Value``='bs1'")[0]
         if($bs1Label -ne 'BioShock Remastered'){throw 'Unwanted BS1 suffix.'}
         if($database.ExecuteStringQuery("SELECT ``Control`` FROM ``Control`` WHERE ``Dialog_``='SingleReadyDlg' AND ``Control``='Independent'").Count -ne 0){throw 'Removed confirmation paragraph is still present.'}

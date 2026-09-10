@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.17",
+  "modVersion": "0.2.17",
+  "modBuild": "beren5556-bs12-v0.2.17-english",
+  "runtime": "310.7.0.0",
+  "baseTag": "v0.2.16",
+  "acceptance": "English text-only rebuild of the user-accepted Spanish base. Automated validation is recorded separately; no new physical-headset or second-PC acceptance is claimed.",
+  "games": {
+    "bs1": {
+      "files": [
+        {
+          "path": "xinput1_3.dll",
+          "sha256": "441BF1728BB38A2EC2BA57605CF840D786122E862D47A6DFA642BFF484F8E191"
+        },
+        {
+          "path": "bioshockvr.dll",
+          "sha256": "1A4568FEDE7C9FA58D24A3F7B424E9A3FA22234C8F5960A3A28DA299BFA53942"
+        },
+        {
+          "path": "host64\\dlss-capabilities.ini",
+          "sha256": "7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77"
+        },
+        {
+          "path": "Lanzador BioShock VR DLSS-DLAA.exe",
+          "sha256": "83DA87F544F047CBE5AF8FABD2B9CEF365C7485FC1EC817B6DA9DDFD80245114"
+        }
+      ]
+    },
+    "bs2": {
+      "files": [
+        {
+          "path": "xinput1_3.dll",
+          "sha256": "79812CAAA21DC5EC902F59DD54A8A92B3F9B31F915631A667CB96EFA9EBF8950"
+        },
+        {
+          "path": "bioshockvr.dll",
+          "sha256": "1A4568FEDE7C9FA58D24A3F7B424E9A3FA22234C8F5960A3A28DA299BFA53942"
+        },
+        {
+          "path": "host64\\dlss-capabilities.ini",
+          "sha256": "FCB20488F19FB39851FF1683E0C4DA4B4AA71D25B9BE12634AD95BC5AAD5508C"
+        },
+        {
+          "path": "Lanzador BioShock 2 VR DLSS-DLAA.exe",
+          "sha256": "7317B52EE7C9D8A51B7BEAC664D991117AFC3C5DAC8418595ED4E979FBCD9842"
+        }
+      ]
+    }
+  }
+}

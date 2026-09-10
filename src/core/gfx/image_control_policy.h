@@ -140,7 +140,7 @@ inline Panel next_panel(Panel current, RenderMode mode) noexcept {
     return Panel::Hidden;
 }
 inline const char* probe_name(Probe p) noexcept {
-    return p == Probe::Normal ? "A NORMAL" : p == Probe::Bridge ? "B PUENTE SIN DLAA" :
+    return p == Probe::Normal ? "A NORMAL" : p == Probe::Bridge ? "B BRIDGE WITHOUT DLAA" :
            p == Probe::Captures ? "B NORMAL + CAPTURAS" :
            p == Probe::Dlaa ? "C DLAA" : "OFF";
 }

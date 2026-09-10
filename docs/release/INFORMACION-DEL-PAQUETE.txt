@@ -1,98 +1,41 @@
-BIOSHOCK VR · DLSS/DLAA BETA 0.2.6 — CANDIDATA DE PRUEBA
+BIOSHOCK VR · DLSS/DLAA BETA 0.2.6 — HISTORICAL TEST CANDIDATE
 
-Esta candidata requiere validar los nuevos controles en el juego/visor.
-La Release 0.2.3 publicada se conserva sin cambios.
+This historical candidate required in-game/headset validation of new controls.
+Published 0.2.3 remained unchanged. Current release instructions are in the repository README.
 
-SE CONSERVAN LAS CORRECCIONES DE LA 0.2.5
-- El botón Cerrar termina el instalador y este se cierra tras abrir el lanzador.
-- El detector de bloqueos respeta la reconstrucción de imagen en caliente,
-  evitando el apagado erróneo del estéreo. Sus protecciones siguen activas
-  fuera del cambio y el margen no puede prolongarse más de 15 segundos.
-- Los registros de la última prueba contienen cambios con estéreo activo.
-  La nueva candidata requiere su propia confirmación en el visor.
+RETAINED 0.2.5 FIXES
+Close ends the installer; successful launcher opening closes it.
+Stereo watchdog respects bounded live image rebuilding, with normal protections outside the operation and a maximum 15-second allowance. Previous logs showed active stereo after changes; this candidate still needed separate headset acceptance.
 
-QUÉ ES
-Este instalador contiene un fork beta de BioShock VR v0.8.2 con soporte
-experimental para los modos de imagen NORMAL, DLAA y DLSS 4.5.
+CONTENTS AND AUTHORSHIP
+Self-contained fork of BioShock VR v0.8.2: VR mod, SteamVR components, beta core, x64 DLSS host, NVIDIA 310.7.0.0 and native launcher, plus licenses.
+Original creator: Mohamad Balouza / VR-Stereo-Hub.
+His foundational stereo, 6DOF, motion-controller and game-integration work made this fork possible. Beren5556 adds DLSS/DLAA and distribution tools.
+https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2
+https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr
+https://github.com/mohamad-balouza
 
-El paquete es autónomo respecto al mod: partiendo de una instalación compatible
-y original de BioShock Remastered, instala el mod VR, sus componentes SteamVR,
-el fork beta, el host DLSS, el runtime NVIDIA necesario y el lanzador.
+MODES AND HISTORICAL CONTROLS
+NORMAL: no DLSS/DLAA. DLAA: native temporal antialiasing. DLSS 4.5 SR: reconstruct smaller internal rendering.
+FXAA/old spatial-upscaler UI removed; both disabled on save/start.
+F1 DLSS: Mode / Resolution / DLSS Quality / DLSS Sharpness / hide.
+F1 NORMAL/DLAA: Mode / Resolution / hide.
+In this historical candidate F2 increases and F3 decreases; hidden controls do nothing. Mode cycles NORMAL/DLSS/DLAA; F6 no longer changes it. Later releases reverse F2/F3 to previous/decrease and next/increase.
+Resolution/quality steps unchanged from 0.2.5.
+Post-DLSS sharpness 0–100%, step 5, default 0 preserving original image; DLSS only, preference retained.
+Smaller text/lower headset panel. NORMAL/DLAA remain 100%, retaining DLSS preference.
+Live resolution changes use windowed mode; startup forcing was then pending.
+Water investigation added sampled copy/wait counters, not a claimed FPS optimization.
 
-AUTORÍA DEL MOD ORIGINAL
-- BioShock VR v0.8.2
-- Creador: Mohamad Balouza
-- Proyecto: VR-Stereo-Hub
+INSTALLATION AND RESTORATION
+First run original BioShock Remastered through Steam to main menu and close it to create Bioshock.ini. Installer checks the INI, asks only for compatible Build\Final and verifies BioshockHD.exe.
+Installation does not change INIs; replaced files are backed up.
+Restore recovers prior files/removes empty owned directories, retaining preferences/recovery backup.
+Desktop launcher shortcut created. Failed automatic opening does not invalidate installation; manual path shown.
+Launcher waits up to 30 seconds for Steam's BioshockHD.exe, closing only after detecting it or successful direct start. Failure keeps launcher open with explanation.
 
-AGRADECIMIENTO ESPECIAL
-Mohamad Balouza realizó el trabajo fundamental y más difícil para llevar
-BioShock a VR: renderizado estereoscópico, seguimiento 6DOF, controladores de
-movimiento e integración con el juego. Este fork añade DLSS/DLAA y herramientas
-de distribución sobre esa enorme base. Sin su trabajo, no existiría.
-
-- Versión base:
-  https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr/releases/tag/v0.8.2
-- Proyecto:
-  https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr
-- Creador:
-  https://github.com/mohamad-balouza
-
-MODOS DE IMAGEN DEL FORK
-- NORMAL: renderizado sin DLSS ni DLAA.
-- DLAA: antialiasing temporal a resolución nativa.
-- DLSS 4.5 SR: reconstrucción desde una resolución interna menor.
-
-FXAA y el antiguo reescalado espacial no forman parte de las opciones del
-lanzador. Al guardar o iniciar, ambos quedan desactivados.
-
-CONTROLES DE IMAGEN
-- F1 en DLSS: Modo / Resolución / Calidad DLSS / Sharpness DLSS / ocultar.
-- F1 en NORMAL y DLAA: Modo / Resolución / ocultar.
-- F2 aumenta y F3 disminuye el valor seleccionado; ocultos no cambian nada.
-- En Modo permiten seleccionar NORMAL, DLSS y DLAA. F6 ya no cambia el modo.
-- Mismas resoluciones, mismos tramos y mismos saltos de calidad que la 0.2.5.
-- Nitidez posterior a DLSS: 0–100 %, pasos de 5. Inicialmente 0 %: imagen
-  anterior intacta. No actúa en NORMAL/DLAA. La preferencia se conserva.
-- Panel con letra más pequeña y situado un poco más abajo en el visor.
-- NORMAL y DLAA mantienen 100 %; la preferencia DLSS no se pierde.
-- El cambio de resolución en caliente usa modo ventana. No se fuerza ventana
-  al arrancar; esa política del lanzador sigue pendiente.
-- La investigación del agua identifica copias repetidas y esperas por ojo
-  como costes a medir en la escena real. Se añaden contadores y tiempos
-  muestreados; no se anuncia todavía una mejora de rendimiento.
-
-INSTALACIÓN Y RESTAURACIÓN
-- Antes de instalar, abre BioShock Remastered una vez desde Steam, llega al
-  menú principal y ciérralo para que se cree Bioshock.ini.
-- El instalador comprueba ese INI y explica qué hacer si todavía no existe.
-- El instalador solo pide la carpeta Build\Final del juego.
-- Verifica que BioshockHD.exe sea la versión compatible probada.
-- No modifica tus archivos INI durante la instalación.
-- Guarda una copia de cualquier archivo que vaya a sustituir.
-- El botón Restaurar devuelve los archivos que existían antes de instalar.
-- Restaurar retira las carpetas del paquete que hayan quedado vacías, pero conserva
-  los ajustes personales y una copia de recuperación por seguridad.
-- Crea un acceso directo del lanzador en el Escritorio.
-- Si Windows no puede abrir automáticamente el lanzador al terminar, el mod sigue
-  instalado y se muestra la ruta para abrirlo manualmente.
-- El lanzador espera hasta 30 segundos a que Steam abra BioshockHD.exe. Solo se
-  cierra al detectar el juego o al iniciar correctamente la vía directa; si el
-  arranque falla, permanece abierto y lo explica.
-
-COMPONENTES INCLUIDOS
-- Proxy de carga x86 y componentes SteamVR del mod base.
-- Fork beta bioshockvr.dll.
-- Host x64 y runtime NVIDIA DLSS 4.5 (NGX 310.7.0.0).
-- Lanzador de configuración para NORMAL, DLAA y DLSS.
-- Licencias y avisos de terceros.
-
-No incluye DLSS 5, Neural Rendering, RenoDX ni ReShade.
-
-VERSIÓN DE LA DLL NVIDIA
-El instalador siempre coloca nvngx_dlss.dll 310.7.0.0, que es la versión
-probada y recomendada. Se permite sustituirla manualmente por otra DLL x64 y
-el lanzador solo mostrará una advertencia. Con versiones diferentes no se
-garantizan el funcionamiento, la estabilidad ni la calidad de imagen; el
-cambio corre por cuenta del usuario. Reinstalar restaura la 310.7.0.0.
-
-Las licencias se instalan dentro de BioShockVR-DLSS45\Licenses.
+NVIDIA AND LICENSES
+Includes x86 loader/SteamVR components, beta bioshockvr.dll, x64 host/NVIDIA NGX 310.7.0.0, launcher and third-party notices.
+No DLSS 5, Neural Rendering, RenoDX or ReShade.
+Alternative x64 nvngx_dlss.dll allowed with warning at user's risk; functionality/stability/quality not guaranteed. Reinstall restores tested/recommended 310.7.0.0.
+Licenses: BioShockVR-DLSS45\Licenses.

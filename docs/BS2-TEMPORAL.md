@@ -1,79 +1,54 @@
-# BioShock 2: contrato temporal DLAA/DLSS
+# BioShock 2: DLAA/DLSS temporal contract
 
-Estado: port técnico en validación, no declaración de calidad final en visor.
-Juego objetivo: **BioShock 2 Remastered**, `Bioshock2HD.exe`, Steam AppID `409720`.
-El ejecutable original de BioShock 2 no está soportado por este adaptador.
+Technical-port validation record, not a declaration of final headset quality.
+Target: **BioShock 2 Remastered**, `Bioshock2HD.exe`, Steam AppID `409720`. The original non-Remastered BioShock 2 executable is unsupported.
 
-## Separación respecto de BioShock 1
+## Separation from BioShock 1
 
-El proveedor es `src/game/bioshock2r/temporal_guides.*`. Conserva el contrato de
-recursos del backend común, pero no usa cámaras, hooks, matrices ni direcciones
-de `bioshock1r`. Los datos de producción del mod BS2 viven en
-`%LOCALAPPDATA%\BioshockVR\bs2\`, incluido `dlss.ini`.
+Provider: `src/game/bioshock2r/temporal_guides.*`. It retains the shared backend resource contract, but uses no bioshock1r cameras, hooks, matrices or addresses. Production BS2 data, including dlss.ini, lives under `%LOCALAPPDATA%\BioshockVR\bs2\`.
 
-La configuración gráfica del juego es distinta: `Shared.ini` es la autoridad de
-resolución, con espejo en `Bioshock2SP.ini`, bajo
-`%APPDATA%\BioshockHD\Bioshock2\`. No se modifica `Bioshock.ini` de BS1.
+Game graphics configuration differs: Shared.ini is resolution authority, mirrored to Bioshock2SP.ini under `%APPDATA%\BioshockHD\Bioshock2\`. BS1's Bioshock.ini is untouched.
 
-El flujo de cada ojo es:
+Per-eye flow:
 
 ```text
-Draw BS2 etiquetado -> pose final + proyección WORLD del mismo build
-                   -> profundidad D24 del intervalo de render
-                   -> profundidad R32F + movimiento R16G16F
-                   -> host NGX x64 independiente por ojo
-                   -> resultado a la swapchain OpenXR del mismo ojo
+Tagged BS2 Draw -> final pose + same-build WORLD projection
+                -> render-interval D24 depth
+                -> R32F depth + R16G16F motion
+                -> independent per-eye x64 NGX host
+                -> result to that same eye's OpenXR swapchain
 ```
 
-## Cámara y proyección WORLD: identidad exacta
+## Camera and WORLD projection: exact identity
 
-Cada `sr_push_eye` devuelve un identificador monotónico. `scenedraw` lo conserva
-en un ámbito local al hilo, incluido el segundo Draw; los Draw anidados no reciben
-por accidente la etiqueta del ojo exterior. `camera` publica únicamente la pose
-final de gameplay, después de aplicar el desplazamiento del ojo. La publicación
-se consulta por **ojo y build exactos**, con antigüedad máxima de 200 ms; nunca se
-reemplaza por «la última cámara disponible».
+Each sr_push_eye returns a monotonic identifier. Scenedraw retains it in thread-local scope, including the second Draw; nested Draws do not accidentally receive the outer eye's tag. Camera publishes only the final gameplay pose after eye offset. Lookup requires **exact eye/build**, maximum age 200 ms; it never substitutes “latest available camera”.
 
-La matriz no se deduce de los valores configurados para el visor. Se observa el
-constructor del `FPlayerSceneNode` raíz que crea `UGameEngine::Draw`, y dentro de
-ese ámbito se captura exclusivamente su constructor de proyección **primaria
-WORLD**. Las cámaras de portales/reflejos y la proyección secundaria de foreground
-no son elegibles, aunque compartan la misma tangente por el ajuste de FOV de armas.
+The matrix is not inferred from configured headset values. Observation targets the root FPlayerSceneNode created by UGameEngine::Draw; within that scope only its **primary WORLD** projection constructor is captured. Portal/reflection cameras and secondary foreground projection are ineligible, even if weapon-FOV adjustment gives them matching tangents.
 
-Además, la pose que recibió el constructor debe coincidir con la publicación de
-CalcView: tolerancia de 0,01 unidades Unreal en posición y coincidencia exacta de
-rotación módulo 65536. Una publicación doble de cámara o proyección se rechaza;
-no se elige silenciosamente la última.
+Constructor pose must also match the CalcView publication: position tolerance 0.01 Unreal units and exact rotation modulo 65536. Duplicate camera/projection publication is rejected, not silently resolved by choosing the last.
 
-### Evidencia binaria específica de BS2
+### BS2-specific binary evidence
 
-Auditoría local de 2026-09-08, SHA256 del ejecutable:
+Local audit 2026-09-08. Executable SHA-256:
+`C2A31FB67B285C136203A4A6E739545177BE5753D972E6AEA0F44C65DDF22F8C`.
 
-`C2A31FB67B285C136203A4A6E739545177BE5753D972E6AEA0F44C65DDF22F8C`
-
-| Punto | RVA BS2 / significado |
+| Point | BS2 RVA / meaning |
 | --- | --- |
-| Creación desde Draw raíz | CALL `0x4EF44C`, retorno `0x4EF451` |
-| `FPlayerSceneNode` | thunk `0x5C95` -> constructor `0x5BBD40`; RTTI/vtable `0x10CF750` |
-| Actualización de matrices | CALL `0x5BBEB7` -> thunk `0x59E3` -> cuerpo `0x5C34A0` |
-| Proyección primaria WORLD | retorno `0x5C4364`, destino nodo `+0x1D0` |
-| Proyección secundaria foreground | retorno `0x5C43AF`, destino nodo `+0x380`; excluida |
-| Constructor de perspectiva finita | cuerpo `0x5BBC00`, seis floats, `ret 0x18` |
+| Creation from root Draw | CALL 0x4EF44C, return 0x4EF451 |
+| FPlayerSceneNode | thunk 0x5C95 → constructor 0x5BBD40; RTTI/vtable 0x10CF750 |
+| Matrix update | CALL 0x5BBEB7 → thunk 0x59E3 → body 0x5C34A0 |
+| Primary WORLD projection | return 0x5C4364, node destination +0x1D0 |
+| Secondary foreground projection | return 0x5C43AF, node destination +0x380; excluded |
+| Finite-perspective constructor | body 0x5BBC00, six floats, ret 0x18 |
 
-La rama WORLD incorpora explícitamente la opción FOV del juego antes de la
-conversión de aspecto; la secundaria usa su otro parámetro de lente. Esa cadena
-de código identifica WORLD independientemente de una coincidencia numérica con
-el FOV de foreground. Se comprueban los destinos CALL/JMP y el prólogo conocido
-antes de instalar los hooks; una discrepancia desactiva la vía temporal sin
-desactivar por sí sola la cámara VR.
+WORLD explicitly incorporates the game's FOV option before aspect conversion; foreground uses its other lens parameter. This code chain identifies WORLD independently of numerical foreground-FOV coincidence. CALL/JMP targets and known prologue are verified before hooks; mismatch disables the temporal route without by itself disabling VR camera.
 
-Receta de auditoría reproducible, ABI y pruebas:
+Reproducible audit recipe, ABI/tests:
 [temporal_guides_bs2_test/README.md](../src/tools/temporal_guides_bs2_test/README.md).
 
-## Profundidad y planos reales por ojo
+## Actual per-eye depth and planes
 
-El observador lee los argumentos **reales** de near/far y valida la matriz
-resultante en el mismo build. La función auditada genera perspectiva D3D finita:
+The observer reads **actual** near/far arguments and validates the resulting same-build matrix. The audited function produces finite D3D perspective:
 
 ```text
 m10 = far / (far - near)
@@ -83,200 +58,112 @@ tanHalfFovX = 1 / m0
 tanHalfFovY = 1 / m5
 ```
 
-Se exigen entradas finitas, diagonal de lente positiva, ceros esperados y
-`0 < near < far`. Matrices invertidas o asimétricas inesperadas se rechazan.
-El selector de far del motor tiene una rama 1024 y otra que lee una global
-inicialmente 65536; near parte de una global inicialmente 10. **No se presupone
-qué rama está activa**: los valores capturados por ojo gobiernan la reconstrucción.
-Los hints near/far de `PrepareDesc` no sustituyen esa observación.
+Required: finite inputs, positive lens diagonal, expected zeros and `0 < near < far`. Unexpected reversed/asymmetric matrices are rejected. The engine's far selector has a 1024 branch and another reading a global initially 65536; near comes from a global initially 10. **No active branch is assumed**: captured per-eye values govern reconstruction. PrepareDesc near/far hints do not replace observation.
 
-La convención validada es profundidad normal: near -> 0, far -> 1. La textura D24
-se convierte a R32F conservando su valor de profundidad hardware, sin inversión,
-para NGX. Near/far se usan para reconstruir posición y movimiento, no para enviar
-una distancia lineal como si fuese la profundidad hardware.
+Validated convention: normal depth, near → 0 and far → 1. D24 converts to R32F retaining hardware depth, without inversion, for NGX. Near/far reconstruct position/motion; linear distance is not submitted as hardware depth.
 
-El DSV se elige mediante votos de draws dentro del intervalo, limitado a D24 de
-dimensiones correctas, una muestra y mip 0. Se observan binds/draws/clears y se
-conserva/restaura el estado D3D11 al copiar una profundidad todavía enlazada.
-Esta selección sigue siendo heurística por actividad de render, no una identidad
-semántica del objeto profundidad del motor.
+DSV selection uses draw votes within the interval, restricted to correctly sized, single-sample, mip-0 D24. Binds/draws/clears are observed; D3D11 state is preserved/restored when copying still-bound depth. This remains a render-activity heuristic, not semantic identity of the engine's depth object.
 
-Las tangentes de composición y, cuando existe, la lectura independiente del
-bloque WORLD deben concordar con la matriz capturada. Una discrepancia produce
-fallback, no una corrección inventada de FOV.
+Composition tangents and any independent WORLD-block read must agree with captured projection. Disagreement causes fallback, not invented FOV correction.
 
-## Movimiento de cámara y jitter cero
+## Camera motion and zero jitter
 
-Los vectores son **solo de cámara**, reconstruidos desde profundidad y las poses
-actual/anterior de ese mismo ojo. Convención: píxel actual -> píxel anterior,
-en píxeles de render, escalas `1,1`, textura `R16G16_FLOAT`.
+Vectors are **camera-only**, reconstructed from depth and this eye's current/previous poses. Convention: current pixel → previous pixel, in render pixels, scales 1,1, R16G16_FLOAT.
 
-Las manos, armas duales, enemigos animados, partículas, agua y otros objetos con
-movimiento independiente no reciben todavía sus propios vectores. Pueden aparecer
-estelas y otros errores temporales aunque la cámara, profundidad e IPC sean
-coherentes. El cuerpo/arma VR funcional no equivale a tener sus vectores de
-movimiento implementados.
+Hands, dual weapons, animated enemies, particles, water and independently moving objects lack their own vectors. Trails/temporal errors may remain despite coherent camera/depth/IPC. Functional VR body/weapons do not imply their motion vectors are implemented.
 
-La proyección raster del juego **no recibe jitter temporal**. El cliente envía
-`jitterX=0` y `jitterY=0` tanto en DLAA como en SR; el host los entrega como tales
-a NGX. No se afirma una secuencia subpíxel que el juego no ha dibujado. La falta de
-jitter limita la información temporal disponible, especialmente para SR: procesar
-correctamente una imagen no acredita calidad equivalente a una integración
-completa con jitter y vectores de objetos.
+The raster projection **has no temporal jitter**. Client sends jitterX=0/jitterY=0 for DLAA/SR; host forwards these to NGX. No undrawn subpixel sequence is claimed. Missing jitter limits temporal information, especially SR. Successful image processing does not prove quality equivalent to complete jitter/object-vector integration.
 
-## Historial y rechazo seguro
+## History and safe rejection
 
-Cada ojo posee sus propias texturas e historial. El primer frame válido solicita
-reset. También lo solicitan:
+Each eye owns textures/history. First valid frame requests reset, as do:
 
-- Cambios de tangentes, near o far.
-- Saltos en la secuencia del mismo ojo, que normalmente avanza de dos en dos.
-- Cambio de época de cámara: vista, gameplay/cinemática, modo, recenter o rearmado
-  del estéreo; también un fallo en la segunda pasada.
-- Antigüedad del historial superior a 200 ms o reloj no monótono.
-- Corte grande: desplazamiento por frame de 256 UU o más, o giro de 45 grados o
-  más en cualquiera de los ejes.
+- Tangent/near/far changes.
+- Same-eye sequence gaps (normally advances by two).
+- Camera epoch changes: view, gameplay/cutscene, mode, recenter, stereo rearm or second-pass failure.
+- History older than 200 ms or nonmonotonic clock.
+- Large cuts: per-frame translation ≥256 UU or rotation ≥45 degrees on any axis.
 
-Las dimensiones nuevas recrean recursos y limpian ambos historiales. Cámara,
-build, profundidad o proyección ausentes/ambiguos, datos no finitos, build fuera
-de orden o desacuerdo WORLD devuelven `false` para que core aplique su salida de
-seguridad. El fallback espacial no se etiqueta como procesamiento DLSS/DLAA.
+New dimensions recreate resources and clear both histories. Missing/ambiguous camera/build/depth/projection, nonfinite data, out-of-order build or WORLD disagreement returns false for core safety output. Spatial fallback is not labelled DLSS/DLAA processing.
 
-## Lectura de registros y validación
+## Logs and validation
 
-Registros de producción: `%LOCALAPPDATA%\BioshockVR\bs2\bioshockvr.log` y los
-logs separados de ambos hosts dentro de ese mismo directorio de datos.
+Production: `%LOCALAPPDATA%\BioshockVR\bs2\bioshockvr.log` plus separate eye-host logs in the same data directory.
 
-| Señal | Qué acredita |
+| Signal | What it establishes |
 | --- | --- |
-| `root WORLD finite projection observation ready` | Firmas y ramas verificadas, hooks instalados; todavía no acredita gameplay |
-| `rootWorld=1 samePose=1 finite=1` | Muestra de proyección raíz y pose observadas válidas |
-| `pubs=1 projPubs=1`, `build/cam` iguales | Publicaciones únicas para el build exacto del ojo |
-| `nearFar=... epoch=...` | Planos realmente capturados y época de cámara |
-| `coherent=1 hist=1 reject=none` | Entradas aceptadas e historial continuo de ese ojo |
-| `processed` creciente y hosts sin error | Se está ejecutando la vía NGX, no únicamente fallback |
+| root WORLD finite projection observation ready | Signatures/branches verified, hooks installed; not yet gameplay proof |
+| rootWorld=1 samePose=1 finite=1 | Valid observed root projection and matching pose |
+| pubs=1 projPubs=1, matching build/cam | Unique publications for the exact eye build |
+| nearFar=... epoch=... | Actually captured planes and camera epoch |
+| coherent=1 hist=1 reject=none | Accepted inputs and continuous history for that eye |
+| Increasing processed and error-free hosts | NGX execution, not fallback alone |
 
-El primer log de captura es one-shot por ojo y puede producirse ya en menú con
-`samePose=0`: allí no existe necesariamente publicación de cámara gameplay. No es
-por sí solo una avería. En gameplay, `coherent=1` con `projPubs=1` también implica
-que pasaron los filtros obligatorios de nodo raíz y pose coincidente.
+Initial capture log is one-shot per eye and may occur in a menu with samePose=0 because no gameplay camera is published there. Alone this is not failure. In gameplay, coherent=1 with projPubs=1 implies required root-node/matching-pose filters passed.
 
-### Evidencia registrada, 2026-09-08
+### Recorded DLAA evidence, 2026-09-08
 
-La prueba automática WARP actualizada se ejecutó con `PASS`, exit code 0. Comprueba
-recursos y matemáticas con cámaras deterministas; no ejecuta hooks en el juego.
-Las compilaciones de producción y laboratorio también finalizaron correctamente.
+Updated WARP test passed with code 0: deterministic camera resource/math checks, not in-game hooks. Production/LAB builds succeeded.
 
-Se repitió la integración de juego real **con el filtro de constructor raíz** en
-el run `dlaa-f0d5823b`, usando DLAA 1024x1024 -> 1024x1024, ambos hosts NGX reales
-y runtime OpenXR `bvr-xrsim`. El artefacto local del run está bajo:
+Game integration was repeated **with the root-constructor filter** in dlaa-f0d5823b, DLAA 1024×1024 → 1024×1024, two real NGX hosts and bvr-xrsim:
 
 ```text
 D:\BioShock2VR-DLSS-Lab\game-cc819bfd-7129-4494-97ff-2b9fd80f81a6\runs\dlaa-f0d5823b
 ```
 
-Se auditaron `run.json`, `data/bioshockvr.log`, los dos logs bajo
-`data/DLSS45Host/eye0` y `eye1`, los JSON `evidence/dlaa-world`,
-`dlaa-world-motion`, `dlaa-pause`, `dlaa-resumed` y la captura estéreo de gameplay.
-Las dimensiones 1032x1104 del JSON corresponden a la captura/composición del
-simulador, no a una resolución NGX distinta de la declarada arriba.
+Audited run.json, data/bioshockvr.log, both data/DLSS45Host/eye0 and eye1 logs, evidence/dlaa-world, dlaa-world-motion, dlaa-pause, dlaa-resumed JSON and stereo gameplay capture. JSON 1032×1104 dimensions are simulator capture/composition, not different NGX resolution.
 
-| Comprobación | Resultado observado |
+| Check | Observation |
 | --- | --- |
-| WORLD estable a 00:32:20 | 5650 frames NGX, 2825 por ojo; `coherent=1 hist=1 reject=none` |
-| Identidad y planos por ojo | `pubs=1 projPubs=1`, build/cámara iguales, `nearFar=10/65536`, época 8 |
-| Hosts reales | NGX Init y feature DLAA model K correctos; evaluaciones crecientes en ambos, sin errores NGX en el tramo auditado |
-| Captura inicial | FOCUSED, proyección con dos vistas; gate 3415/3415/3415, discarded/outOfOrder 0; IPD observado 0,063 m e imagen presente en ambos ojos |
-| Giro simulado | Yaw/pitch 15/5 grados en `dlaa-world-motion`; poses de cámara cambiadas, coherencia e historial conservados |
-| Pausa | `dlaa-pause`: una capa quad, sin capa de proyección temporal |
-| Reanudación | `dlaa-resumed`: vuelven proyección de dos vistas y tres quads; época 8 -> 10, resets por ojo 1 -> 2 |
-| Último diagnóstico 00:33:50 | 12714 frames procesados, 6357 por ojo, `coherent=1 hist=1`, `reject=none`, planos 10/65536 |
+| Stable WORLD 00:32:20 | 5650 NGX frames, 2825 per eye; coherent=1 hist=1 reject=none |
+| Per-eye identity/planes | pubs=1 projPubs=1, build/camera match, nearFar=10/65536, epoch 8 |
+| Real hosts | Successful NGX Init and DLAA model K feature; both evaluation counts increasing; no NGX errors in audited segment |
+| Initial capture | FOCUSED, two projection views; gate 3415/3415/3415, discarded/outOfOrder 0; observed IPD 0.063 m, image in both eyes |
+| Simulated turn | Yaw/pitch 15/5 degrees in dlaa-world-motion; changed camera poses, coherence/history retained |
+| Pause | dlaa-pause: one quad, no temporal projection layer |
+| Resume | dlaa-resumed: two-view projection and three quads return; epoch 8 → 10, per-eye resets 1 → 2 |
+| Last diagnostic 00:33:50 | 12714 processed frames, 6357 per eye; coherent=1 hist=1 reject=none, planes 10/65536 |
 
-`tagMismatch` se mantuvo en 1 durante gameplay tras la carga, y en 2 tras
-reanudar, sin incremento en los tramos estables observados; no fue cero durante
-toda la sesión. Los fallbacks aumentaron durante menú/pausa y dejaron de aumentar
-al recuperar gameplay. Son transiciones observadas, no una prueba de ausencia de
-fallos en todas las transiciones posibles.
+tagMismatch stayed at 1 after load, then 2 after resume, without increases in observed stable segments; not zero throughout. Fallbacks increased in menu/pause and stopped after gameplay resumed. These are observed transitions, not proof for all transitions.
 
-El cierre solicitado mediante WM_CLOSE a 00:33:53 registró después una excepción
-`0xC0000005` en `Bioshock2HD.exe+0x4FF0FE`, clasificada por el manejador existente
-como fallo conocido de teardown y terminada sin volcado. No se presenta este run
-como «cierre sin errores», aunque no falló la evaluación NGX durante gameplay.
-El antecedente exacto consta en el commit upstream `4071543` y en
-[ENGINE_NOTES, sesión 38](bioshock2/ENGINE_NOTES.md#the-faulting-site-0x4ff0fe---the-engines-pending-display-apply-virtual),
-incluido un bisect anterior con todos los hooks omitidos. El guard de
-`src/core/util/crash.cpp` es genérico tras la señal de teardown y llama a
-`TerminateProcess(..., 0)`: un exit code 0 tampoco demostraría ausencia de esa AV.
-La observación temporal nueva no modifica ese guard ni escribe el objeto de la
-instrucción afectada; el run sin volcado no aporta por sí solo una pila causal.
+WM_CLOSE at 00:33:53 was followed by 0xC0000005 at Bioshock2HD.exe+0x4FF0FE, classified by the existing handler as known teardown failure and terminated without dump. This run is **not error-free shutdown**, despite successful gameplay NGX evaluation. Prior evidence: upstream commit 4071543 and [ENGINE_NOTES session 38](bioshock2/ENGINE_NOTES.md#the-faulting-site-0x4ff0fe---the-engines-pending-display-apply-virtual), including all-hooks-skipped bisect. The generic crash.cpp teardown guard calls TerminateProcess(...,0); code 0 does not prove absence of AV. New temporal observation neither changes that guard nor writes the faulting object's data; a dumpless run alone provides no causal stack.
 
-### Integración SR Quality, 2026-09-08
+### SR Quality integration, 2026-09-08
 
-También se auditó el run `sr-7590efc3`, hermano del run DLAA en el mismo directorio
-de laboratorio: `run.json`, log principal, ambos logs de host, JSON
-`evidence/dlss-sr-world` y `dlss-sr-motion`, y captura estéreo con giro de cabeza.
-Constan el filtro raíz WORLD instalado y el runtime `bvr-xrsim`.
+Also audited sibling sr-7590efc3: run.json, main/host logs, evidence/dlss-sr-world and dlss-sr-motion JSON, stereo turning capture. Root WORLD filter and bvr-xrsim are recorded.
 
-| Comprobación | Resultado observado |
+| Check | Observation |
 | --- | --- |
-| Resolución y modo reales | Ambos hosts: 1024x1024 -> 1536x1536, SR Quality elegido por el óptimo NGX 1024x1024 (ratio 2/3 por eje) |
-| Evaluación NGX | Features creadas y frames 1, 1800, 3600, 5400, 7200, 9000 evaluados en ambos logs; sin errores NGX en el tramo auditado |
-| Último diagnóstico 00:36:19 | 18936 frames procesados, 9468 por ojo; `coherent=1 hist=1 reject=none` |
-| Datos temporales | `pubs=1 projPubs=1`, build/cámara iguales, `nearFar=10/65536`, época 8, un reset inicial por ojo, cero gaps |
-| Transiciones y continuidad | `tagMismatch=1` tras carga y estable; `mixed=0`; fallback 1911 sin incremento en el tramo de gameplay final |
-| JSON WORLD / giro | FOCUSED y proyección de dos vistas; gates 4468/4468/4468 y 7141/7141/7141, discarded/outOfOrder 0; giro yaw/pitch 15/5 grados e imagen presente en ambos ojos |
+| Actual mode/resolution | Both hosts 1024×1024 → 1536×1536; SR Quality selected by NGX optimum 1024×1024 (2/3 per axis) |
+| NGX evaluation | Feature creation and frames 1, 1800, 3600, 5400, 7200, 9000 in both logs; no audited-segment NGX errors |
+| Last diagnostic 00:36:19 | 18936 processed, 9468 per eye; coherent=1 hist=1 reject=none |
+| Temporal data | pubs=1 projPubs=1, matching build/camera, nearFar=10/65536, epoch 8, one initial reset/eye, zero gaps |
+| Transitions/continuity | tagMismatch=1 after load and stable; mixed=0; fallback 1911 stable in final gameplay segment |
+| WORLD/turning JSON | FOCUSED, two projection views; gates 4468/4468/4468 and 7141/7141/7141, discarded/outOfOrder 0; yaw/pitch 15/5 degrees, image in both eyes |
 
-La captura del simulador sigue siendo 1032x1104 por ojo; no se usa esa dimensión
-de captura para afirmar qué resolución procesó NGX. La resolución SR se acredita
-con las creaciones de feature de ambos hosts y los mensajes `eye0/eye1 ready`.
+Simulator capture remains 1032×1104 per eye, not evidence of NGX processing size. SR dimensions are established by both feature-creation and eye0/eye1-ready logs.
 
-El cierre solicitado a 00:36:22 volvió a registrar una AV `0xC0000005`, esta vez en
-`Bioshock2HD.exe+0xC312D2`. No es el mismo RVA que en DLAA. Las notas upstream ya
-describen un antecedente en esa dirección como parte de las incidencias de
-teardown; aun así, el clasificador de cierre es genérico y la ausencia de volcado
-no permite probar la causa concreta de este run. Tampoco aquí se afirma cierre
-sin errores ni se utiliza el exit code 0 forzado como prueba de ello.
+Exit requested 00:36:22 again logged 0xC0000005, now Bioshock2HD.exe+0xC312D2, not DLAA's RVA. Upstream documents a prior teardown issue there, but generic classification/no dump cannot prove this run's precise cause. No clean-exit claim or use of forced code 0 as proof.
 
-### SR a resolución alta y control NORMAL, 2026-09-08
+### High-resolution SR and NORMAL control, 2026-09-08
 
-Se revisaron además dos runs del mismo laboratorio, sin modificar código entre
-ellos: `sr-e171beb2` (SR alto) y `off-57e9251e` (NORMAL). La auditoría leyó sus
-registros, JSON de evidencia y `close-result.json`, los logs de ambos hosts del
-SR alto y las capturas estéreo de gameplay.
+Runs sr-e171beb2 and off-57e9251e used unchanged code. Audited logs, evidence JSON, close-result.json, high-SR host logs and stereo gameplay captures.
 
-| Comprobación | SR alto `sr-e171beb2` | NORMAL `off-57e9251e` |
+| Check | High SR: sr-e171beb2 | NORMAL: off-57e9251e |
 | --- | --- | --- |
-| Modo acreditado | Ambos hosts NGX: 2048x2048 -> 3072x3072, Quality | `dlss.ini` y log: `mode=off`; sin arranque de hosts en log ni directorio DLSS45Host |
-| Resultado temporal | A 00:40:06, 15364 procesados / 7682 por ojo; `coherent=1 hist=1 reject=none` | No se atribuyen frames a NGX: es el control VR sin DLSS/DLAA |
-| Identidad/historial | `pubs=1 projPubs=1`, planos 10/65536, época 8, un reset inicial por ojo, gaps 0 | El observador raíz WORLD sigue instalado; NORMAL no equivale a vanilla ni a deshabilitar todos los hooks |
-| Continuidad | `mixed=0`; `tagMismatch=1` y fallback 1141 estables al final | Estéreo y giro simulado presentes |
-| Evidencia JSON | `dlss-high-world`, `dlss-high-motion`: FOCUSED, dos vistas; gates 6343 y 9120 iguales en waited/begun/ended | `normal-world`, `normal-motion`: FOCUSED, dos vistas; gates 5249 y 6369 iguales en waited/begun/ended |
-| Cierre solicitado | WM_CLOSE, AV `0xC0000005` en `+0xC37362`, proceso terminado con exit code 0 | WM_CLOSE, AV `0xC0000005` en `+0xC312D2`, proceso terminado con exit code 0 |
+| Established mode | Both NGX hosts: 2048×2048 → 3072×3072, Quality | dlss.ini/log mode=off; no host startup or DLSS45Host directory |
+| Temporal result | 00:40:06: 15364 processed / 7682 per eye; coherent=1 hist=1 reject=none | No NGX frame claim; VR without DLSS/DLAA |
+| Identity/history | pubs=1 projPubs=1, planes 10/65536, epoch 8, one reset/eye, gaps 0 | Root WORLD observer still installed; NORMAL is not vanilla or all-hooks-disabled |
+| Continuity | mixed=0; tagMismatch=1, fallback 1141 stable at end | Stereo and simulated turning present |
+| JSON | dlss-high-world/motion: FOCUSED, two views; gates 6343 and 9120 match waited/begun/ended | normal-world/motion: FOCUSED, two views; gates 5249 and 6369 match waited/begun/ended |
+| Requested exit | WM_CLOSE, AV 0xC0000005 at +0xC37362, exit code 0 | WM_CLOSE, AV 0xC0000005 at +0xC312D2, exit code 0 |
 
-Los cuatro JSON conservan `discarded=0`, `outOfOrder=0`, separación ocular 0,063 m
-y captura 1032x1104 por ojo. Los JSON de movimiento muestran yaw/pitch 15/5 grados;
-las imágenes verifican salida visible en ambos ojos, no una valoración de
-ghosting. Los hosts del SR alto registran evaluaciones hasta al menos frame 7200
-por ojo, sin errores NGX en el tramo auditado.
+All four JSON: discarded=0, outOfOrder=0, 0.063 m eye separation, 1032×1104 per-eye capture. Motion JSON: yaw/pitch 15/5 degrees. Images establish visible output in both eyes, not ghosting quality. High-SR hosts evaluate at least frame 7200 per eye without audited-segment NGX errors.
 
-La resolución alta **no acredita 90 Hz sostenidos**: aunque el simulador estaba
-configurado a 90, los últimos beats de ese run observados antes del cierre fueron
-71-73 Draws/segundo y otras tantas segundas pasadas. Las temporizaciones internas
-de NGX no equivalen a rendimiento total del juego ni a latencia del visor.
+High resolution **does not establish sustained 90 Hz**. Although simulator configured 90, final observed beats were 71–73 Draws/s and equal second passes. Internal NGX timings are not whole-game performance or headset latency.
 
-Ambos `close-result.json` señalan `teardownFaultInLog=true`; no se interpreta su
-exit code 0 como cierre sin AV. El fallo también presente en NORMAL demuestra
-que no requiere una evaluación NGX activa para manifestarse en estas pruebas;
-no identifica por sí solo la causa ni exonera todo el código inyectado. El nuevo
-RVA `0xC37362` del SR alto no se confunde con los otros dos sitios registrados.
+Both close-result.json record teardownFaultInLog=true. Code 0 is not interpreted as AV-free exit. NORMAL reproducing proves active NGX evaluation is unnecessary in these tests; it neither identifies the cause nor exonerates all injected code. High-SR +0xC37362 is kept distinct from the other sites.
 
-Estos resultados acreditan los contratos técnicos observados de DLAA y las dos
-configuraciones SR, no calidad final en visor ni vectores propios de objetos.
-Más resoluciones, escenas y transiciones, comodidad y calidad visual en un visor
-físico se validan por separado; no se infieren de las pruebas automáticas.
+These establish observed technical contracts for DLAA/two SR configurations, not final headset quality or object vectors. More resolutions/scenes/transitions and physical-headset comfort/quality require separate validation.
 
-Para laboratorio, `BVR_BS2_TEST_ISOLATION` exige `BVR_LAB_GAME_INI` absoluto y un
-`Shared.ini` hermano válido, sin buscar perfiles reales si faltan. El proxy de
-laboratorio aísla además las rutas que consulta el motor; no forma parte del
-payload de producción. La simulación no demuestra funcionamiento visual en un
-visor físico, ausencia de ghosting ni comodidad en sesiones largas.
+LAB `BVR_BS2_TEST_ISOLATION` requires absolute BVR_LAB_GAME_INI and valid sibling Shared.ini, without real-profile fallback. The lab proxy also isolates engine-read paths and is not production payload. Simulation does not prove physical-headset visuals, absence of ghosting or long-session comfort.

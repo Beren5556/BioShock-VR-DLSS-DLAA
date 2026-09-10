@@ -1,149 +1,87 @@
-# BioShock 2: investigación del fallo al cerrar
+# BioShock 2: historical exit-crash investigation
 
-Fecha: 2026-09-08, Europe/Madrid. Estado: **reproducido y acotado; no corregido**.
-Alcance autorizado: diagnóstico. No se ha cambiado código de producción ni se ha
-recompilado, instalado o publicado la beta.
+Date: 2026-09-08, Europe/Madrid. Status at that point: **reproduced and narrowed down; not fixed**.
+Authorized scope was diagnosis. Production code was not changed and the beta was not rebuilt, installed or published.
 
-## Conclusión
+## Conclusion
 
-La variante `Bioshock2HD.exe+0x4FF0FE` es una lectura de un puntero nulo en el
-ejecutable del juego después de solicitar el cierre de su ventana. Se reproduce
-sin DLSS, sin crear una instancia OpenXR, con los cuatro subsistemas del mod
-omitidos y también **sin cargar `bioshockvr.dll`**.
+`Bioshock2HD.exe+0x4FF0FE` reads a null pointer in the game executable after requesting window closure. It reproduces without DLSS, without creating OpenXR, with all four mod subsystems skipped and **without loading bioshockvr.dll**.
 
-Por tanto, ni NGX/DLSS, ni OpenXR, ni los nuevos hooks temporales de esta beta son
-necesarios para provocar esta variante. Coincide con un fallo documentado en el
-mod base antes de nuestra adaptación. La evidencia apunta a la ruta de cierre
-del motor, pero no demuestra quién deja nulo el objeto ni excluye toda influencia
-del entorno: el último control conserva el proxy XInput de aislamiento y los
-componentes externos cargados por el juego. No es una prueba de «vanilla pura».
+NGX/DLSS, OpenXR and this beta's new temporal hooks are therefore not necessary to trigger this variant. It matches a failure documented in the base mod before this adaptation. Evidence points to the engine's shutdown path but does not establish who nulls the object or exclude all environmental influence: the final control retains the isolation XInput proxy and external game-loaded components. This is not “pure vanilla” validation.
 
-Esto tampoco demuestra que los otros sitios observados de madrugada
-(`+0xC312D2` y `+0xC37362`) compartan exactamente la misma causa.
+It also does not prove that the other early-morning sites (`+0xC312D2`, `+0xC37362`) share exactly the same cause.
 
-## Pruebas nuevas
+## New tests
 
-Todas se ejecutaron desde el menú, con ventana, resolución privada 1024×1024,
-perfiles y copias de partidas separados. Se solicitó `WM_CLOSE`; no se probó la
-ruta de menú «Salir a Windows» con confirmación y guardado.
+All ran from the menu, windowed, private 1024×1024 resolution, separate profiles/save copies. WM_CLOSE was requested; confirmed/saved “Exit to Windows” menu flow was not tested.
 
-Raíz de evidencias:
+Evidence root:
 `D:\BioShock2VR-DLSS-Lab\game-cc819bfd-7129-4494-97ff-2b9fd80f81a6\runs`.
 
-| Run / PID | Configuración real | Primera excepción de acceso al cerrar | Final de la prueba |
+| Run / PID | Actual configuration | First close-time AV | Test ending |
 | --- | --- | --- | --- |
-| `off-5e58b01c` / 3684 | NORMAL; `BVR_SKIP=xr`; `BVR_VEH=1`; adaptador y D3D activos | `0xC0000005`, `+0x4FF0FE`, READ de dirección 0 | CDB alcanzó segunda oportunidad; el cierre superó 10 s. Se terminó exclusivamente el proceso de laboratorio. No es una medición de cierre natural. |
-| `off-83222d24` / 20668 | NORMAL; `BVR_SKIP=input,adapter,d3d11,xr`; `BVR_VEH=1` | La misma instrucción y lectura nula | CDB capturó y se desconectó; proceso terminó con `0xC0000005`. |
-| `off-76963be7` / 20120 | Núcleo `bioshockvr.dll` ausente durante todo el proceso; proxy LAB presente | La misma instrucción y lectura nula | CDB capturó y se desconectó; proceso terminó con `0xC0000005`. |
+| off-5e58b01c / 3684 | NORMAL; BVR_SKIP=xr; BVR_VEH=1; adapter/D3D active | 0xC0000005, +0x4FF0FE, READ address 0 | CDB reached second chance; closure exceeded 10 s. Only the lab process was terminated. Not natural-exit timing. |
+| off-83222d24 / 20668 | NORMAL; BVR_SKIP=input,adapter,d3d11,xr; BVR_VEH=1 | Same instruction/null read | CDB captured/detached; process exited 0xC0000005. |
+| off-76963be7 / 20120 | bioshockvr.dll absent throughout; LAB proxy present | Same instruction/null read | CDB captured/detached; process exited 0xC0000005. |
 
-Los logs de inicialización del segundo control confirman que no se instalaron
-entrada, adaptador ni hooks D3D11 y que no se creó OpenXR. En el tercero, el
-inventario de módulos de CDB no contiene `bioshockvr.dll`; `lm m bioshockvr` no
-devuelve ningún módulo y no se genera `bioshockvr.log`.
+Second-control initialization logs confirm no input, adapter or D3D11 hooks and no OpenXR creation. The third CDB module inventory lacks bioshockvr.dll; `lm m bioshockvr` returns no module and no bioshockvr.log is generated.
 
-Cada control conserva `exit-debugger-trace.log` dentro de su run. Los dos últimos
-conservan además `close-result.json`. El `run.json` lo genera la preparación:
-sus hashes describen los archivos preparados, no prueban que se cargaron. En el
-tercer control la DLL se renombró **después** de preparar el run; el inventario
-del depurador y esta anotación describen su configuración efectiva.
+Each run retains exit-debugger-trace.log; the last two also retain close-result.json. Preparation writes run.json: its hashes describe prepared files, not proof of loading. In the third control the DLL was renamed **after** preparation; debugger inventory and this note describe the effective configuration.
 
-## Captura técnica
+## Technical capture
 
-Se utilizó CDB x86 10.0.26100.3916, ya instalado, unido a cada PID cuando la
-ventana respondía. No se parcheó memoria del juego para el diagnóstico.
+Already-installed x86 CDB 10.0.26100.3916 attached to each PID while the window responded. No game-memory patch was used for diagnosis.
 
-- Excepción: `0xC0000005`, lectura de `0x00000000`.
-- Dirección: `Bioshock2HD.exe+0x4FF0FE`; registro `EAX=0`.
-- El acceso sigue la cadena global del motor `+0x1A638F0 → +0x4C → +0x44`;
-  el último miembro produce el puntero nulo que la siguiente instrucción lee.
-- La pila estimada coincide en los tres controles: `+0x30DEF9`, `+0x30CE43`,
-  `+0x2E4C49`, `+0x30F8CE`, `+0xCDBC5E`.
-- CDB advierte que no dispone de información de desenrollado: esos retornos no
-  se presentan como una pila simbólica fiable. Las capturas actuales no muestran
-  USER32 en esa cadena; no prueban que la excepción ocurra dentro del WndProc.
-- En la primera captura `.ecxr` falló, pero el registro de excepción, los
-  registros actuales y la instrucción concuerdan. Las dos siguientes capturas
-  obtuvieron los datos actuales sin depender de `.ecxr`.
+- Exception 0xC0000005, read 0x00000000.
+- Address Bioshock2HD.exe+0x4FF0FE; EAX=0.
+- Access follows engine global chain +0x1A638F0 → +0x4C → +0x44. The final member yields the null pointer read by the next instruction.
+- Estimated stack matches all controls: +0x30DEF9, +0x30CE43, +0x2E4C49, +0x30F8CE, +0xCDBC5E.
+- CDB warns of missing unwind information; these returns are not a reliable symbolic stack. Captures do not show USER32 in this chain or prove an exception inside WndProc.
+- First capture's .ecxr failed, but exception record, current registers and instruction agree. Later captures obtained current data without relying on .ecxr.
 
-El depurador cambia el tratamiento de excepciones y los tiempos de cierre.
-Estos ensayos sirven para localizar la primera AV, no para comparar el tiempo
-de salida normal ni el comportamiento natural del filtro de excepciones.
+Debugging changes exception handling and shutdown timing. These tests locate the first AV, not normal-exit timing or natural exception-filter behavior.
 
-## Qué hacía ya el mod base
+## Existing base-mod behavior
 
-`src/core/util/crash.cpp`, `src/core/ui/overlay.cpp` y
-`src/core/framework/dllmain.cpp` no tienen diferencias respecto a HEAD
-`1de552a`. El comportamiento de cierre no fue introducido por esta adaptación.
+`src/core/util/crash.cpp`, `src/core/ui/overlay.cpp` and `src/core/framework/dllmain.cpp` were unchanged from HEAD `1de552a`. This adaptation did not introduce their exit behavior.
 
-El WndProc marca el inicio de cierre ante `WM_CLOSE`, `WM_DESTROY` o
-`WM_ENDSESSION`. Desde ese momento, el filtro clasifica genéricamente una
-excepción como fallo conocido del host, omite el dump y llama a
-`TerminateProcess(..., 0)`. También existe un vigilante de 15 segundos.
+WndProc marks shutdown on WM_CLOSE, WM_DESTROY or WM_ENDSESSION. Thereafter the filter generically classifies exceptions as known host failures, omits dumps and calls `TerminateProcess(..., 0)`. A 15-second watchdog also exists.
 
-**Código de salida 0 y ausencia de dump no equivalen a cierre limpio.** El texto
-actual «terminating cleanly» describe una terminación forzada que oculta el
-resultado de error, no una liberación ordenada de recursos. La clasificación
-genérica tampoco demuestra por sí misma la causa de cualquier excepción futura.
+**Exit code 0 and no dump do not equal clean shutdown.** “terminating cleanly” described forced termination hiding the failure result, not orderly resource release. Generic classification does not establish the cause of future exceptions.
 
-En los cuatro ensayos de madrugada la AV llegó 8–16 ms después de `WM_CLOSE`,
-antes de que se registrara la limpieza normal de OpenXR o
-`DLL_PROCESS_DETACH`. No fue el vencimiento del vigilante de 15 s ni la espera
-de salida de 3 s del host DLSS.
+In four early tests the AV arrived 8–16 ms after WM_CLOSE, before normal OpenXR cleanup or DLL_PROCESS_DETACH logs. It was not the 15 s watchdog or DLSS host's 3 s exit wait.
 
-Antecedentes locales relevantes:
+Relevant historical references (line numbers refer to the original document revisions):
 
-- `docs/bioshock2/ENGINE_NOTES.md:1236–1341`: análisis previo de `+0x4FF0FE` y
-  control con todos los hooks omitidos. El control antiguo sin proxy no tenía
-  observador de excepciones; por sí solo no demostraba que vanilla fallase.
-- `docs/bioshock2/ENGINE_NOTES.md:1414–1433`: ruta alternativa de salida desde
-  el menú y guardado previo. Desactivar el flush forzado durante el cierre
-  produjo entonces un bloqueo y se revirtió; no debe proponerse de nuevo como
-  arreglo sin demostrar un protocolo seguro.
-- `docs/STATUS.md:4423`: antecedente de la misma dirección durante una partida
-  inactiva. Una dirección coincidente no permite clasificar un fallo como
-  «solo al cerrar» sin conocer el estado de la ejecución.
-- `docs/BS2-TEST-RESULTS.md:94`: incidencia de los ensayos de la beta.
+- `docs/bioshock2/ENGINE_NOTES.md:1236–1341`: earlier +0x4FF0FE analysis/all-hooks-skipped control. The old no-proxy control had no exception observer and alone did not prove vanilla failure.
+- `docs/bioshock2/ENGINE_NOTES.md:1414–1433`: alternative menu/save exit. Disabling forced flush then caused a hang and was reverted; do not propose it again without a demonstrated safe protocol.
+- `docs/STATUS.md:4423`: same address during inactive gameplay. Matching addresses cannot classify a failure as exit-only without run state.
+- `docs/BS2-TEST-RESULTS.md:94`: beta test issue.
 
-## Límites y trabajo posterior propuesto
+## Limits and proposed subsequent work
 
-1. Separar en el diagnóstico «cierre ordenado», «fallo durante el cierre» y
-   «terminación de protección», conservando el error real y sin llamar limpio
-   al resultado de `TerminateProcess`.
-2. Para corregir la causa, localizar qué destruye o vacía el objeto y por qué
-   sigue siendo consultado. No aplicar un salto por dirección fija ni limitarse
-   a tragar la AV: el sitio también tiene antecedentes fuera del cierre.
-3. Capturar por separado `+0xC312D2` y `+0xC37362`, y contrastar la salida por
-   menú con la salida de ventana. Comprobar guardado, cancelación de salida y
-   posible lentitud antes de cambiar el vigilante existente.
-4. Validar cualquier parche con NORMAL/DLAA/DLSS, visor real y posteriormente
-   otro ordenador. Las pruebas de hoy no sustituyen esas validaciones.
+1. Distinguish orderly shutdown, shutdown crash and protective termination; preserve the real error and do not call TerminateProcess clean.
+2. Identify what destroys/nulls the object and why it is still read. No fixed-address jump or merely swallowing the AV; the site also appears outside shutdown.
+3. Capture +0xC312D2/+0xC37362 separately, compare menu/window exit and verify saving, cancellation and slowness before changing the watchdog.
+4. Validate any patch with NORMAL/DLAA/DLSS, real headset and later another computer. These tests do not replace that validation.
 
-Estos son próximos pasos sugeridos, **no cambios implementados**.
+These were proposed next steps, **not implemented changes**.
 
-## Incidencia independiente del laboratorio
+## Separate lab issue
 
-El primer intento `off-a4248059` terminó durante el arranque del simulador,
-antes de pedir cierre: evento Application Error 1000, módulo
-`bvr_xrsim32.dll`, código `0xC0000409`, desplazamiento `0x315DE`.
-No es la AV investigada ni un fallo demostrado del runtime OpenXR real. Se
-excluyó ese intento y los controles posteriores omitieron XR. El simulador es
-una herramienta de laboratorio, no el runtime que se entrega en la beta.
+First attempt off-a4248059 ended during simulator startup, before requesting exit: Application Error 1000, bvr_xrsim32.dll, 0xC0000409, offset 0x315DE. This is not the investigated AV or a demonstrated real-OpenXR-runtime failure. It was excluded; later controls skipped XR. The simulator is a lab tool, not the beta's shipped runtime.
 
-## Estado al finalizar
+## Final state of this investigation
 
-- Verificación final: los 30 archivos originales protegidos —incluidas
-  configuraciones, partidas y binarios de la instalación real— coinciden byte
-  por byte con el inventario previo.
-- La DLL de laboratorio temporalmente renombrada se restauró con su mismo hash.
-- No quedan juegos, depuradores ni auxiliares de estas pruebas ejecutándose.
-- Núcleo de producción, lanzador e instalador no se reconstruyeron ni cambiaron.
-- No se ha aplicado un arreglo ni se ha marcado el fallo como resuelto.
+- All 30 protected originals, including real configuration/saves/binaries, matched the prior inventory byte for byte.
+- Temporarily renamed LAB DLL restored with the same hash.
+- No test game, debugger or helper remained running.
+- Production core, launcher and installer were not rebuilt/changed.
+- No fix was applied and the issue was not marked resolved.
 
-Hashes SHA-256 verificados al finalizar:
-
-| Archivo | SHA-256 |
+| File | Final verified SHA-256 |
 | --- | --- |
-| Instalador 0.1.0-beta del escritorio | `A61BCCE385C0095645C67FE27A937E0D2B661E3C8CE2805F401C273EA73D9D6D` |
-| Núcleo de producción | `8DFD11347E8B80623CC3678BD030BD9B77B76FACA9BEF3766C1E66E224D0554A` |
-| Lanzador de la beta | `613772D164550745AB3A58924CF8A156EBCB95DE312869D01166361CA4A0EF8D` |
-| Núcleo LAB restaurado | `A32EABCE3EE62A2EC502875AF45A21D19857E215A5630DB675A2B7D8A503E4F6` |
+| Desktop 0.1.0-beta installer | A61BCCE385C0095645C67FE27A937E0D2B661E3C8CE2805F401C273EA73D9D6D |
+| Production core | 8DFD11347E8B80623CC3678BD030BD9B77B76FACA9BEF3766C1E66E224D0554A |
+| Beta launcher | 613772D164550745AB3A58924CF8A156EBCB95DE312869D01166361CA4A0EF8D |
+| Restored LAB core | A32EABCE3EE62A2EC502875AF45A21D19857E215A5630DB675A2B7D8A503E4F6 |

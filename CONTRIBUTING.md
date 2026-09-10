@@ -1,20 +1,31 @@
-# Contribuir
+# Contributing
 
-El repositorio está en beta pública. Los colaboradores deben abrir una rama corta, explicar el efecto observable del cambio y adjuntar la validación realizada.
+Use a focused branch, explain the observable effect of the change and include
+the validation performed.
 
-Este es un fork de [BioShock VR](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr), creado por Mohamad Balouza. Toda contribución debe conservar esa atribución y distinguir con claridad el trabajo original de los cambios específicos de este fork.
+This is a fork of [BioShock VR](https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr),
+created by Mohamad Balouza. Every contribution must preserve that attribution
+and clearly distinguish upstream work from changes specific to this fork.
 
-## Reglas del proyecto
+## Project rules
 
-- Mantén la compatibilidad con la base BioShock VR v0.8.2 indicada en PROVENANCE.md.
-- No presentes cambios experimentales como funciones del proyecto original.
-- No añadas archivos del juego, volcados, capturas RenderDoc, credenciales, el SDK NGX ni binarios NVIDIA sueltos.
-- Conserva los modos públicos NORMAL, DLAA y DLSS 4.5; DLSS 5 pertenece a una línea de investigación distinta.
-- No vuelvas a exponer FXAA, el reescalador espacial ni la pestaña completa de Bioshock.ini sin una decisión explícita de producto.
-- Añade pruebas o una justificación verificable para cada cambio funcional.
+- Preserve compatibility with the BioShock VR v0.8.2 base identified in PROVENANCE.md.
+- Do not present experimental fork changes as original-project features.
+- Do not commit game files, dumps, RenderDoc captures, credentials, the NGX SDK
+  or standalone NVIDIA binaries.
+- Keep NORMAL, DLAA and DLSS 4.5 as the public modes. DLSS 5 is outside this release.
+- Do not expose FXAA, the spatial upscaler or the full Bioshock.ini editor
+  without an explicit product decision.
+- Add tests or verifiable justification for every functional change.
+- For the English edition, keep runtime changes text-only and preserve
+  configuration keys, values, per-game identities and upgrade component paths.
+- Keep public documentation and UI text in English on the English branch.
 
-Antes de proponer un cambio ejecuta:
+Before proposing a change:
 
     powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Repository.ps1 -BuildLauncher
+    node scripts/localization/english.mjs verify
 
-Para cambios en el instalador, sigue además docs/TESTING.md y prueba solo sobre copias aisladas. Nunca uses una instalación real como fixture modificable.
+For installer changes, also follow docs/TESTING.md and use isolated fixtures.
+Never use a real installation as a writable test fixture. Preserve historical
+release artifacts rather than silently replacing them.

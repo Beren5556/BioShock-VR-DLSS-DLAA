@@ -5,15 +5,15 @@
 namespace bvr::b1r::graphics_options {
 struct Definition { const char* key; const char* label; bool impact; bool defaultOn; };
 inline constexpr Definition kOptions[] = {
-    {"HighDetailShaders", "Shaders de alto detalle", false, true},
-    {"Shadows", "Sombras", true, true},
-    {"RealTimeReflection", "Reflejos", true, false},
-    {"PostProcessing", "Posprocesado", false, true},
-    {"UseRippleSystem", "Ondulaciones del agua", true, false},
-    {"UseHighDetailSoftParticles", "Particulas de alta calidad", false, true},
-    {"UseDistortion", "Distorsion", false, true},
-    {"UseHighDetailPostProcEffects", "Posprocesado de alta calidad", false, true},
-    {"FluidSurfaceDetail", "Detalle de fluidos", false, true}
+    {"HighDetailShaders", "High-detail shaders", false, true},
+    {"Shadows", "Shadows", true, true},
+    {"RealTimeReflection", "Reflections", true, false},
+    {"PostProcessing", "Post-processing", false, true},
+    {"UseRippleSystem", "Water ripples", true, false},
+    {"UseHighDetailSoftParticles", "High-quality particles", false, true},
+    {"UseDistortion", "Distortion", false, true},
+    {"UseHighDetailPostProcEffects", "High-quality post-processing", false, true},
+    {"FluidSurfaceDetail", "Fluid detail", false, true}
 };
 inline constexpr size_t kCount = sizeof(kOptions) / sizeof(kOptions[0]);
 struct Value { bool on = false; bool known = false; bool live = false; };

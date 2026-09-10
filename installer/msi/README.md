@@ -1,44 +1,22 @@
-# Windows Installer por juego — integración 0.2.13
+# Per-game Windows Installer — historical 0.2.13 integration
 
-> Referencia histórica y código compartido de acciones. La distribución vigente
-> utiliza `../single-game/Build-Msi.ps1`: [cierre 0.2.16](../../docs/RELEASE-0.2.16.md).
-> No construir el antiguo EXE contenedor para una entrega nueva.
+> Historical reference and shared custom-action code. Current distribution uses `../single-game/Build-Msi.ps1`: [English 0.2.17](../../docs/ENGLISH-0.2.17.md), [Spanish 0.2.16 closure](../../docs/RELEASE-0.2.16.md). Do not build the old EXE wrapper for new deliveries.
 
-Build-Msi.ps1 -GameId bs2 exige BasePayloadDirectory (23 archivos aceptados de
-0.2.11) y herramientas WiX verificadas. Build-Bundle.ps1 incorpora después
-ese candidato y el MSI BS1 exacto. Test-Msi exige ManifestPath de una familia
-aislada; Test-LegacyMigration cubre las betas BS2 Format=3 / 0.1.0 y 0.1.1.
-Las copias BS2 viven en BioshockVR\bs2\WindowsInstaller y su registro/familia
-no comparten identidad con BS1. [Guía vigente](../../docs/INTEGRATION-0.2.13.md).
+Historically, `Build-Msi.ps1 -GameId bs2` required BasePayloadDirectory (23 accepted 0.2.11 files) and verified WiX tools. Build-Bundle.ps1 then embedded that candidate and the exact BS1 MSI. Test-Msi requires an isolated-family ManifestPath; Test-LegacyMigration covers BS2 Format=3 betas 0.1.0/0.1.1. BS2 backups live under BioshockVR\bs2\WindowsInstaller; registry/product identities are separate from BS1. [Historical integration](../../docs/INTEGRATION-0.2.13.md).
 
-## Referencia histórica del MSI BS1 0.2.11
+## Historical BS1 0.2.11 MSI
 
-Paquete MSI por usuario para BioShock 1 Remastered. Instala el mod completo
-en `Build\Final`, registra su mantenimiento en Aplicaciones de Windows y crea
-un acceso directo de escritorio si se deja marcada la casilla
-«Crear acceso directo en tu escritorio» (marcada por defecto). La elección
-se conserva en las reparaciones. No ejecuta el lanzador ni el juego.
-La pantalla final explica dónde y cómo abrirlo, con instrucciones diferentes
-según se haya creado el acceso. El texto del runtime solo muestra
-«Incluye NVIDIA DLSS 310.7.0.0.».
+Per-user package for BioShock 1 Remastered. Installs the complete mod in `Build\Final`, registers maintenance in Windows Apps and creates a desktop shortcut if the default-enabled checkbox is selected. Repair preserves that choice. Neither launcher nor game is automatically started. Final instructions differ according to shortcut creation. Runtime text only states that NVIDIA DLSS 310.7.0.0 is included.
 
-La 0.2.11 incluye la corrección de recuperación del estéreo, pendiente de
-confirmación en visor. Lleva ProductCode y versión nuevos para actualizar
-0.2.10 sin el error 1638. El mismo archivo MSI admite reparación/reinstalación.
+Version 0.2.11 included stereo recovery, then pending headset confirmation. A new ProductCode/version upgraded 0.2.10 without error 1638. The same MSI supports repair/reinstallation.
 
-La ruta se obtiene, en este orden, de la selección explícita, la instalación
-MSI registrada, el manifiesto del instalador anterior y las bibliotecas de
-Steam. Varias copias compatibles sin una selección previa dejan la decisión
-al usuario. La carpeta raíz del juego se normaliza a `Build\Final`.
+Path priority: explicit selection, registered MSI installation, previous-installer manifest, Steam libraries. Multiple compatible copies without a prior selection require the user's choice. A game root is normalized to `Build\Final`.
 
-## Construcción
+## Historical build
 
-Requisitos: MSVC 2022 x86, CMake, .NET Framework 4.7.2 o superior, runtime
-.NET 6 para las herramientas WiX 6.0.2. No hace falta instalar un SDK dotnet.
-El payload base local se importa con las herramientas existentes del proyecto;
-no se obtiene de una carpeta completa del juego ni se añade al repositorio.
+Requirements: MSVC 2022 x86, CMake, .NET Framework 4.7.2+, .NET 6 runtime for WiX 6.0.2; no dotnet SDK required. Existing project tools import the local base payload, not a full game folder. The payload is not committed.
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```powershell
 cmake --preset stable-win32
@@ -46,111 +24,42 @@ cmake --build --preset stable --parallel 4 --target bioshockvr
 & .\installer\msi\Build-Msi.ps1
 ```
 
-El script verifica las cuatro optimizaciones, desactiva los tres modos de
-diagnóstico, compila el lanzador y crea `artifacts/stable-0.2.11/*.msi` con
-su manifiesto SHA-256. Incluye el host de distribución y NVIDIA 310.7.0.0.
-La primera ejecución descarga herramientas WiX fijadas a 6.0.2 de NuGet y
-el código fuente/licencia de ese tag oficial; se conservan sus avisos MS-RL.
-Las condiciones de uso de las herramientas están en su `OSMFEULA.txt`.
+The historical script checked all four optimizations, disabled three diagnostic modes, built the launcher and produced `artifacts/stable-0.2.11/*.msi` plus SHA-256 manifest. It included the distribution host and NVIDIA 310.7.0.0. First use downloaded WiX pinned to 6.0.2 from NuGet and the official tag's source/license, retaining MS-RL notices. Tool terms are in `OSMFEULA.txt`.
 
-Una versión entregada es inmutable: cuando existe su
-`release/SHA256SUMS-v<versión>.txt`, el script impide regenerar su MSI público.
-Los cambios, incluso de interfaz, deben llevar versión nueva. Cambiar solo
-PackageCode manteniendo ProductCode y versión requiere mecanismos de pequeña
-actualización que no sirven como instalación normal con doble clic; fue el
-origen del aviso 1638 en la revisión de interfaz de 0.2.10. Usamos una
-[actualización mayor MSI](https://learn.microsoft.com/en-us/windows/win32/msi/major-upgrades)
-con ProductCode nuevo y UpgradeCode compartido; no se pide al usuario que
-desinstale primero ni se manipula su registro para evitar el control de Windows.
+Delivered versions are immutable: an existing `release/SHA256SUMS-v<version>.txt` blocks regeneration of that public MSI. Even UI changes require a new version. Changing only PackageCode while retaining ProductCode/version needs small-update mechanisms unsuitable for normal double-click installation; this caused 1638 in the 0.2.10 UI revision. We use an [MSI major upgrade](https://learn.microsoft.com/en-us/windows/win32/msi/major-upgrades) with a new ProductCode/shared UpgradeCode. Users need not uninstall first; registry data is not manipulated to evade Windows checks.
 
-## Verificación aislada
+## Isolated validation
 
 ```powershell
-& .\installer\msi\Test-Msi.ps1 -GameExeSource 'E:\ruta\Build\Final\BioshockHD.exe'
+& .\installer\msi\Test-Msi.ps1 -GameExeSource 'E:\path\Build\Final\BioshockHD.exe'
 ```
 
-El ejecutable se COPIA a una carpeta temporal única; nunca se incluye en el
-MSI ni se inicia. Se redirigen la configuración, las copias y el escritorio
-al fixture de prueba. La prueba se niega a sustituir una instalación MSI real
-registrada. Cubre instalación limpia, valores predeterminados, reparación, preservación de
-ajustes, desinstalación, fallo controlado con rollback y recuperación del mod
-anterior. Comprueba también los hashes de la instalación e INI reales.
+The executable is COPIED to a unique temporary directory, never included in the MSI or launched. Configuration, backups and desktop are redirected to fixtures. Tests refuse to replace a registered real MSI installation. Coverage includes clean install, defaults, repair, preference preservation, uninstall, controlled rollback and previous-mod recovery. Real installation/INI hashes are also checked.
 
-La versión 0.2.10 mantiene el lanzador compacto, el acceso directo versionado,
-el progreso separado de su barra y las cuatro optimizaciones. En el visor la
-resolución cambia exactamente 100 píxeles y la calidad DLSS usa una lista de
-5 puntos porcentuales. F4 continúa limitado a la página gráfica.
-Las notas deben existir antes de empaquetar.
-La publicación y la prueba final en visor son pasos aparte.
+Version 0.2.10 retained the compact launcher, versioned shortcut, progress text separate from its bar and four optimizations. Headset resolution changes by exactly 100 pixels; DLSS quality uses 5-percentage-point steps. F4 remains graphics-page-only. Notes must exist before packaging. Publication and final headset testing are separate steps.
 
-Para probar con un producto real registrado se construyen paquetes de prueba
-con `Build-Msi.ps1 -TestFamily <32 caracteres hexadecimales>`. La familia de
-prueba cambia ProductCode, UpgradeCode, todos los GUID de componentes y la
-clave de registro; no comparte ninguno con el MSI de distribución. Sus acciones
-rechazan cualquier destino que no sea su carpeta privada `BvrMsiTest-<familia>`.
-Estos paquetes nunca se distribuyen ni se colocan junto al instalador público.
+With a real product registered, build tests with `Build-Msi.ps1 -TestFamily <32 hexadecimal characters>`. This changes ProductCode, UpgradeCode, all component GUIDs and registry keys; none are shared with distribution. Actions reject targets outside private `BvrMsiTest-<family>` directories. These packages are never distributed or placed beside the public installer.
 
-`Test-Msi.ps1 -ManifestPath <manifiesto aislado> -FixtureBase X:\BibliotecaSteam`
-prueba en la misma unidad del fallo sin entrar en la instalación real.
-`-UpgradeManifestPath <manifiesto nuevo de la misma familia>` verifica la
-actualización con los hashes del payload nuevo, no con los antiguos. Un MSI
-de la familia real sigue siendo rechazado si hay una instalación registrada.
-El test comprueba también que el registro y los archivos reales no cambian.
-`-ReproducePackageCollision`, solo con una familia aislada, copia el MSI
-antiguo y cambia su PackageCode para reproducir 1638; no toca el original.
-La batería de actualización verifica después la instalación normal de la
-versión nueva y la reinstalación de ese mismo archivo, incluidos los accesos.
-`-TestShortcutChoice` añade instalación sin acceso, reparación conservando
-esa elección, activación/desactivación y recuperación si falla cualquiera
-de esos cambios. La propiedad de instalación silenciosa
-`BVR_DESKTOPSHORTCUT=0` desactiva el acceso; `=1` lo activa. En la interfaz
-la casilla desmarcada deja la propiedad vacía y el marcador de inicialización
-evita que la secuencia de ejecución la vuelva a activar por defecto.
-Los directorios y logs privados se conservan como evidencia; los productos
-MSI de prueba se desinstalan al terminar.
+`Test-Msi.ps1 -ManifestPath <isolated manifest> -FixtureBase X:\SteamLibrary` tests the affected drive without entering the real installation.
+`-UpgradeManifestPath <new manifest in the same family>` checks upgrade against NEW payload hashes, not old ones. Real-family MSIs are rejected when an installation is registered. Real registry/files must remain unchanged.
+`-ReproducePackageCollision`, only for isolated families, copies the old MSI and changes its PackageCode to reproduce 1638 without touching the original. The upgrade suite then tests normal installation of the new version and same-file reinstallation, including shortcuts.
+`-TestShortcutChoice` adds no-shortcut install, choice-preserving repair, enabling/disabling and recovery from either failed change. Silent `BVR_DESKTOPSHORTCUT=0` disables the shortcut; `=1` enables it. The UI's unchecked box leaves the property empty; an initialization marker prevents execution from reenabling it by default.
+Private directories/logs remain as evidence; test products are uninstalled at completion.
 
-`Test-MsiPresentation.ps1` comprueba el MSI en modo solo lectura: diálogo
-activo, ausencia de solapamientos, versión y destino del acceso, retirada
-de su nombre antiguo y compatibilidad de rutas de copias anteriores. Puede
-ejecutarse aunque exista una instalación real, porque no instala nada.
-`Preview-Progress.cs` es una utilidad de desarrollo que usa exclusivamente
-las API de vista previa de MSI y se cierra al cabo de 60 segundos. No se
-incluye en el instalador. La prueba visual se realiza con una copia del MSI
-con un texto de estado de ejemplo de varias líneas.
+`Test-MsiPresentation.ps1` reads the MSI without installation: active dialog, overlap checks, shortcut version/target, old-name removal and previous backup path compatibility. It is safe with a real product installed.
+`Preview-Progress.cs` is a development-only MSI preview API helper that exits after 60 seconds. It is not shipped. Visual tests use an MSI copy with sample multiline status text.
 
-## Corrección de 1926 / error 5
+## Error 1926 / error 5 fix
 
-Reproducido con el algoritmo 0.2.9 en una carpeta aislada de E:, usando el
-mismo usuario sin elevar. Windows Installer intentaba proteger los `.rbf`
-generados al retirar archivos existentes en `E:\Config.Msi`; el usuario puede
-modificar la carpeta del juego, pero no administrar esa carpeta del sistema.
+Reproduced with the 0.2.9 algorithm in an isolated E: folder under the same nonelevated user. Windows Installer tried protecting `.rbf` files created while removing existing files in `E:\Config.Msi`; the user could modify the game folder but not administer this system folder.
 
-0.2.10 guarda primero la instantánea recuperable, verifica todos sus hashes
-y que los destinos no hayan cambiado, y retira únicamente los archivos de
-esa lista antes de las acciones estándar RemoveFiles/InstallFiles. La acción
-incluye el acceso directo exacto de la versión registrada anterior, también
-cuando el escritorio se encuentra en otra unidad. La acción
-RollbackFiles ya está programada antes de la retirada. Windows Installer sigue
-gestionando y recuperando sus archivos nuevos, accesos, registro y actualización
-del producto anterior. No se desactiva rollback, no se cambia ALLUSERS, no se
-elevan privilegios y no se tocan las ACL de Config.Msi.
+Version 0.2.10 first saves a recoverable snapshot, verifies all hashes and unchanged destinations, then removes only listed files before standard RemoveFiles/InstallFiles. The action includes the exact previously registered shortcut, including desktops on another drive. RollbackFiles is already scheduled before removal. Windows Installer still manages/recover its new files, shortcuts, registry and previous-product upgrade. Rollback is not disabled, ALLUSERS is not changed, privileges are not elevated by this fix, and Config.Msi ACLs are untouched.
 
-Se comprueba tanto el fallo justo después de retirar los archivos como el
-fallo después de copiarlos. Un código MSI 0 no basta: la prueba falla si el
-registro del paquete corregido contiene Error 1926.
-Referencia del mecanismo estándar: [Rollback Installation de Microsoft](https://learn.microsoft.com/en-us/windows/win32/msi/rollback-installation).
+Tests cover failure immediately after removal and after copying. MSI code 0 alone is insufficient: Error 1926 in the corrected package's log fails the test.
+Standard mechanism: [Microsoft Rollback Installation](https://learn.microsoft.com/en-us/windows/win32/msi/rollback-installation).
 
-## Recuperación
+## Recovery
 
-Antes de sustituir archivos se guarda una instantánea recuperable. El MSI
-restaura byte a byte el estado anterior si falla. Al desinstalar recupera los
-archivos que había antes del primer MSI, deja los INI personales y conserva
-las copias en `%LOCALAPPDATA%\BioshockVR\WindowsInstaller`.
+A recoverable snapshot precedes replacement. On failure the MSI restores the prior state byte for byte. Uninstall restores files from before the first MSI, leaves personal INIs and retains backups in `%LOCALAPPDATA%\BioshockVR\WindowsInstaller` (BS2 uses its separate bs2 subtree).
 
-Una instalación nueva aplica los predeterminados a las nueve opciones de
-`Engine.RenderConfig` ensayadas, cuando ya existe el INI del juego:
-`RealTimeReflection` y `UseRippleSystem` en False, `FluidSurfaceDetail` en High
-y el resto en True. Una
-actualización o reparación conserva las preferencias existentes. Reparar
-vuelve a instalar NVIDIA 310.7.0.0; una DLL x64 alternativa no dispara
-reparación automática ni bloquea el lanzamiento por su número de versión.
+A fresh install applies defaults to the nine tested `Engine.RenderConfig` options when the game INI exists: `RealTimeReflection` and `UseRippleSystem=False`, `FluidSurfaceDetail=High`, others True. Upgrade/repair preserves preferences. Repair reinstalls NVIDIA 310.7.0.0; an alternative x64 DLL does not trigger automatic repair or block launch merely because of its version.

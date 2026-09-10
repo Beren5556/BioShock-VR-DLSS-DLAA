@@ -49,7 +49,7 @@ namespace BioShockMsi
         public static string CreateMsiMigrationFixture(string root) {
             if(!System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(root.TrimEnd('\\')),
                 @"\ABvrMsiTest-[a-f0-9]{32}\z"))
-                throw new InvalidDataException("Solo se pueden crear fixtures MSI aislados.");
+                throw new InvalidDataException("Only isolated MSI fixtures may be created.");
             string text;return MigrationFixture(root,out text)["Legacy"];
         }
         public static string CreateNamedBetaMsiFixture(string root, bool existed) {

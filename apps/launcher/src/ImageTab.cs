@@ -18,15 +18,15 @@ namespace BioshockVrLauncher
         private readonly Dictionary<string, ComboBox> _graphicsOptions = new Dictionary<string, ComboBox>();
         // Nine tested settings; defaults disable the two largest observed costs.
         private static readonly string[][] ImageGraphics = new string[][] {
-            new string[] { "HighDetailShaders", "Shaders de alto detalle", "" },
-            new string[] { "Shadows", "Sombras", "Moderado impacto en rendimiento" },
-            new string[] { "RealTimeReflection", "Reflejos", "Alto impacto en rendimiento" },
-            new string[] { "PostProcessing", "Posprocesado", "" },
-            new string[] { "UseRippleSystem", "Ondulaciones del agua", "Moderado impacto en rendimiento" },
-            new string[] { "UseHighDetailSoftParticles", "Partículas de alta calidad", "" },
-            new string[] { "UseDistortion", "Distorsión", "" },
-            new string[] { "UseHighDetailPostProcEffects", "Posprocesado de alta calidad", "" },
-            new string[] { "FluidSurfaceDetail", "Detalle de fluidos", "" }
+            new string[] { "HighDetailShaders", "High-detail shaders", "" },
+            new string[] { "Shadows", "Shadows", "Moderate performance impact" },
+            new string[] { "RealTimeReflection", "Reflections", "High performance impact" },
+            new string[] { "PostProcessing", "Post-processing", "" },
+            new string[] { "UseRippleSystem", "Water ripples", "Moderate performance impact" },
+            new string[] { "UseHighDetailSoftParticles", "High-quality particles", "" },
+            new string[] { "UseDistortion", "Distortion", "" },
+            new string[] { "UseHighDetailPostProcEffects", "High-quality post-processing", "" },
+            new string[] { "FluidSurfaceDetail", "Fluid detail", "" }
         };
 
         private static int GraphicsDefault(string key)
@@ -70,7 +70,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(content);
 
             GroupBox image = new GroupBox();
-            image.Text = "Imagen del visor";
+            image.Text = "Headset image";
             image.Dock = DockStyle.Fill;
             image.AutoSize = true;
             image.Padding = new Padding(8, 3, 8, 6);
@@ -82,7 +82,7 @@ namespace BioshockVrLauncher
             fields.ColumnCount = 4;
             for (int i = 0; i < 4; i++) fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
             image.Controls.Add(fields);
-            string[] labels = { "Resolución del visor", "Modo de renderizado", "Calidad DLSS", "Resolución interna" };
+            string[] labels = { "Headset resolution", "Render mode", "DLSS quality", "Internal resolution" };
             for (int i = 0; i < labels.Length; i++)
             {
                 Label label = MakeCompactLabel(labels[i]);
@@ -96,7 +96,7 @@ namespace BioshockVrLauncher
             _dlssOutputWidth.Dock = DockStyle.Fill;
             _dlssOutputWidth.Margin = new Padding(0, 0, 8, 0);
             fields.Controls.Add(_dlssOutputWidth, 0, 1);
-            _toolTip.SetToolTip(_dlssOutputWidth, "Píxeles por lado y por ojo. Se aplica el mismo valor a la anchura y la altura.");
+            _toolTip.SetToolTip(_dlssOutputWidth, "Pixels per side, per eye. The same value is used for width and height.");
 
             // Keep existing mode indices so the proven persistence logic is unchanged.
             _dlssMode.Items.Clear();
@@ -111,7 +111,7 @@ namespace BioshockVrLauncher
             _imageQuality.Margin = new Padding(0, 0, 8, 0);
             _imageQuality.SelectedIndexChanged += ImageQualityChanged;
             fields.Controls.Add(_imageQuality, 2, 1);
-            _toolTip.SetToolTip(_imageQuality, "Cada tramo cambia 100 píxeles de resolución interna por lado. El porcentaje se calcula respecto a la salida del visor.");
+            _toolTip.SetToolTip(_imageQuality, "Each step changes internal resolution by 100 pixels per side. The percentage is relative to headset output.");
 
             _imageInternalResolution = new TextBox();
             _imageInternalResolution.ReadOnly = true;
@@ -127,9 +127,9 @@ namespace BioshockVrLauncher
             fields.SetColumnSpan(_imageHint, 4);
             Label inGame = new Label();
             inGame.Text = GameProfile.IsBioShock2
-                ? "F1: menú del visor · F2: anterior / − · F3: siguiente / +\nGráficos del juego: cámbialos aquí, guarda y reinicia."
-                : "F1 abre el menú en el visor y navega por las opciones disponibles.\n" +
-                  "F2: anterior / − · F3: siguiente / + · En opciones gráficas, F4 cambia el valor.";
+                ? "F1: headset menu · F2: previous / − · F3: next / +\nGame graphics: change them here, save and restart."
+                : "F1 opens the headset menu and cycles through its pages.\n" +
+                  "F2: previous / − · F3: next / + · In graphics options, F4 toggles the value.";
             inGame.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             inGame.AutoSize = true;
             inGame.Margin = new Padding(0, 5, 0, 0);
@@ -138,7 +138,7 @@ namespace BioshockVrLauncher
             fields.Controls.Add(_imageHint, 0, 3);
 
             GroupBox effects = new GroupBox();
-            effects.Text = "Opciones gráficas del juego";
+            effects.Text = "Game graphics options";
             effects.Dock = DockStyle.Fill;
             effects.AutoSize = true;
             effects.Padding = new Padding(8, 3, 8, 5);
@@ -186,28 +186,28 @@ namespace BioshockVrLauncher
                 choice.Dock = DockStyle.Fill;
                 choice.Margin = new Padding(0, 1, column == 0 ? 14 : 0, 1);
                 choice.Items.AddRange(definition[0] == "FluidSurfaceDetail"
-                    ? new object[] { "Bajo", "Alto" } : new object[] { "Desactivado", "Activado" });
+                    ? new object[] { "Low", "High" } : new object[] { "Off", "On" });
                 choice.SelectedIndex = GraphicsDefault(definition[0]);
                 choice.SelectedIndexChanged += GraphicsOptionChanged;
                 _graphicsOptions.Add(definition[0], choice);
                 options.Controls.Add(choice, column + 1, displayRow);
             }
             Label impact = new Label();
-            impact.Text = "* Alto impacto en el Rendimiento";
+            impact.Text = "* High performance impact";
             impact.AutoSize = true;
             impact.ForeColor = Color.Red;
             impact.Margin = new Padding(0, 4, 0, 0);
             options.Controls.Add(impact, 0, 5);
             options.SetColumnSpan(impact, 4);
             Button defaults = new Button();
-            defaults.Text = "Valores predeterminados";
+            defaults.Text = "Defaults";
             defaults.AutoSize = true;
             defaults.UseVisualStyleBackColor = true;
             defaults.Margin = new Padding(0, 5, 0, 0);
             defaults.Click += delegate { ApplyGraphicsDefaults(); };
             options.Controls.Add(defaults, 0, 6);
             Label defaultsHint = new Label();
-            defaultsHint.Text = "Reflejos y ondulaciones desactivados; resto activado.";
+            defaultsHint.Text = "Reflections and ripples off; other effects on.";
             defaultsHint.AutoSize = true;
             defaultsHint.ForeColor = Muted;
             defaultsHint.Anchor = AnchorStyles.Left;
@@ -273,12 +273,12 @@ namespace BioshockVrLauncher
                 _imageQuality.Enabled = hasRender && sr && _dlssMode.Enabled;
                 _dlssOutputWidth.Enabled = hasRender && _dlssMode.Enabled;
                 _imageInternalResolution.Text = hasRender
-                    ? renderWidth + " × " + renderHeight : "Pendiente";
+                    ? renderWidth + " × " + renderHeight : "Pending";
                 _imageHint.Text = !hasRender
-                    ? "Abre el juego una primera vez sin el mod y ciérralo; después pulsa Recargar."
+                    ? "Run the game once without the mod and close it, then click Reload."
                     : !string.IsNullOrEmpty(_dlssLoadWarning)
-                        ? "Revisa la configuración de imagen: " + _dlssLoadWarning
-                        : "Resolución cuadrada por ojo. Guarda los cambios con el juego cerrado.";
+                        ? "Check image settings: " + _dlssLoadWarning
+                        : "Square resolution per eye. Save changes with the game closed.";
                 _imageHint.Visible = !hasRender || !string.IsNullOrEmpty(_dlssLoadWarning);
             }
             finally { _refreshingSimpleImage = false; }
@@ -326,7 +326,7 @@ namespace BioshockVrLauncher
                     pair.Value.SelectedIndex = selected;
                     pair.Value.Enabled = valid;
                     _toolTip.SetToolTip(pair.Value, valid ? string.Empty :
-                        "Ajuste no disponible en la configuración actual; no se modifica automáticamente.");
+                        "Setting unavailable in the current configuration; it will not be changed automatically.");
                 }
             }
             finally { _loadingGraphics = false; }
@@ -382,7 +382,7 @@ namespace BioshockVrLauncher
             using (MainForm form = new MainForm(true))
             {
                 form.InitializeImageFixture();
-                if (form._tabs.TabPages.Count != 7 || form._tabs.TabPages[0].Text != "Imagen" ||
+                if (form._tabs.TabPages.Count != 7 || form._tabs.TabPages[0].Text != "Image" ||
                     form._graphicsOptions.Count != 9 || !form._imageInternalResolution.ReadOnly) return false;
                 if (form._imageQuality.SelectedItem == null ||
                     ((PixelQuality)form._imageQuality.SelectedItem).Pixels != 2150 ||
@@ -462,9 +462,9 @@ namespace BioshockVrLauncher
             using (MainForm form = new MainForm(true))
             {
                 form.InitializeImageFixture();
-                form._configStateLabel.Text = "Configuración de ejemplo · no modifica archivos del juego";
+                form._configStateLabel.Text = "Sample configuration · game files unchanged";
                 form._gameStateLabel.Text = GameProfile.DisplayName + " Remastered";
-                form.SetStatus("Vista previa · 0.2.13 · sin modificar archivos del juego", SystemColors.ControlText);
+                form.SetStatus("Preview · 0.2.17 EN · game files unchanged", SystemColors.ControlText);
                 form.ShowInTaskbar = false;
                 form.Opacity = 0;
                 form.Show();

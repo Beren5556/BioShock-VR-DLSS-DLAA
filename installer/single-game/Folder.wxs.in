@@ -3,29 +3,29 @@
   <Fragment>
     <UI Id="GameUI_@Game@">
       <Dialog Id="Folder_@Game@" Width="370" Height="300" Title="[ProductName] [ProductVersion]">
-        <Control Id="Title" Type="Text" X="15" Y="12" Width="340" Height="24" Text="{\WixUI_Font_Title}@DisplayName@ Remastered · mod VR" />
+        <Control Id="Title" Type="Text" X="15" Y="12" Width="340" Height="24" Text="{\WixUI_Font_Title}@DisplayName@ Remastered · VR mod" />
         <Control Id="Description" Type="Text" X="15" Y="42" Width="340" Height="30"
-                 Text="Confirma la carpeta del juego. El lanzador y este mod se instalarán dentro de Build\Final, no en el escritorio." />
-        <Control Id="Label" Type="Text" X="15" Y="79" Width="340" Height="14" Text="Carpeta de @DisplayName@ Remastered" />
+                 Text="Confirm the game directory. The launcher and mod will be installed in Build\Final, not on the desktop." />
+        <Control Id="Label" Type="Text" X="15" Y="79" Width="340" Height="14" Text="@DisplayName@ Remastered folder" />
         <Control Id="Folder" Type="Edit" X="15" Y="97" Width="267" Height="19" Property="BVR_@Upper@_GAMEPATH" />
-        <Control Id="Browse" Type="PushButton" X="287" Y="97" Width="68" Height="19" Text="Explorar…">
+        <Control Id="Browse" Type="PushButton" X="287" Y="97" Width="68" Height="19" Text="Browse…">
           <Publish Property="_BrowseProperty" Value="@Upper@DIR" Order="1" />
           <Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
         </Control>
-        <Control Id="FirstRun" Type="Text" X="15" Y="129" Width="340" Height="30" Text="Antes de instalar por primera vez, abre este juego desde Steam y ciérralo para crear su configuración." />
-        <Control Id="Desktop" Type="CheckBox" X="15" Y="168" Width="340" Height="16" Property="BVR_@Upper@_DESKTOPSHORTCUT" CheckBoxValue="1" Text="Crear acceso directo en el escritorio" />
+        <Control Id="FirstRun" Type="Text" X="15" Y="129" Width="340" Height="30" Text="Before installing for the first time, launch this game from Steam and close it to create its configuration." />
+        <Control Id="Desktop" Type="CheckBox" X="15" Y="168" Width="340" Height="16" Property="BVR_@Upper@_DESKTOPSHORTCUT" CheckBoxValue="1" Text="Create a desktop shortcut" />
         <Control Id="Credits" Type="Text" X="15" Y="221" Width="340" Height="38"
-                 Text="BioShock VR v0.8.2 de Mohamad Balouza. Fork DLSS/DLAA de Beren5556. Incluye NVIDIA DLSS 310.7.0.0, créditos y licencias." />
+                 Text="BioShock VR v0.8.2 by Mohamad Balouza. DLSS/DLAA fork by Beren5556. Includes NVIDIA DLSS 310.7.0.0, credits and licenses." />
         <Control Id="Line" Type="Line" X="0" Y="265" Width="370" Height="0" />
-        <Control Id="Back" Type="PushButton" X="156" Y="273" Width="62" Height="18" Text="Atrás"><Publish Event="NewDialog" Value="SingleOperationDlg" /></Control>
-        <Control Id="Next" Type="PushButton" X="226" Y="273" Width="62" Height="18" Default="yes" Text="Siguiente">
+        <Control Id="Back" Type="PushButton" X="156" Y="273" Width="62" Height="18" Text="Back"><Publish Event="NewDialog" Value="SingleOperationDlg" /></Control>
+        <Control Id="Next" Type="PushButton" X="226" Y="273" Width="62" Height="18" Default="yes" Text="Next">
           <Publish Event="DoAction" Value="ValidateGame_@Game@" Order="1" />
           <Publish Event="SpawnDialog" Value="SuiteErrorDlg" Order="2" Condition="BVR_VALID &lt;&gt; &quot;1&quot;" />
           <Publish Event="SetTargetPath" Value="@Upper@DIR" Order="3" Condition="BVR_VALID = &quot;1&quot;" />
           <Publish Event="DoAction" Value="PlanSingleGame" Order="4" Condition="BVR_VALID = &quot;1&quot;" />
           @Next@
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="296" Y="273" Width="62" Height="18" Cancel="yes" Text="Cancelar"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="296" Y="273" Width="62" Height="18" Cancel="yes" Text="Cancel"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
     </UI>
   </Fragment>

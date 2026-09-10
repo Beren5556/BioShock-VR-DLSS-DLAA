@@ -1,14 +1,15 @@
-## Objetivo
+## Purpose
 
-Describe el cambio observable y por qué pertenece a esta versión del fork.
+Describe the observable change and why it belongs in this fork release.
 
-## Validación
+## Validation
 
-- [ ] Ejecuté scripts/Verify-Repository.ps1 -BuildLauncher.
-- [ ] No añadí archivos del juego, credenciales, payload local ni componentes NVIDIA sueltos.
-- [ ] Documenté cualquier cambio funcional o de compatibilidad.
-- [ ] Si afecta al instalador, completé la batería aislada de docs/TESTING.md.
+- [ ] I ran `scripts/Verify-Repository.ps1 -BuildLauncher`.
+- [ ] I did not add game files, credentials, local payloads or standalone NVIDIA components.
+- [ ] I documented any functionality or compatibility changes.
+- [ ] For installer changes, I completed the isolated tests described in `docs/TESTING.md`.
+- [ ] For English localization, I ran `node scripts/localization/english.mjs verify` and checked text layout.
 
-## Riesgos y restauración
+## Risks and recovery
 
-Indica los riesgos conocidos, la prueba VR manual realizada y cómo revertir el cambio.
+Describe known risks, any manual VR tests performed, and how to reverse the change.

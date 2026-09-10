@@ -1,6 +1,6 @@
 # Architecture
 
-> Este documento conserva la arquitectura detallada de BioShock VR v0.8.2. La ampliación específica del fork DLSS/DLAA se describe en [DLSS-DLAA-ARCHITECTURE.md](DLSS-DLAA-ARCHITECTURE.md).
+> This document preserves the detailed architecture of BioShock VR v0.8.2. Fork-specific DLSS/DLAA extensions are described in [DLSS-DLAA-ARCHITECTURE.md](DLSS-DLAA-ARCHITECTURE.md).
 
 ## Overview
 

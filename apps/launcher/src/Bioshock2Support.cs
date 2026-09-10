@@ -24,22 +24,22 @@ namespace BioshockVrLauncher
     internal static class ResolutionPresets
     {
         internal static readonly ResolutionPreset[] Items = {
-            new ResolutionPreset(0, 0, "Personalizada / actual"),
-            new ResolutionPreset(1920, 1080, "1920 × 1080 · juego plano"),
+            new ResolutionPreset(0, 0, "Custom / current"),
+            new ResolutionPreset(1920, 1080, "1920 × 1080 · flat-screen"),
             new ResolutionPreset(1500, 1500, "1500 × 1500"),
             new ResolutionPreset(1650, 1650, "1650 × 1650"),
             new ResolutionPreset(1800, 1800, "1800 × 1800"),
             new ResolutionPreset(1950, 1950, "1950 × 1950"),
-            new ResolutionPreset(2048, 2048, "2048 × 2048 · equilibrada"),
+            new ResolutionPreset(2048, 2048, "2048 × 2048 · balanced"),
             new ResolutionPreset(2100, 2100, "2100 × 2100"),
             new ResolutionPreset(2250, 2250, "2250 × 2250"),
             new ResolutionPreset(2400, 2400, "2400 × 2400"),
             new ResolutionPreset(2550, 2550, "2550 × 2550"),
-            new ResolutionPreset(2560, 2560, "2560 × 2560 · más nítida"),
+            new ResolutionPreset(2560, 2560, "2560 × 2560 · sharper"),
             new ResolutionPreset(2700, 2700, "2700 × 2700"),
             new ResolutionPreset(2850, 2850, "2850 × 2850"),
             new ResolutionPreset(3000, 3000, "3000 × 3000"),
-            new ResolutionPreset(3072, 3072, "3072 × 3072 · GPU potente"),
+            new ResolutionPreset(3072, 3072, "3072 × 3072 · powerful GPU"),
             new ResolutionPreset(3150, 3150, "3150 × 3150"),
             new ResolutionPreset(3300, 3300, "3300 × 3300"),
             new ResolutionPreset(3450, 3450, "3450 × 3450"),
@@ -47,7 +47,7 @@ namespace BioshockVrLauncher
             new ResolutionPreset(3750, 3750, "3750 × 3750"),
             new ResolutionPreset(3900, 3900, "3900 × 3900"),
             new ResolutionPreset(4050, 4050, "4050 × 4050"),
-            new ResolutionPreset(4096, 4096, "4096 × 4096 · muy exigente")
+            new ResolutionPreset(4096, 4096, "4096 × 4096 · very demanding")
         };
 
         internal static int FindIndex(int width, int height)
@@ -85,11 +85,11 @@ namespace BioshockVrLauncher
                         !string.Equals(entry.Key, "StartupFullscreen", StringComparison.OrdinalIgnoreCase))
                         continue;
                     if (found != null)
-                        throw new InvalidDataException(file + " contiene StartupFullscreen duplicado en [" + section + "].");
+                        throw new InvalidDataException(file + " contains duplicate StartupFullscreen keys in [" + section + "].");
                     found = entry;
                 }
             if (found == null)
-                throw new InvalidDataException(file + " debe contener una única clave StartupFullscreen en [" + section + "].");
+                throw new InvalidDataException(file + " must contain exactly one StartupFullscreen key in [" + section + "].");
             return found;
         }
 
@@ -103,7 +103,7 @@ namespace BioshockVrLauncher
             if (words) return string.Equals(normalized, "True", StringComparison.OrdinalIgnoreCase);
             if (normalized == "1") return true;
             if (normalized == "0") return false;
-            throw new InvalidDataException(file + " contiene StartupFullscreen no válido: usa True/False o 1/0, con ';' final opcional.");
+            throw new InvalidDataException(file + " has an invalid StartupFullscreen value: use True/False or 1/0, optionally followed by ';'.");
         }
 
         private static string WindowedValue(IniEntry entry, string file)
@@ -360,7 +360,7 @@ PlayerSpeargun.wOffUp=-2.10
                 if (item.Kind == ParamKind.Choice)
                     item.DefaultValue = key;
                 if (item.Key == "gameFovDeg")
-                    item.Description = "FOV de respaldo del motor BS2. Con Llenar FOV del visor activado, se usa el campo de visión real de OpenXR.";
+                    item.Description = "Fallback FOV for the BS2 engine. With Fill headset FOV enabled, the actual OpenXR field of view is used.";
                 result.Add(item);
                 added.Add(item.Key);
             }
@@ -375,10 +375,10 @@ PlayerSpeargun.wOffUp=-2.10
                 string field = pair.Key.Substring(pair.Key.IndexOf('.') + 1);
                 bool scale = field == "modScale" || field == "wScale";
                 bool angle = field.IndexOf("Trim", StringComparison.Ordinal) >= 0;
-                ParamDef item = ParamDef.Number(pair.Key, "Armas", FieldLabel(field),
-                    scale ? "Escala visual del perfil de esta arma. 1,00 conserva el tamaño original."
-                          : (angle ? "Corrección angular específica de esta arma." : "Desplazamiento específico de esta arma, en el espacio local del mando."),
-                    scale ? "multiplicador" : angle ? "grados" : "cm",
+                ParamDef item = ParamDef.Number(pair.Key, "Weapons", FieldLabel(field),
+                    scale ? "Visual scale for this weapon profile. 1.00 keeps the original size."
+                          : (angle ? "Weapon-specific angle correction." : "Weapon-specific offset in the controller's local space."),
+                    scale ? "multiplier" : angle ? "degrees" : "cm",
                     scale ? 0.06m : -180m, scale ? 10m : 180m, scale ? 0.01m : 0.1m,
                     scale ? 3 : 2, pair.Value);
                 result.Add(item);
@@ -388,42 +388,42 @@ PlayerSpeargun.wOffUp=-2.10
 
         private static ParamDef MakeAdditional(string key, string value)
         {
-            const string hands = "Manos y apuntado";
-            const string camera = "Cámara y escala";
-            if (key == "fgFovMatch") return ParamDef.Boolean(key, camera, "Armas ajustadas al FOV de la vista",
-                "Sincroniza el campo de visión de manos y armas con el mundo para BioShock 2.", value == "1");
-            if (key == "fillHeadsetFov") return ParamDef.Boolean(key, camera, "Llenar el FOV del visor",
-                "Usa el campo de visión completo comunicado por OpenXR.", value == "1");
-            if (key == "fgFovManual") return ParamDef.Number(key, camera, "FOV manual de manos y armas",
-                "Valor avanzado. 0 conserva el ajuste automático; se usa cuando se desactiva la sincronización del FOV.",
-                "grados", 0, 180, 1, 1, value);
-            if (key == "armsMode") return ParamDef.Choice(key, hands, "Comportamiento de los brazos",
-                "Brazos originales, acompañando los mandos, u ocultos.",
-                new string[] {"0 · Original", "1 · Seguir mandos", "2 · Ocultar"}, 1);
-            if (key == "ammoMod") return ParamDef.Choice(key, "Movimiento y giro", "Modificador de selección de munición",
-                "Botón modificador utilizado para seleccionar munición con los controles de BioShock 2.",
-                new string[] {"0 · Pulsación de palanca", "1 · Apoyo del pulgar", "2 · Ambos"}, int.Parse(value, CultureInfo.InvariantCulture));
-            if (key == "originOn") return ParamDef.Boolean(key, hands, "Disparos desde los mandos",
-                "Sitúa el origen de los disparos en la mano correspondiente.", value == "1");
-            if (key == "scaleWeapon") return ParamDef.Boolean(key, hands, "Escalar el arma con la mano",
-                "Aplica al arma adjunta la escala de la mano; puede combinarse con la escala propia del arma.", value == "1");
-            if (key == "animMode") return ParamDef.Boolean(key, hands, "Animaciones originales en las manos",
-                "Conserva las animaciones del juego, como recargar o atacar, mientras las manos siguen los mandos.", value == "1");
-            if (key == "animTrans") return ParamDef.Number(key, hands, "Recorrido de animación de las manos",
-                "Cantidad de desplazamiento original de la muñeca que se conserva. 0 mantiene la posición del mando.",
-                "proporción", 0, 1, 0.05m, 2, value);
+            const string hands = "Hands and aiming";
+            const string camera = "Camera and scale";
+            if (key == "fgFovMatch") return ParamDef.Boolean(key, camera, "Match weapons to view FOV",
+                "Synchronize the hand and weapon field of view with the world in BioShock 2.", value == "1");
+            if (key == "fillHeadsetFov") return ParamDef.Boolean(key, camera, "Fill headset FOV",
+                "Use the full field of view reported by OpenXR.", value == "1");
+            if (key == "fgFovManual") return ParamDef.Number(key, camera, "Manual hand and weapon FOV",
+                "Advanced setting. 0 keeps automatic adjustment; used when FOV synchronization is disabled.",
+                "degrees", 0, 180, 1, 1, value);
+            if (key == "armsMode") return ParamDef.Choice(key, hands, "Arm behavior",
+                "Original arms, controller-following arms, or hidden arms.",
+                new string[] {"0 · Original", "1 · Follow controllers", "2 · Hidden"}, 1);
+            if (key == "ammoMod") return ParamDef.Choice(key, "Movement and turning", "Ammo selection modifier",
+                "Modifier button used to select ammunition with BioShock 2 controls.",
+                new string[] {"0 · Stick press", "1 · Thumb rest", "2 · Both"}, int.Parse(value, CultureInfo.InvariantCulture));
+            if (key == "originOn") return ParamDef.Boolean(key, hands, "Fire from controllers",
+                "Place each shot's origin at the corresponding hand.", value == "1");
+            if (key == "scaleWeapon") return ParamDef.Boolean(key, hands, "Scale weapon with hand",
+                "Apply hand scale to the attached weapon; this can combine with the weapon's own scale.", value == "1");
+            if (key == "animMode") return ParamDef.Boolean(key, hands, "Original hand animations",
+                "Keep game animations, such as reloading or attacking, while hands follow the controllers.", value == "1");
+            if (key == "animTrans") return ParamDef.Number(key, hands, "Hand animation movement",
+                "Amount of original wrist movement retained. 0 keeps the controller position.",
+                "ratio", 0, 1, 0.05m, 2, value);
             if (key == "laserL" || key == "laserR" || key == "dotL" || key == "dotR")
-                return ParamDef.Boolean(key, hands, (key.StartsWith("laser") ? "Láser" : "Punto de mira") +
-                    (key.EndsWith("L") ? " izquierdo" : " derecho"),
-                    "Ayuda de apuntado de la mano correspondiente.", value == "1");
+                return ParamDef.Boolean(key, hands, (key.StartsWith("laser") ? "Laser" : "Aim dot") +
+                    (key.EndsWith("L") ? " left" : " right"),
+                    "Aiming aid for the corresponding hand.", value == "1");
             bool scale = key.IndexOf("Scale", StringComparison.Ordinal) >= 0;
             bool angle = key.IndexOf("Trim", StringComparison.Ordinal) >= 0;
-            string side = key.EndsWith("L") ? " · izquierda" : key.EndsWith("R") ? " · derecha" : "";
+            string side = key.EndsWith("L") ? " · left" : key.EndsWith("R") ? " · right" : "";
             string baseKey = side.Length > 0 ? key.Substring(0, key.Length - 1) : key;
             return ParamDef.Number(key, hands, FieldLabel(baseKey) + side,
-                angle ? "Corrección angular del modelo de la mano; es independiente de la dirección real del disparo."
-                      : "Desplazamiento visual local del modelo; los perfiles de arma pueden sustituir estos valores.",
-                scale ? "multiplicador" : angle ? "grados" : "cm",
+                angle ? "Hand model angle correction; independent of the actual shot direction."
+                      : "Local visual model offset; weapon profiles can override these values.",
+                scale ? "multiplier" : angle ? "degrees" : "cm",
                 scale ? 0.06m : -180m, scale ? 10m : 180m, scale ? 0.01m : 0.1m, scale ? 3 : 2, value);
         }
 
@@ -431,22 +431,22 @@ PlayerSpeargun.wOffUp=-2.10
         {
             switch (field)
             {
-                case "aimTrimPitch": return "Apuntado · inclinación";
-                case "aimTrimYaw": return "Apuntado · giro";
-                case "aimPosFwd": return "Origen disparo · delante";
-                case "aimPosRight": return "Origen disparo · lateral";
-                case "aimPosUp": return "Origen disparo · altura";
-                case "modTrimPitch": case "handTrimPitch": return "Modelo mano · inclinación";
-                case "modTrimYaw": case "handTrimYaw": return "Modelo mano · giro";
-                case "modTrimRoll": case "handTrimRoll": return "Modelo mano · rotación lateral";
-                case "modOffFwd": case "handOffFwd": return "Modelo mano · delante";
-                case "modOffRight": case "handOffRight": return "Modelo mano · lateral";
-                case "modOffUp": case "handOffUp": return "Modelo mano · altura";
-                case "modScale": return "Escala de la mano";
-                case "wScale": return "Escala del arma";
-                case "wOffFwd": return "Arma · delante";
-                case "wOffRight": return "Arma · lateral";
-                case "wOffUp": return "Arma · altura";
+                case "aimTrimPitch": return "Aim · pitch";
+                case "aimTrimYaw": return "Aim · yaw";
+                case "aimPosFwd": return "Shot origin · forward";
+                case "aimPosRight": return "Shot origin · right";
+                case "aimPosUp": return "Shot origin · up";
+                case "modTrimPitch": case "handTrimPitch": return "Hand model · pitch";
+                case "modTrimYaw": case "handTrimYaw": return "Hand model · yaw";
+                case "modTrimRoll": case "handTrimRoll": return "Hand model · roll";
+                case "modOffFwd": case "handOffFwd": return "Hand model · forward";
+                case "modOffRight": case "handOffRight": return "Hand model · sideways";
+                case "modOffUp": case "handOffUp": return "Hand model · height";
+                case "modScale": return "Hand scale";
+                case "wScale": return "Weapon scale";
+                case "wOffFwd": return "Weapon · forward";
+                case "wOffRight": return "Weapon · right";
+                case "wOffUp": return "Weapon · up";
                 default: return field;
             }
         }
@@ -456,17 +456,17 @@ PlayerSpeargun.wOffUp=-2.10
             "PlayerResearchVideoCamera", "PlayerRivetGun", "PlayerShotgun", "PlayerSpeargun"
         };
         internal static readonly string[] WeaponNames = {
-            "Herramienta de pirateo", "Taladro", "Lanzagranadas", "Ametralladora",
-            "Cámara de investigación", "Remachadora", "Escopeta", "Lanzarpones"
+            "Hack tool", "Drill", "Grenade launcher", "Machine gun",
+            "Research camera", "Rivet gun", "Shotgun", "Spear gun"
         };
 
         internal static bool VerifyExecutable(string path, out string problem)
         {
             problem = null;
             if (!File.Exists(path) || !string.Equals(Path.GetFileName(path), ExeName, StringComparison.OrdinalIgnoreCase))
-                problem = "Selecciona Bioshock2HD.exe de BioShock 2 Remastered.";
+                problem = "Select Bioshock2HD.exe from BioShock 2 Remastered.";
             else if (!string.Equals(Hash(path), ExeHash, StringComparison.OrdinalIgnoreCase))
-                problem = "La versión de Bioshock2HD.exe no coincide con la compilación Steam compatible (build 8552776). Verifica los archivos del juego en Steam.";
+                problem = "Bioshock2HD.exe does not match the supported Steam version (build 8552776). Verify the game files in Steam.";
             return problem == null;
         }
         internal static string Hash(string path)
@@ -505,7 +505,7 @@ PlayerSpeargun.wOffUp=-2.10
                     item.Existed = File.Exists(item.PathName);
                     string actual = item.Existed ? File.ReadAllText(item.PathName, item.Encoding) : "";
                     if (actual != item.Expected)
-                        throw new IOException(System.IO.Path.GetFileName(item.PathName) + " cambió externamente. Recarga antes de guardar.");
+                        throw new IOException(System.IO.Path.GetFileName(item.PathName) + " was changed externally. Reload before saving.");
                     if (actual == item.Content && item.Existed) continue;
                     Directory.CreateDirectory(System.IO.Path.GetDirectoryName(item.PathName));
                     if (item.Existed)
@@ -518,13 +518,13 @@ PlayerSpeargun.wOffUp=-2.10
                             Guid.NewGuid().ToString("N").Substring(0, 8) + ".ini");
                         File.Copy(item.PathName, item.Backup, false);
                         if (Bs2Profile.Hash(item.PathName) != Bs2Profile.Hash(item.Backup))
-                            throw new IOException("No se pudo verificar la copia de " + item.PathName);
+                            throw new IOException("Could not verify the backup of " + item.PathName);
                     }
                     item.Temporary = item.PathName + ".lanzador-" + Guid.NewGuid().ToString("N") + ".tmp";
                     changed.Add(item);
                     File.WriteAllText(item.Temporary, item.Content, item.Encoding);
                     if (File.ReadAllText(item.Temporary, item.Encoding) != item.Content)
-                        throw new IOException("Falló la verificación temporal de " + item.PathName);
+                        throw new IOException("Temporary verification failed for " + item.PathName);
                 }
                 foreach (ConfigWrite item in changed)
                 {
@@ -532,13 +532,13 @@ PlayerSpeargun.wOffUp=-2.10
                     if (existsNow != item.Existed ||
                         (existsNow && (File.ReadAllText(item.PathName, item.Encoding) != item.Expected ||
                          Bs2Profile.Hash(item.PathName) != Bs2Profile.Hash(item.Backup))))
-                        throw new IOException("El archivo volvió a cambiar durante el guardado: " + item.PathName);
+                        throw new IOException("The file changed again while saving: " + item.PathName);
                     if (item.Existed) File.Replace(item.Temporary, item.PathName, null, true);
                     else File.Move(item.Temporary, item.PathName);
                     item.Temporary = null;
                     item.Applied = true;
                     if (File.ReadAllText(item.PathName, item.Encoding) != item.Content)
-                        throw new IOException("La lectura final no coincide: " + item.PathName);
+                        throw new IOException("Final readback mismatch: " + item.PathName);
                 }
             }
             catch (Exception original)
@@ -563,10 +563,10 @@ PlayerSpeargun.wOffUp=-2.10
                         else File.Delete(item.PathName);
                     }
                     catch (Exception restoreError)
-                    { rollbackErrors.Add(item.PathName + ": " + restoreError.Message + " Copia: " + item.Backup); }
+                    { rollbackErrors.Add(item.PathName + ": " + restoreError.Message + " Backup: " + item.Backup); }
                 }
                 if (rollbackErrors.Count > 0)
-                    throw new IOException(original.Message + "\nNo se pudo completar la recuperación:\n" + string.Join("\n", rollbackErrors.ToArray()), original);
+                    throw new IOException(original.Message + "\nRecovery could not be completed:\n" + string.Join("\n", rollbackErrors.ToArray()), original);
                 throw;
             }
             finally

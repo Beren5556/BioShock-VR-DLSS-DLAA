@@ -1,35 +1,27 @@
-BIOSHOCK 1-2 VR · DLSS/DLAA 0.2.13 — CANDIDATO LOCAL
-Paquete seleccionado: BioShock 2 Remastered (Steam 409720).
+BIOSHOCK 1-2 VR · DLSS/DLAA 0.2.13 — HISTORICAL LOCAL CANDIDATE
+Selected package: BioShock 2 Remastered (Steam 409720).
 
-Incluye la adaptación VR de BioShock 2, el núcleo DLSS/DLAA, el lanzador
-compacto y NVIDIA DLSS 310.7.0.0. No incluye el juego ni sustituye su EXE.
-BioShock VR v0.8.2 fue creado por Mohamad Balouza / VR-Stereo-Hub.
-Este fork de Beren5556 conserva sus créditos y licencias.
+Includes the BioShock 2 VR adapter, DLSS/DLAA core, compact launcher and NVIDIA DLSS 310.7.0.0. Does not include the game or replace its EXE.
+BioShock VR v0.8.2 was created by Mohamad Balouza / VR-Stereo-Hub.
+This Beren5556 fork retains their credits and licenses.
 
-Antes de instalar, ejecutar el juego una vez desde Steam y cerrarlo.
-Elegir la carpeta Build\Final que contiene Bioshock2HD.exe compatible.
-El lanzador queda en esa carpeta. El escritorio recibe solo un acceso,
-si se marca la casilla. La instalación no abre automáticamente el juego.
+Before installation, run the game once through Steam and close it.
+Choose Build\Final containing the compatible Bioshock2HD.exe.
+The launcher is installed there. The desktop receives only a shortcut, if selected. Installation does not automatically start the game.
 
-El lanzador usa Shared.ini como autoridad de resolución y sincroniza
-Bioshock2SP.ini. Guardar prepara el modo ventana. Solo se cierra al
-comprobar el proceso nuevo correcto y una ventana que responde.
-F1 recorre las páginas de imagen; F2 anterior / menos; F3 siguiente / más.
-Las opciones gráficas de BS2 se cambian en el lanzador: guardar y reiniciar.
-F4 en caliente todavía no está implementado para BS2.
+The launcher treats Shared.ini as the resolution authority and synchronizes Bioshock2SP.ini. Save prepares windowed mode. It closes only after confirming the correct new process and a responsive window.
+F1 cycles image pages; F2 previous/decrease; F3 next/increase.
+BS2 graphics options are changed in the launcher: save and restart.
+Live F4 changes are not implemented for BS2.
 
-Actualizar o reparar conserva preferencias. Reparar reinstala los binarios
-incluidos, entre ellos NVIDIA 310.7.0.0. Las versiones x64 alternativas
-se permiten con aviso, sin garantía de funcionamiento.
-Desinstalar retira los archivos del mod y recupera los originales conocidos.
-La migración beta 0.1.0/0.1.1 verifica sus 21 copias; no utiliza las DLL de
-la beta como originales del juego. Si falta una copia, la migración se
-rechaza. Se conservan las copias y los INI personales; no se tocan partidas.
+Upgrade/repair preserves preferences. Repair reinstalls included binaries, including NVIDIA 310.7.0.0. Alternative x64 versions are allowed with a warning and no guarantee.
+Uninstall removes mod files and restores known originals.
+Migration from beta 0.1.0/0.1.1 verifies all 21 backups; beta DLLs are not treated as original game files. A missing backup rejects migration.
+Backups and personal INIs remain; saves are untouched.
 
-Perfil independiente: %LOCALAPPDATA%\BioshockVR\bs2.
-Copias MSI: %LOCALAPPDATA%\BioshockVR\bs2\WindowsInstaller.
-El producto del 1 se mantiene por separado, con su MSI 0.2.11 aceptado.
+Separate profile: %LOCALAPPDATA%\BioshockVR\bs2.
+MSI backups: %LOCALAPPDATA%\BioshockVR\bs2\WindowsInstaller.
+At this historical stage BS1 remained separate with its accepted 0.2.11 MSI.
 
-Pendiente: prueba de este candidato en visor (rendimiento, agua, modos,
-resolución, estéreo, carga y cierre), coexistencia y otro ordenador.
-No contiene DLSS 5 ni Frame Generation. No es una publicación estable.
+Pending at that stage: headset testing (performance, water, modes, resolution, stereo, loading and exit), coexistence and another computer.
+No DLSS 5 or Frame Generation. This historical candidate was not a stable release.

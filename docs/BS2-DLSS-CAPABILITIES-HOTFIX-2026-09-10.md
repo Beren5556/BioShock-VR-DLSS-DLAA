@@ -1,54 +1,48 @@
-# BS2: bloqueo de DLAA/DLSS tras instalar 0.2.15
+# BS2: DLAA/DLSS blocked after installing 0.2.15
 
-Estado: corregido el perfil del mod instalado; pendiente de confirmar en una nueva ejecución del juego. Por petición de Carlos se prioriza el mod, sin regenerar ni reemplazar el MSI.
+Historical status: installed profile corrected; confirmation in a new game run pending. At Carlos's request, the mod was prioritized without regenerating/replacing the MSI. This fix was subsequently included in 0.2.16.
 
-## Causa comprobada
+## Confirmed cause
 
-El registro `%LOCALAPPDATA%\BioshockVR\bs2\bioshockvr.log` del 10 de septiembre, 18:09:49, lee `mode=dlaa`, salida 2950x2950 y runtime válido 310.7.0.0. Después registra:
+The September 10, 18:09:49 `%LOCALAPPDATA%\BioshockVR\bs2\bioshockvr.log` read `mode=dlaa`, 2950×2950 output and valid runtime 310.7.0.0, then reported that dlss-capabilities.ini did not match the game/DLSS45/two-host/runtime 310.7.0/IPC v8 contract and used native direct copy.
 
-```text
-prepare failed: dlss-capabilities.ini no corresponde al juego, DLSS45, dos hosts, runtime 310.7.0 e IPC v8
-unavailable: desactivado - using native direct copy
-```
+Rejection occurred before launching DLSS hosts. Later requests were rejected too, returning the overlay to the previous mode. September 8 host logs did not belong to this run.
 
-El rechazo ocurre antes de lanzar los hosts DLSS. Las solicitudes posteriores también se rechazan y el overlay vuelve al modo anterior. Los registros de hosts del 8 de septiembre no pertenecen a esta ejecución.
+The installed file was BS1's accepted generic profile without identity. BS2 requires `game=bs2` and `adapter=bioshock2r`, already present in `installer/profiles/bs2/dlss-capabilities.ini`. Payload selection missed them because it compared a backslash path with the base manifest's forward slashes.
 
-El archivo instalado era el perfil genérico aceptado de BS1, sin identidad. El núcleo de BS2 exige `game=bs2` y `adapter=bioshock2r`; esas entradas ya existían en `installer/profiles/bs2/dlss-capabilities.ini`. La selección del payload no las utilizaba porque comparaba una ruta con barras inversas con las barras normales del manifiesto base.
+## Applied change
 
-## Cambio aplicado
-
-Con juego, hosts y lanzador cerrados, se añadieron exclusivamente las dos entradas de identidad al archivo:
+With game, hosts and launcher closed, only the two identity entries were added to:
 
 ```text
 BioShock 2 Remastered\Build\Final\host64\dlss-capabilities.ini
 ```
 
-El resultado coincide byte por byte con el perfil BS2 del repositorio. Copia recuperable del archivo anterior:
+The result matches the repository BS2 profile byte for byte. Recoverable previous copy:
 
 ```text
 artifacts/hotfix-bs2-capabilities-20260910/dlss-capabilities.original.ini
 ```
 
-SHA-256 anterior: `7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77`.
+Previous SHA-256: `7C52BD6F6F186C40CDA847F0E143BDCFF94F0CB9BAC355977C27C2E27B857D77`.
+Corrected SHA-256: `FCB20488F19FB39851FF1683E0C4DA4B4AA71D25B9BE12634AD95BC5AAD5508C`.
 
-SHA-256 corregido: `FCB20488F19FB39851FF1683E0C4DA4B4AA71D25B9BE12634AD95BC5AAD5508C`.
+No binaries, graphics settings, resolution, host caches or BS1 files changed. Normal core preparation copies the correct profile into private per-eye directories. Core validation was not weakened.
 
-No se modificaron binarios, ajustes gráficos, resolución, cachés de los hosts ni archivos de BS1. El núcleo copiará el perfil correcto a los directorios privados por ojo durante la preparación normal. No se ha debilitado la validación del núcleo.
+In source, `installer/msi/Build-Msi.ps1` normalizes separators before selection. `Test-PayloadProfiles.ps1` tests the actual selection loop without copying files or running an installer, and checks profile contracts through Windows INI APIs.
 
-En fuentes, `installer/msi/Build-Msi.ps1` normaliza los separadores antes de seleccionar el perfil. `Test-PayloadProfiles.ps1` prueba el bucle real de selección sin copiar archivos ni ejecutar un instalador, y comprueba el contrato del perfil mediante las API INI de Windows.
+## Verification and remaining work at that point
 
-## Verificación y pendientes
+- 27 checks passed: BS1/BS2 selection with either separator, BS1 profile integrity, cross-profile rejection and installed BS2 profile acceptance.
+- BS2 core/host/runtime, BS1 core/profile and desktop MSI hashes unchanged.
+- Configuration remained DLAA, 2950×2950. The game was not automatically started.
+- New-host startup and DLAA remaining active needed in-game confirmation before testing DLSS.
+- Frozen 0.2.15 MSI/payloads remained untouched and contained the old profile; repair/reinstall could undo this hotfix. The next release needed a rebuilt BS2 payload with the correct profile and this test, not reuse of the defective payload or overwrite of a delivered version.
 
-- 27 comprobaciones correctas: selección BS1/BS2 con ambos separadores, integridad del perfil BS1, rechazo cruzado de perfiles y aceptación del perfil BS2 instalado.
-- Hashes del núcleo/host/runtime de BS2, núcleo/perfil de BS1 y MSI del escritorio iguales a los anteriores a esta intervención.
-- La configuración sigue en DLAA, 2950x2950. No se ha arrancado el juego automáticamente.
-- Falta confirmar que los hosts nuevos arrancan y DLAA se mantiene activo dentro del juego; después se podrá comprobar DLSS.
-- El MSI 0.2.15 y los payloads congelados siguen intactos y contienen el perfil anterior. Una reparación/reinstalación puede deshacer este hotfix. La próxima versión deberá reconstruir el payload BS2 con el perfil corregido, ejecutar esta prueba y usarlo como entrada del MSI único; no reutilizar el payload BS2 defectuoso ni sobrescribir una versión ya entregada.
-
-Para repetir la prueba de perfiles:
+Repeat the profile test:
 
 ```powershell
-./installer/msi/Test-PayloadProfiles.ps1 -BasePayloadDirectory '<payload BS1 aceptado 0.2.11>' -InstalledBs2Directory '<Build\Final de BS2>'
+./installer/msi/Test-PayloadProfiles.ps1 -BasePayloadDirectory '<accepted BS1 0.2.11 payload>' -InstalledBs2Directory '<BS2 Build\Final>'
 ```
 
-Este resultado resuelve la causa identificada de la vuelta inmediata a NORMAL. No constituye todavía validación de imagen, rendimiento ni estabilidad dentro del visor.
+This resolved the identified immediate fallback to NORMAL, but was not yet headset image, performance or stability validation.

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.16',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.17',
     [Parameter(Mandatory=$true)][string]$Bs1PayloadDirectory,
     [string]$Bs1ManifestPath = '',
     [Parameter(Mandatory=$true)][string]$Bs2PayloadDirectory,
@@ -185,12 +185,12 @@ $suitePlan = 'namespace BioShockSuite { internal static class SuitePlan { intern
     '}"; internal const string SelectorProduct = "{' + $productCode + '}"; } }'
 $suitePlanPath = Join-Path $work 'SuitePlan.g.cs'; Write-Generated $suitePlanPath $suitePlan
 $suiteActions = Compile-Actions 'SuiteActions' @((Join-Path $PSScriptRoot 'SuiteActions.cs'), $suitePlanPath) ''
-$suffix = if ($TestFamily) { '-AISLADO' } elseif ($Release) { '' } else { '-CANDIDATO' }
+$suffix = if ($TestFamily) { '-EN-ISOLATED' } elseif ($Release) { '-EN' } else { '-EN-CANDIDATE' }
 $output = Join-Path $outputRoot ("BioShock-1-2-VR-DLSS-DLAA-$Version$suffix.msi")
 $args = @((Join-Path $tools 'wix.6.0.2\tools\net6.0\any\wix.dll'), 'build',
     (Join-Path $PSScriptRoot 'Package.wxs'), (Join-Path $PSScriptRoot 'Interface.wxs')) + @($inputs) +
     @('-ext', (Join-Path $tools 'wixtoolset.ui.wixext.6.0.2\wixext6\WixToolset.UI.wixext.dll'),
-      '-arch','x64','-culture','es-es','-d',"Version=$Version",'-d',"RepoRoot=$repo",'-d',"SuiteActionsDll=$suiteActions",
+      '-arch','x64','-culture','en-us','-d',"Version=$Version",'-d',"RepoRoot=$repo",'-d',"SuiteActionsDll=$suiteActions",
       '-d',"ProductCode=$productCode",'-d',"UpgradeCode=$upgradeCode",
       '-d',("Bs1Product=" + $games.bs1.productCode),'-d',("Bs2Product=" + $games.bs2.productCode),
       '-d',("Bs1Upgrade=" + $games.bs1.legacyUpgradeCode),'-d',("Bs2Upgrade=" + $games.bs2.legacyUpgradeCode),

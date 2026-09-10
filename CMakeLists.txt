@@ -5,8 +5,8 @@ cmake_minimum_required(VERSION 3.21)
 # identity so logs/screenshots never imply that this is an upstream release.
 project(BioshockVR VERSION 0.8.2 LANGUAGES C CXX)
 set(BVR_DISTRIBUTION_NAME "BioShock 1-2 VR DLSS/DLAA")
-set(BVR_DISTRIBUTION_VERSION "0.2.13")
-set(BVR_DISTRIBUTION_BUILD_ID "beren5556-bs12-v0.2.13-candidate2-sr-range-audit")
+set(BVR_DISTRIBUTION_VERSION "0.2.17")
+set(BVR_DISTRIBUTION_BUILD_ID "beren5556-bs12-v0.2.17-english")
 
 # Local DLL-only diagnostic. No installer/launcher/runtime payload is rebuilt.
 option(BVR_PERFORMANCE_PROBE "Enable the temporary BioShock 1 F4 comparison" OFF)
@@ -79,8 +79,8 @@ if(NOT BVR_PERFORMANCE_PROBE AND NOT BVR_LATENCY_PROBE AND NOT BVR_CRITICAL_PATH
        NOT BVR_DLSS_TAIL_OVERLAP OR NOT BVR_DLSS_EARLY_DELIVERY)
         message(FATAL_ERROR "The stable build must retain all four tested performance optimizations")
     endif()
-    set(BVR_DISTRIBUTION_VERSION "0.2.13")
-    set(BVR_DISTRIBUTION_BUILD_ID "beren5556-bs12-v0.2.13-candidate2-sr-range-audit")
+    set(BVR_DISTRIBUTION_VERSION "0.2.17")
+    set(BVR_DISTRIBUTION_BUILD_ID "beren5556-bs12-v0.2.17-english")
 endif()
 
 # BioshockHD.exe is 32-bit x86. Everything we inject must be too.

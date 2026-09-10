@@ -28,7 +28,7 @@ namespace BioShockSuite
         {
             string id=session["BVR_INSTANCE"];
             if (!IsGame(id) || !string.Equals(session["ProductCode"], Product(id), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Selecciona el juego desde el desplegable inicial del MSI.");
+                throw new InvalidOperationException("Select a game from the MSI's opening list.");
             return id;
         }
         private static void CheckTestRoot(Session session, string id)
@@ -38,17 +38,17 @@ namespace BioShockSuite
             string root=session["BVR_TESTROOT"];
             if (string.IsNullOrWhiteSpace(root) || !Path.GetFileName(root.TrimEnd('\\')).Equals(
                 "BvrMsiTest-"+SuitePlan.TestFamily, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Este MSI de prueba solo admite su carpeta aislada.");
+                throw new InvalidOperationException("This test MSI only supports its isolated directory.");
         }
         private static ActionResult Error(Session session, Exception error)
         {
-            session.Log("MSI por juego: " + error);
+            session.Log("Per-game MSI: " + error);
             using (Record record=new Record(1)) { record.FormatString="[1]";record[1]=error.Message;session.Message(InstallMessage.Error,record); }
             return ActionResult.Failure;
         }
         private static string Quote(string value)
         {
-            if (value.IndexOfAny(new[]{'"','\r','\n'}) >= 0) throw new InvalidOperationException("Ruta no válida para Windows Installer.");
+            if (value.IndexOfAny(new[]{'"','\r','\n'}) >= 0) throw new InvalidOperationException("Invalid path for Windows Installer.");
             return "\"" + value.TrimEnd('\\') + "\"";
         }
 
@@ -61,11 +61,11 @@ namespace BioShockSuite
             try
             {
                 string id=session["BVR_GAME"];
-                if (!IsGame(id)) throw new InvalidOperationException("Elige BioShock 1 o BioShock 2 en el desplegable.");
+                if (!IsGame(id)) throw new InvalidOperationException("Select BioShock 1 or BioShock 2 from the list.");
                 CheckTestRoot(session,id);
                 string source=Path.GetFullPath(session["OriginalDatabase"]);
                 if (!File.Exists(source) || !source.EndsWith(".msi", StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("Vuelve a abrir el archivo MSI original para seleccionar un juego.");
+                    throw new IOException("Reopen the original MSI file to select a game.");
                 string args="/i " + Quote(source);
                 if (MsiQueryProductStateW(Product(id)) == InstallState.Default)
                     args += " /n " + Product(id);
@@ -84,7 +84,7 @@ namespace BioShockSuite
                     args += " /l*v " + Quote(Path.Combine(logRoot, id+"-"+DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")+".log"));
                     ProcessStartInfo start=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"msiexec.exe"),args);
                     start.UseShellExecute=false;
-                    using(Process child=Process.Start(start)) { if(child==null) throw new IOException("No se pudo abrir el asistente del juego."); }
+                    using(Process child=Process.Start(start)) { if(child==null) throw new IOException("Could not open the game's setup wizard."); }
                 }
                 session["BVR_VALID"]="1";session["BVR_DISPATCHING"]="1";
             }
@@ -110,7 +110,7 @@ namespace BioShockSuite
                 foreach(string old in session["BVR_OLD_SUITE"].Split(';'))
                 {
                     if (old.Length == 0 || MsiQueryFeatureStateW(old,"Game_"+id) != InstallState.Local) continue;
-                    if (related.Count > 0) throw new InvalidOperationException("Hay varias instalaciones conjuntas anteriores; revisa el registro antes de continuar.");
+                    if (related.Count > 0) throw new InvalidOperationException("Multiple earlier combined installations were found; review the registration before continuing.");
                     related.Add(old);
                     remove=MsiQueryFeatureStateW(old,"Game_"+other) == InstallState.Local ? "Game_"+id+",Desktop_"+id : "ALL";
                 }
@@ -130,17 +130,17 @@ namespace BioShockSuite
                 bool current=session.Features["Game_"+id].CurrentState == InstallState.Local;
                 bool removing=session["BVR_OPERATION"] == "remove";
                 bool shortcut=session[P(id,"DESKTOPSHORTCUT")] == "1";
-                if (removing && !current) throw new InvalidOperationException("Este MSI todavía no ha instalado el mod seleccionado.");
+                if (removing && !current) throw new InvalidOperationException("This MSI has not installed the selected mod yet.");
                 if (session.Features["Game_"+other].CurrentState == InstallState.Local)
-                    throw new InvalidOperationException("La identidad MSI no está aislada por juego.");
+                    throw new InvalidOperationException("The MSI identity is not isolated by game.");
                 session.Features["Game_"+id].RequestState=removing ? InstallState.Absent : InstallState.Local;
                 session.Features["Desktop_"+id].RequestState=!removing && shortcut ? InstallState.Local : InstallState.Absent;
                 session["ADDLOCAL"]=!removing && !current ? "Game_"+id+(shortcut ? ",Desktop_"+id : "") : "";
                 session["REMOVE"]=removing ? "ALL" : current && !shortcut ? "Desktop_"+id : "";
                 session["REINSTALL"]=!removing && current ? "Game_"+id+(shortcut ? ",Desktop_"+id : "") : "";
                 session["REINSTALLMODE"]="amus";
-                session["BVR_SUMMARY"]=removing ? "Desinstalar este mod y recuperar sus archivos previos." :
-                    current ? "Reparar / reinstalar este mod conservando tus preferencias." : "Instalar / actualizar este mod conservando tus preferencias.";
+                session["BVR_SUMMARY"]=removing ? "Uninstall this mod and restore its previous files." :
+                    current ? "Repair / reinstall this mod and keep your preferences." : "Install / update this mod and keep your preferences.";
                 session["BVR_SELECTED_PATH"]=session[id.ToUpperInvariant()+"DIR"];
                 session["BVR_VALID"]="1";session["BVR_ERROR"]="";
             }
@@ -159,13 +159,13 @@ namespace BioShockSuite
                 foreach(string feature in new[]{"Game_"+other,"Desktop_"+other})
                     if (session.Features[feature].CurrentState == InstallState.Local ||
                         session.Features[feature].RequestState == InstallState.Local)
-                        throw new InvalidOperationException("Esta ejecución no puede modificar el otro juego.");
+                        throw new InvalidOperationException("This run cannot modify the other game.");
                 FeatureInfo selected=session.Features["Game_"+id];
                 bool current=selected.CurrentState == InstallState.Local;
                 bool removing=current && selected.RequestState == InstallState.Absent;
                 bool active=removing || selected.RequestState == InstallState.Local ||
                     current && (session["REINSTALL"] == "ALL" || session["REINSTALL"].Contains("Game_"+id));
-                if (!active) throw new InvalidOperationException("No se ha solicitado ninguna operación para este juego.");
+                if (!active) throw new InvalidOperationException("No operation was requested for this game.");
                 session[P(id,"ACTIVE")]="1";session[P(id,"REMOVING")]=removing ? "1" : "";
                 session[P(other,"ACTIVE")]="";session[P(other,"REMOVING")]="";
                 session.Log("Single game: "+id+", current="+selected.CurrentState+", request="+selected.RequestState+", removing="+removing);

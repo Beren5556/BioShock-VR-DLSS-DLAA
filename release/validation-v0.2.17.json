@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.17",
+  "edition": "English",
+  "baseTag": "v0.2.16",
+  "date": "2026-09-11",
+  "installer": "BioShock-1-2-VR-DLSS-DLAA-0.2.17-EN.msi",
+  "installerSha256": "EA8D5A363F43A6EFF44A5187A2BCBC26ABDE6F55C6A989C6BD7A84A5B829F943",
+  "installerBytes": 38461440,
+  "sourceEquivalence": {
+    "passed": true,
+    "comparedFiles": 241,
+    "mappedOccurrences": 1364,
+    "baseCommit": "efbafc38e4f5cff28b7b960e1bf28d00c62ee758",
+    "allowedChanges": [
+      "Reviewed English string literals",
+      "Launcher version strings",
+      "MSI language metadata"
+    ],
+    "renderingLogicChanged": false
+  },
+  "coreTests": {
+    "passed": true,
+    "executables": 12
+  },
+  "launchers": {
+    "bs1SelfTestPassed": true,
+    "bs2SelfTestPassed": true,
+    "previewImagesReviewed": 14
+  },
+  "nvidiaRuntimeTests": {
+    "passed": true,
+    "bs1Checks": 16,
+    "bs2Checks": 16,
+    "usesRealModClient": true,
+    "usesGameOrHeadset": false,
+    "runtime": "310.7.0.0"
+  },
+  "msi": {
+    "passed": true,
+    "embeddedFiles": 46,
+    "language": 1033,
+    "controlsInBounds": 54,
+    "unchangedComponents": 48,
+    "versionedShortcutIdentities": 2,
+    "isolatedStandardChecks": 74,
+    "isolatedStandardOperations": 12,
+    "isolatedUpgradeChecks": 56,
+    "isolatedUpgradeOperations": 10,
+    "crossLanguagePredecessor": "0.2.16 Spanish",
+    "sameUserElevated": true,
+    "isolatedInstallerSha256": "1FA7ED509BDE79AB22941738131E8B683C7F8AF50D9C066329A1EDB84223C349",
+    "predecessorIsolatedInstallerSha256": "C95F31E90D33359FB935B9A19C2FEAEE97ECF70BEDD22BB982C271B767CBDB8A",
+    "testProductsRemoved": true
+  },
+  "migrationChecks": {
+    "passed": true,
+    "checks": 40
+  },
+  "unchangedSpanishMsiSha256": "1C881F0A27416198FC25A068A79044BEED7FCC37160F38E7AFE2AE09CE9A2371",
+  "installedGamesModified": false,
+  "limitations": [
+    "No new physical-headset or real-game acceptance of the English binaries",
+    "No second-computer validation",
+    "Windows long-path installation support is not established; use a conventional short game path",
+    "Automated equivalence and synthetic GPU tests are not a universal performance or stability guarantee"
+  ]
+}

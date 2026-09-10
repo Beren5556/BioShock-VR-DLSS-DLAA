@@ -108,7 +108,7 @@ int wmain(int argc, wchar_t** argv) {
             const bool invalid = bvr::dlss45::prepare(device.Get(), 1474, 1474, DXGI_FORMAT_R8G8B8A8_UNORM,
                 2950, 2950, bvr::dlss45::Mode::SuperResolution, false, hostPath.c_str());
             if (!expect(!invalid && !bvr::dlss45::ready() &&
-                std::strstr(bvr::dlss45::status(), "fuera del rango") != nullptr,
+                std::strstr(bvr::dlss45::status(), "outside the NVIDIA supported range") != nullptr,
                 "out-of-range input is rejected with the specific NVIDIA range message")) break;
             continue;
         }

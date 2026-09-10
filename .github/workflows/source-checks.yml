@@ -2,7 +2,7 @@ name: Source checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, codex/english-v0.2.17]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -25,3 +25,7 @@ jobs:
       - name: Verify repository and launcher
         shell: pwsh
         run: .\scripts\Verify-Repository.ps1 -BuildLauncher
+
+      - name: Verify text-only runtime changes against the Spanish release
+        shell: pwsh
+        run: node scripts/localization/english.mjs verify

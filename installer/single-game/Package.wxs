@@ -2,8 +2,8 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="BioShock 1-2 VR DLSS-DLAA" Manufacturer="Beren5556 · BioShock VR Community"
            Version="$(Version)" ProductCode="$(ProductCode)" UpgradeCode="$(UpgradeCode)"
-           Language="3082" Codepage="1252" Scope="perUser" InstallerVersion="500">
-    <SummaryInformation Description="BioShock 1 y 2 VR · selección individual · $(Version)" />
+           Language="1033" Codepage="1252" Scope="perUser" InstallerVersion="500">
+    <SummaryInformation Description="BioShock 1 and 2 VR · per-game setup · $(Version)" />
     <Upgrade Id="$(UpgradeCode)">
       <UpgradeVersion Maximum="$(Version)" IncludeMaximum="no" MigrateFeatures="no" Property="BVR_OLD_TARGET" />
       <UpgradeVersion Minimum="$(Version)" IncludeMinimum="yes" OnlyDetect="yes" Property="BVR_NEWER_TARGET" />
@@ -25,12 +25,12 @@
     <Property Id="BVR_TESTFAILGAME" Secure="yes" />
     <Property Id="BVR_VALID" Value="0" />
     <Property Id="INSTALLLEVEL" Value="1" />
-    <Property Id="ARPCOMMENTS" Value="Un instalador, un juego por ejecución. Basado en BioShock VR de Mohamad Balouza. Fork DLSS/DLAA de Beren5556." />
+    <Property Id="ARPCOMMENTS" Value="One installer, one game per run. Based on BioShock VR by Mohamad Balouza. DLSS/DLAA fork by Beren5556." />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/Beren5556/BioShock-VR-DLSS-DLAA" />
     <Property Id="ARPPRODUCTICON" Value="ModIcon" />
     <Icon Id="ModIcon" SourceFile="$(RepoRoot)\apps\launcher\assets\BioshockVrLauncher.ico" />
-    <Launch Condition="VersionNT64" Message="Este paquete necesita Windows de 64 bits." />
-    <Launch Condition="NOT BVR_NEWER_TARGET" Message="Este juego ya tiene un MSI igual o más reciente con otra identidad." />
+    <Launch Condition="VersionNT64" Message="This package requires 64-bit Windows." />
+    <Launch Condition="NOT BVR_NEWER_TARGET" Message="This game already has an MSI of the same or a newer version with a different identity." />
     <StandardDirectory Id="DesktopFolder" />
     <FeatureRef Id="Game_bs1" /><FeatureRef Id="Game_bs2" />
     <Binary Id="SuiteActions" SourceFile="$(SuiteActionsDll)" />

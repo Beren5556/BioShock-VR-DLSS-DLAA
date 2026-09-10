@@ -46,9 +46,9 @@ namespace BioshockVrLauncher
         {
             problem = null;
             if (!File.Exists(path) || !string.Equals(Path.GetFileName(path), ExeName, StringComparison.OrdinalIgnoreCase))
-                problem = "Selecciona " + ExeName + " de " + DisplayName + " Remastered.";
+                problem = "Select " + ExeName + " of " + DisplayName + " Remastered.";
             else if (!string.Equals(Bs2Profile.Hash(path), ExeHash, StringComparison.OrdinalIgnoreCase))
-                problem = "El ejecutable no coincide con la compilación Steam compatible de " + DisplayName + ".";
+                problem = "The executable does not match the supported Steam build of " + DisplayName + ".";
             return problem == null;
         }
         internal static bool SelfTest()

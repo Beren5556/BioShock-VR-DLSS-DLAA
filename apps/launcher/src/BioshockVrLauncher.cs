@@ -11,10 +11,10 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("BioShock 1-2 VR - DLSS/DLAA - Beren5556")]
-[assembly: AssemblyDescription("Lanzador y editor seguro con modos Normal, DLAA y DLSS 4.5")]
-[assembly: AssemblyProduct("Complemento DLSS 4.5 para BioShock VR")]
-[assembly: AssemblyVersion("0.2.13.0")]
-[assembly: AssemblyFileVersion("0.2.13.0")]
+[assembly: AssemblyDescription("Launcher and safe editor with Normal, DLAA and DLSS 4.5 modes")]
+[assembly: AssemblyProduct("DLSS 4.5 add-on for BioShock VR")]
+[assembly: AssemblyVersion("0.2.17.0")]
+[assembly: AssemblyFileVersion("0.2.17.0")]
 
 namespace BioshockVrLauncher
 {
@@ -124,7 +124,7 @@ namespace BioshockVrLauncher
             if (lines.Count == 1 && lines[0].Length == 0)
             {
                 lines.Clear();
-                lines.Add("# " + GameProfile.DisplayName + " VR - valores guardados por el lanzador en castellano");
+                lines.Add("# " + GameProfile.DisplayName + " VR - values saved by the English launcher");
             }
 
             HashSet<string> written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -141,7 +141,7 @@ namespace BioshockVrLauncher
                 if (replacements.TryGetValue(key, out value))
                 {
                     if (written.Contains(key))
-                        lines[i] = "; duplicado desactivado por el lanzador: " + trimmed;
+                        lines[i] = "; duplicate disabled by the launcher: " + trimmed;
                     else
                     {
                         lines[i] = key + "=" + value;
@@ -301,9 +301,9 @@ namespace BioshockVrLauncher
             }
 
             if (!foundSpatial)
-                structureError = "Falta la sección [spatial].";
+                structureError = "The [spatial] section is missing.";
             else if (duplicates.Count > 0)
-                structureError = "Hay claves duplicadas en [spatial].";
+                structureError = "There are duplicate keys in [spatial].";
             else
                 structureError = null;
             return values;
@@ -326,37 +326,37 @@ namespace BioshockVrLauncher
 
             string raw;
             if (!values.TryGetValue("enabled", out raw))
-                problems.Add("Falta enabled.");
+                problems.Add("Missing enabled.");
             else if (raw == "1" || string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase))
                 settings.Enabled = true;
             else if (raw == "0" || string.Equals(raw, "false", StringComparison.OrdinalIgnoreCase))
                 settings.Enabled = false;
             else
-                problems.Add("enabled debe ser 0 o 1.");
+                problems.Add("enabled must be 0 or 1.");
 
             int number;
             if (!values.TryGetValue("outputWidth", out raw))
-                problems.Add("Falta outputWidth.");
+                problems.Add("Missing outputWidth.");
             else if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
                      number < 1024 || number > 8192)
-                problems.Add("outputWidth debe estar entre 1024 y 8192.");
+                problems.Add("outputWidth must be between 1024 and 8192.");
             else
                 settings.OutputWidth = number;
 
             if (!values.TryGetValue("outputHeight", out raw))
-                problems.Add("Falta outputHeight.");
+                problems.Add("Missing outputHeight.");
             else if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
                      number < 1024 || number > 8192)
-                problems.Add("outputHeight debe estar entre 1024 y 8192.");
+                problems.Add("outputHeight must be between 1024 and 8192.");
             else
                 settings.OutputHeight = number;
 
             decimal sharpness;
             if (!values.TryGetValue("sharpness", out raw))
-                problems.Add("Falta sharpness.");
+                problems.Add("Missing sharpness.");
             else if (!decimal.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out sharpness) ||
                      sharpness < 0m || sharpness > 1m)
-                problems.Add("sharpness debe estar entre 0,00 y 1,00.");
+                problems.Add("sharpness must be between 0.00 and 1.00.");
             else
                 settings.Sharpness = sharpness;
 
@@ -411,8 +411,8 @@ namespace BioshockVrLauncher
             if (!foundSpatial)
             {
                 if (lines.Count > 0) lines.Add(string.Empty);
-                lines.Add("# Reescalado espacial experimental de " + GameProfile.DisplayName + " VR");
-                lines.Add("# No activa DLSS ni DLAA. Solo lo utiliza la DLL experimental compatible.");
+                lines.Add("# Experimental spatial upscaling for " + GameProfile.DisplayName + " VR");
+                lines.Add("# Does not enable DLSS or DLAA. Used only by the compatible experimental DLL.");
                 lines.Add("[spatial]");
                 spatialEnd = lines.Count;
             }
@@ -577,9 +577,9 @@ namespace BioshockVrLauncher
             }
 
             if (!foundDlss)
-                structureError = "Falta la sección [dlss].";
+                structureError = "The [dlss] section is missing.";
             else if (duplicates.Count > 0)
-                structureError = "Hay claves duplicadas en [dlss].";
+                structureError = "There are duplicate keys in [dlss].";
             else
                 structureError = null;
             return values;
@@ -678,47 +678,47 @@ namespace BioshockVrLauncher
             string raw;
             DlssMode mode;
             if (!values.TryGetValue("mode", out raw))
-                problems.Add("Falta mode.");
+                problems.Add("Missing mode.");
             else if (!TryParseMode(raw, out mode))
-                problems.Add("mode debe ser off, dlaa o sr.");
+                problems.Add("mode must be off, dlaa or sr.");
             else
                 settings.Mode = mode;
 
             if (!values.TryGetValue("runtime", out raw))
-                problems.Add("Falta runtime.");
+                problems.Add("Missing runtime.");
             else if (!string.Equals(raw, RequiredRuntime, StringComparison.OrdinalIgnoreCase))
-                problems.Add("runtime debe ser " + RequiredRuntime + ".");
+                problems.Add("runtime must be " + RequiredRuntime + ".");
             settings.Runtime = RequiredRuntime;
 
             if (!values.TryGetValue("preset", out raw))
-                problems.Add("Falta preset.");
+                problems.Add("Missing preset.");
             else if (!IsValidPreset(raw))
-                problems.Add("preset debe ser auto, K, M o L.");
+                problems.Add("preset must be auto, K, M or L.");
             else
                 settings.Preset = NormalizePreset(raw);
 
             DlssQuality quality;
             if (!values.TryGetValue("quality", out raw))
-                problems.Add("Falta quality.");
+                problems.Add("Missing quality.");
             else if (!TryParseQuality(raw, out quality))
-                problems.Add("quality debe ser auto, quality, balanced, performance o ultra_performance.");
+                problems.Add("quality must be auto, quality, balanced, performance or ultra_performance.");
             else
                 settings.Quality = quality;
 
             int number;
             if (!values.TryGetValue("outputWidth", out raw))
-                problems.Add("Falta outputWidth.");
+                problems.Add("Missing outputWidth.");
             else if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
                      number < 1024 || number > 8192 || (number & 1) != 0)
-                problems.Add("outputWidth debe ser par y estar entre 1024 y 8192.");
+                problems.Add("outputWidth must be even and between 1024 and 8192.");
             else
                 settings.OutputWidth = number;
 
             if (!values.TryGetValue("outputHeight", out raw))
-                problems.Add("Falta outputHeight.");
+                problems.Add("Missing outputHeight.");
             else if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
                      number < 1024 || number > 8192 || (number & 1) != 0)
-                problems.Add("outputHeight debe ser par y estar entre 1024 y 8192.");
+                problems.Add("outputHeight must be even and between 1024 and 8192.");
             else
                 settings.OutputHeight = number;
 
@@ -729,7 +729,7 @@ namespace BioshockVrLauncher
                 if (!decimal.TryParse(normalizedNear, NumberStyles.Float,
                                       CultureInfo.InvariantCulture, out nearPlane) ||
                     nearPlane < 0.1m || nearPlane > 1000.0m)
-                    problems.Add("nearPlaneUu debe estar entre 0,1 y 1000,0 UU.");
+                    problems.Add("nearPlaneUu must be between 0.1 and 1000.0 UU.");
                 else
                     settings.NearPlaneUu = nearPlane;
             }
@@ -738,7 +738,7 @@ namespace BioshockVrLauncher
             {
                 if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
                     number < 0 || number > 100)
-                    problems.Add("sharpnessPercent debe estar entre 0 y 100.");
+                    problems.Add("sharpnessPercent must be between 0 and 100.");
                 else settings.SharpnessPercent = number;
             }
 
@@ -770,7 +770,7 @@ namespace BioshockVrLauncher
                     !int.TryParse(values["srScaleDenominator"], NumberStyles.Integer,
                                   CultureInfo.InvariantCulture, out denominator) ||
                     numerator <= 0 || denominator <= numerator || denominator > 8192)
-                    problems.Add("La preferencia de escala SR debe ser una fracción válida entre 0 y 1.");
+                    problems.Add("The preferred SR scale must be a valid fraction between 0 and 1.");
                 else
                 {
                     settings.SrScaleNumerator = numerator;
@@ -828,7 +828,7 @@ namespace BioshockVrLauncher
                 if (replacements.TryGetValue(key, out value))
                 {
                     if (written.Contains(key))
-                        lines[i] = "; duplicado desactivado por el lanzador: " + trimmed;
+                        lines[i] = "; duplicate disabled by the launcher: " + trimmed;
                     else
                     {
                         lines[i] = key + "=" + value;
@@ -841,8 +841,8 @@ namespace BioshockVrLauncher
             if (!foundDlss)
             {
                 if (lines.Count > 0) lines.Add(string.Empty);
-                lines.Add("# Complemento DLSS 4.5 para " + GameProfile.DisplayName + " VR - integracion de Beren5556");
-                lines.Add("# Requiere dos historiales por ojo, profundidad, movimiento, jitter y host x64.");
+                lines.Add("# DLSS 4.5 add-on for " + GameProfile.DisplayName + " VR - integration by Beren5556");
+                lines.Add("# Requires two eye histories, depth, motion, jitter and an x64 host.");
                 lines.Add("[dlss]");
                 dlssEnd = lines.Count;
             }
@@ -922,7 +922,7 @@ namespace BioshockVrLauncher
                    parsed.SrScaleNumerator == 1 && parsed.SrScaleDenominator == 2 &&
                    rendered.Contains("unknown=ok") && rendered.Contains("; conservar") &&
                    repairedValid && string.IsNullOrEmpty(repairedWarning) &&
-                   repaired.Contains("; duplicado desactivado por el lanzador: preset=L") &&
+                   repaired.Contains("; duplicate disabled by the launcher: preset=L") &&
                    legacyValid && string.IsNullOrEmpty(legacyWarning) &&
                    legacySettings.NearPlaneUu == 10.0m && !invalidNearAccepted &&
                    invalidNearWarning.Contains("nearPlaneUu") && remembersSrInDlaa &&
@@ -1207,7 +1207,7 @@ namespace BioshockVrLauncher
         {
             List<IniEntry> entries = new List<IniEntry>();
             string text = content ?? string.Empty;
-            string section = "Sin sección";
+            string section = "No section";
             int lineIndex = 0;
             int lineStart = 0;
             while (lineStart <= text.Length)
@@ -1281,9 +1281,9 @@ namespace BioshockVrLauncher
             foreach (IniEntry entry in changed)
             {
                 if (entry.Value.IndexOf('\r') >= 0 || entry.Value.IndexOf('\n') >= 0)
-                    throw new InvalidDataException("El valor de " + entry.Key + " contiene un salto de línea.");
+                    throw new InvalidDataException("The value of " + entry.Key + " contains a line break.");
                 if (entry.ValueStart < 0 || entry.ValueStart + entry.ValueLength > result.Length)
-                    throw new InvalidDataException("Posición no válida para " + entry.Key + ".");
+                    throw new InvalidDataException("Invalid position for " + entry.Key + ".");
                 result.Remove(entry.ValueStart, entry.ValueLength);
                 result.Insert(entry.ValueStart, entry.Value);
             }
@@ -1348,123 +1348,123 @@ namespace BioshockVrLauncher
 
         static IniKnowledge()
         {
-            Add("WindowedViewportX", "Resolución horizontal", "Anchura del backbuffer cuando el juego arranca en ventana. El mod usa esta superficie para construir la imagen VR.");
-            Add("WindowedViewportY", "Resolución vertical", "Altura del backbuffer cuando el juego arranca en ventana. Para este mod se recomienda mantenerla igual que la anchura.");
-            Add("FullscreenViewportX", "Resolución horizontal a pantalla completa", "Anchura usada al arrancar a pantalla completa. El lanzador la mantiene igual que la resolución de ventana para evitar cambios inesperados.");
-            Add("FullscreenViewportY", "Resolución vertical a pantalla completa", "Altura usada al arrancar a pantalla completa. El lanzador la mantiene igual que la resolución de ventana.");
-            Add("MenuViewportX", "Anchura interna de los menús del juego", "Resolución lógica de los menús 2D originales del juego. No controla el tamaño del menú F10 del mod.");
-            Add("MenuViewportY", "Altura interna de los menús del juego", "Resolución lógica de los menús 2D originales del juego. No controla la posición del menú F10 del mod.");
-            Add("StartupFullscreen", "Arrancar a pantalla completa", "Decide si el juego intenta abrirse a pantalla completa. Para esta instalación VR, el modo de ventana (False) es la ruta probada; el modo exclusivo puede impedir que la resolución solicitada se aplique correctamente.");
-            Add("Brightness", "Brillo", "Nivel de brillo de la imagen. Hay valores con escalas distintas en varias secciones; modifica solo el de la sección que realmente usa el juego.");
-            Add("Contrast", "Contraste", "Nivel de contraste de la imagen. Puede afectar a la legibilidad dentro del visor.");
-            Add("Gamma", "Gamma", "Curva de luminosidad de la imagen. Cambios grandes pueden ocultar detalle en sombras o quemar zonas claras dentro del visor.");
-            Add("UseVSync", "Sincronización vertical", "Sincroniza la presentación con el refresco configurado. En VR puede añadir latencia o interferir con el ritmo del runtime; el efecto depende de la ruta gráfica activa.");
-            Add("VSync", "Sincronización vertical del usuario", "Preferencia de VSync guardada por el juego. En VR puede influir en latencia y regularidad de fotogramas.");
-            Add("DesiredRefreshRate", "Frecuencia de refresco solicitada", "Frecuencia que solicita el renderizador de escritorio. No cambia directamente los Hz del visor OpenXR.");
-            Add("MinDesiredFrameRate", "Fotogramas mínimos deseados", "Objetivo interno usado por el motor para decisiones de rendimiento. No es el límite de refresco del visor.");
-            Add("UseMultithreadedRendering", "Renderizado multihilo", "Permite al renderizador repartir trabajo entre hilos. Puede cambiar rendimiento y regularidad de fotogramas en VR.");
-            Add("UseMultithreading", "Multihilo del motor", "Activa trabajo multihilo general del motor. Puede afectar al rendimiento y a la estabilidad del ritmo de fotogramas.");
-            Add("ReduceMouseLag", "Reducir latencia del ratón", "Ruta especial del motor para reducir latencia de entrada. Con controladores VR normalmente no es necesaria y puede alterar el rendimiento.");
-            Add("Sync Mouse To Framerate", "Sincronizar ratón con fotogramas", "Vincula la entrada del ratón al ritmo de renderizado. No suele ayudar a los controladores de movimiento.");
-            Add("HorizontalFOV", "Campo de visión horizontal", "FOV horizontal guardado por el juego. La DLL VR personalizada instalada lo sustituye por el FOV completo del visor durante el juego.");
-            Add("bHorizontalFOVLock", "Bloquear FOV horizontal", "Bloqueo guardado por el juego. En las pruebas, desactivarlo no eliminó el recorte; conviene mantenerlo como está porque la DLL VR corrige el FOV en vivo.");
-            Add("HorizontalFOVLock", "Bloqueo horizontal del FOV", "Política del renderizador para el campo de visión. En esta instalación conviene mantenerla como está y dejar que la DLL VR aplique el FOV del visor.");
-            Add("ControlSensitivity", "Sensibilidad del mando", "Nivel general de sensibilidad seleccionado en las opciones del juego.");
-            Add("Sensitivity", "Sensibilidad", "Valor de sensibilidad guardado por el perfil del juego.");
-            Add("MouseSensitivity", "Sensibilidad del ratón", "Sensibilidad del ratón. No controla directamente la velocidad de giro del mando VR, que se ajusta en vrpreset.ini.");
-            Add("MouseAcceleration", "Aceleración del ratón", "Hace que el giro dependa también de la rapidez del movimiento del ratón.");
-            Add("MouseSmoothing", "Suavizado del ratón", "Filtra la entrada del ratón. No es el suavizado del giro de los controladores VR.");
-            Add("UseController", "Usar mando", "Habilita la ruta de mando del cliente. El mod genera entrada de mando a partir de los controladores VR.");
-            Add("UseJoystick", "Usar joystick", "Habilita compatibilidad de joystick del cliente de Windows.");
-            Add("CaptureMouse", "Capturar el ratón", "Mantiene el cursor capturado dentro de la ventana del juego. Puede influir al usar el menú F10 con ratón.");
-            Add("AutoAim", "Ayuda automática de apuntado", "Asistencia de apuntado del juego. El mod dispone además de lockOnDisabled para impedir el magnetismo en VR.");
-            Add("WantsXboxController", "Preferir mando Xbox", "Hace que el juego use interfaz y entrada de mando. Es coherente con la emulación de mando del mod VR.");
-            Add("InvertYAxis", "Invertir eje vertical", "Invierte el eje vertical de la entrada tradicional.");
-            Add("Vibration", "Vibración del mando", "Activa la vibración solicitada por el juego; su traducción a controladores VR depende del mod/runtime.");
-            Add("bMaintainUIScale", "Mantener escala de interfaz", "Intenta conservar la escala del HUD original al cambiar de resolución. No controla el panel HUD OpenXR ni el menú F10 del mod.");
-            Add("MouseIconScale", "Tamaño del puntero", "Escala del icono del ratón en la interfaz del juego.");
-            Add("ScreenFlashes", "Destellos de pantalla", "Permite destellos de daño y otros efectos. En VR pueden resultar intensos o molestos.");
-            Add("Decals", "Calcomanías", "Activa marcas como impactos y manchas. Afecta principalmente a calidad y rendimiento.");
-            Add("NoDynamicLights", "Desactivar luces dinámicas", "Si está activado elimina luces dinámicas y mejora rendimiento a costa de calidad visual.");
-            Add("NoLighting", "Desactivar iluminación", "Deshabilita iluminación del motor. Es un ajuste de diagnóstico y no se recomienda para jugar.");
-            Add("LevelOfAnisotropy", "Filtrado anisotrópico", "Mejora la nitidez de texturas vistas en ángulo. Valores altos consumen algo más de GPU.");
-            Add("UseTrilinear", "Filtrado trilineal", "Suaviza transiciones entre niveles de detalle de las texturas.");
-            Add("UsePrecaching", "Precarga de recursos", "Precarga datos para reducir tirones posteriores, con mayor uso de memoria y carga inicial.");
-            Add("HighDetailActors", "Personajes con alto detalle", "Usa versiones detalladas de actores y personajes.");
-            Add("SuperHighDetailActors", "Personajes con detalle máximo", "Activa el nivel de detalle más alto de los actores.");
-            Add("UseHighDetailShadowMaps", "Sombras de alta calidad", "Usa mapas de sombra con mayor detalle y coste de GPU.");
-            Add("Shadows", "Sombras", "Activa las sombras del motor. Puede tener impacto apreciable en VR.");
-            Add("RealTimeReflection", "Reflejos en tiempo real", "Activa reflejos dinámicos; mejora la imagen y aumenta la carga gráfica.");
-            Add("PostProcessing", "Posprocesado", "Activa efectos aplicados después del renderizado. Algunos pueden resultar incómodos o costosos en VR.");
-            Add("UseDistortion", "Distorsión gráfica del juego", "Activa distorsiones visuales del motor. No es la corrección óptica del visor, que realiza el runtime VR.");
-            Add("UseFxaa", "Antialiasing FXAA", "Suavizado de bordes por posprocesado. Es ligero, aunque puede reducir nitidez dentro del visor.");
-            Add("UseSoftwareAntiAliasing", "Antialiasing por software", "Suavizado adicional de bordes del motor. Puede afectar a nitidez y rendimiento.");
-            Add("HardwareOcclusion", "Oclusión por hardware", "Evita dibujar geometría no visible. Normalmente mejora el rendimiento.");
-            Add("TextureDetail", "Detalle general de texturas", "Calidad general de texturas. Valores altos consumen más memoria de vídeo.");
-            Add("FluidSurfaceDetail", "Detalle de líquidos", "Calidad de las superficies de agua y otros fluidos.");
-            Add("DynamicShadowDetail", "Detalle de sombras dinámicas", "Nivel de calidad de las sombras que cambian en tiempo real.");
-            Add("RenderDetail", "Detalle de renderizado", "Nivel general de detalle del renderizador.");
-            Add("UseHighDetailPostProcEffects", "Posprocesado de alta calidad", "Usa versiones más detalladas de los efectos posteriores al renderizado.");
-            Add("UseLinearSpace", "Espacio de color lineal", "Realiza determinadas operaciones de iluminación y mezcla en espacio lineal. Cambiarlo puede alterar mucho la imagen.");
-            Add("OverrideDesktopRefreshRate", "Ignorar refresco del Escritorio", "Permite al juego imponer otra frecuencia al monitor. No controla el refresco del visor.");
-            Add("AvoidHitches", "Evitar tirones", "Activa una estrategia del renderizador para reducir parones; puede cambiar uso de memoria o carga previa.");
-            Add("SpeakerMode", "Configuración de altavoces", "Distribución de canales elegida por el juego. Para auriculares VR suele convenir estéreo o la opción recomendada por el runtime.");
-            Add("Use3DSound", "Audio posicional 3D", "Activa la ruta de sonido 3D del motor. Puede ser relevante para la orientación espacial en VR.");
-            Add("ReverseStereo", "Intercambiar canales estéreo", "Intercambia izquierda y derecha. Déjalo desactivado salvo que los canales estén realmente invertidos.");
-            Add("MasterVolume", "Volumen general", "Volumen maestro del juego.");
-            Add("SFXVolume", "Volumen de efectos", "Volumen de efectos de sonido.");
-            Add("MusicVolume", "Volumen de música", "Volumen de la música.");
-            Add("VoVolume", "Volumen de voces", "Volumen de diálogos y voces.");
-            Add("DialogSubtitles", "Subtítulos de diálogos", "Muestra subtítulos de las conversaciones.");
-            Add("ArtSubtitles", "Subtítulos de material artístico", "Muestra textos o subtítulos adicionales asociados al contenido del juego.");
-            Add("language", "Idioma", "Código o entrada de idioma usada por la sección correspondiente.");
-            Add("Coronas", "Halos de luz", "Activa halos alrededor de determinadas fuentes de luz. Puede añadir algo de carga gráfica y resultar intenso en VR.");
-            Add("DecoLayers", "Capas decorativas", "Activa capas visuales decorativas del mundo. Desactivarlas puede reducir detalle y algo de carga gráfica.");
-            Add("Projectors", "Proyectores visuales", "Activa efectos proyectados sobre superficies, como luces o marcas. Puede afectar a calidad y rendimiento.");
-            Add("ReportDynamicUploads", "Registrar cargas dinámicas", "Opción de diagnóstico del renderizador para informar de recursos enviados dinámicamente; no suele mejorar la experiencia VR.");
-            Add("TextureDetailInterface", "Detalle de texturas de interfaz", "Calidad de las texturas de la interfaz original del juego. No cambia el tamaño del menú F10 del mod.");
-            Add("TextureDetailTerrain", "Detalle de texturas del terreno", "Calidad de las texturas aplicadas al terreno y superficies del escenario.");
-            Add("TextureDetailWeaponSkin", "Detalle de texturas de armas", "Calidad de las texturas de los modelos de armas, muy visibles de cerca en VR.");
-            Add("TextureDetailPlayerSkin", "Detalle de texturas del jugador", "Calidad de las texturas asociadas al modelo del jugador.");
-            Add("TextureDetailWorld", "Detalle de texturas del mundo", "Calidad de las texturas generales del escenario; valores altos consumen más memoria de vídeo.");
-            Add("TextureDetailRenderMap", "Detalle de texturas renderizadas", "Calidad de superficies que reciben imágenes generadas por el juego.");
-            Add("TextureDetailLightmap", "Detalle de mapas de luz", "Calidad de las texturas de iluminación precalculada del escenario.");
-            Add("NoFractalAnim", "Desactivar animación fractal", "Deshabilita ciertas animaciones procedurales. Puede reducir movimiento visual y algo de carga gráfica.");
-            Add("ScaleHUDX", "Escala horizontal del HUD original", "Ajuste horizontal del HUD 2D del juego. No controla el panel OpenXR ni la posición del menú F10 del mod.");
-            Add("MouseXMultiplier", "Multiplicador horizontal del ratón", "Multiplica el movimiento horizontal del ratón; no es la velocidad de giro configurada en vrpreset.ini.");
-            Add("MouseYMultiplier", "Multiplicador vertical del ratón", "Multiplica el movimiento vertical del ratón; no controla directamente los mandos VR.");
-            Add("WindowedViewportXPos", "Posición horizontal de la ventana", "Coordenada horizontal de la ventana de escritorio. No desplaza la imagen dentro del visor.");
-            Add("WindowedViewportYPos", "Posición vertical de la ventana", "Coordenada vertical de la ventana de escritorio. No desplaza la imagen dentro del visor.");
-            Add("WindowedViewportXPosEditor", "Posición X de la ventana del editor", "Posición interna reservada para herramientas del motor; no afecta al juego normal ni a VR.");
-            Add("WindowedViewportYPosEditor", "Posición Y de la ventana del editor", "Posición interna reservada para herramientas del motor; no afecta al juego normal ni a VR.");
-            Add("MaxChannels", "Máximo de canales de audio", "Número máximo de sonidos simultáneos. Reducirlo puede cortar sonidos; aumentarlo consume más recursos.");
-            Add("MaxStreams", "Máximo de flujos de audio", "Cantidad máxima de pistas de audio transmitidas simultáneamente desde disco.");
-            Add("StreamBufferSize", "Búfer de audio en streaming", "Tamaño del búfer usado para audio transmitido. Cambiarlo puede afectar a cortes, latencia y memoria.");
-            Add("AdapterNumber", "Adaptador gráfico", "Índice de la GPU elegida por esta ruta de renderizado. -1 deja que el motor seleccione el adaptador; un índice erróneo puede impedir el arranque.");
-            Add("TesselationFactor", "Factor de teselación", "Factor interno de detalle geométrico de esta ruta de renderizado. El efecto real depende del renderizador activo.");
-            Add("CheckForOverflow", "Comprobar desbordamientos", "Comprobación interna de diagnóstico del renderizador; puede afectar al rendimiento y no suele activarse para jugar.");
-            Add("BatchRenderFlash", "Agrupar renderizado Flash", "Agrupa el dibujo de la interfaz Flash del juego. Alterarlo puede afectar a menús y HUD.");
-            Add("DetailTextures", "Texturas de detalle", "Añade capas de textura fina en superficies cercanas; mejora detalle a costa de algo de GPU y memoria.");
-            Add("HDRSceneExpBias", "Compensación de exposición HDR", "Ajusta la exposición base de la escena HDR. Cambios grandes pueden empeorar la visibilidad y comodidad en VR.");
-            Add("MaxSkeletalProjectorsPerActor", "Proyectores por personaje", "Límite de efectos proyectados sobre cada actor animado. Valores altos pueden aumentar la carga gráfica.");
-            Add("StreamingDistanceScale", "Distancia de carga de recursos", "Escala la distancia usada para cargar recursos visuales. Puede afectar a nitidez, memoria y tirones en VR.");
-            Add("HighDetailShaders", "Shaders de alto detalle", "Activa versiones de mayor calidad de los shaders, con mayor coste de GPU.");
-            Add("UseRippleSystem", "Ondulaciones del agua", "Activa el sistema de ondas y perturbaciones de las superficies de agua.");
-            Add("UseHighDetailSoftParticles", "Partículas suaves de alta calidad", "Usa partículas con transiciones más suaves contra la geometría; mejora calidad y aumenta carga gráfica.");
-            Add("UseSpecCubeMap", "Reflejos especulares por cubemap", "Activa reflejos aproximados mediante mapas cúbicos. Puede mejorar materiales metálicos y mojados.");
-            Add("ForceGlobalLighting", "Forzar iluminación global", "Fuerza una ruta global de iluminación del motor. Es un ajuste avanzado que puede cambiar mucho la imagen.");
-            Add("CascadingWaterSimulationVelocity", "Velocidad de simulación del agua", "Controla la velocidad interna de determinados efectos de agua en cascada.");
-            Add("MovementStick", "Palanca de movimiento", "Indica qué palanca del mando tradicional usa el juego para el movimiento. El mod traduce sus controles VR a esta entrada.");
-            Add("AutoCenter", "Centrado automático", "Hace que la vista o la entrada tradicional tienda a recentrarse. En VR puede sentirse artificial.");
-            Add("bReverb", "Reverberación", "Activa reverberación ambiental, útil para la sensación espacial de las estancias.");
-            Add("bEAXEnabled", "Efectos de audio EAX", "Activa la antigua ruta de efectos EAX si está disponible; normalmente no es necesaria con audio moderno del visor.");
-            Add("GameDifficulty", "Dificultad", "Nivel de dificultad de la partida guardado por el juego.");
-            Add("AdaptiveTraining", "Ayudas de aprendizaje adaptativas", "Permite que el juego adapte determinados consejos o ayudas al progreso del jugador.");
-            Add("NoVitaChamber", "Desactivar Vita-Cámaras", "Impide la reaparición mediante Vita-Cámaras cuando está activado.");
-            Add("QuestArrow", "Flecha de objetivo", "Muestra la ayuda direccional hacia el objetivo dentro de la interfaz del juego.");
-            Add("bShowShimmer", "Resaltar objetos interactivos", "Muestra un brillo visual sobre ciertos objetos; puede facilitar localizarlos dentro del visor.");
-            Add("bHighlightFocussedItems", "Resaltar elementos enfocados", "Destaca los objetos a los que apunta o enfoca el jugador.");
-            Add("UseGamePlusData", "Usar datos de Nueva Partida+", "Permite que el juego reutilice datos compatibles de una partida terminada.");
+            Add("WindowedViewportX", "Horizontal resolution", "Backbuffer width for windowed startup. The mod uses this surface to construct the VR image.");
+            Add("WindowedViewportY", "Vertical resolution", "Backbuffer height for windowed startup. This mod recommends keeping it equal to width.");
+            Add("FullscreenViewportX", "Fullscreen horizontal resolution", "Width used for fullscreen startup. The launcher keeps it equal to the windowed resolution to avoid unexpected changes.");
+            Add("FullscreenViewportY", "Fullscreen vertical resolution", "Height used for fullscreen startup. The launcher keeps it equal to the windowed resolution.");
+            Add("MenuViewportX", "Internal game menu width", "Logical resolution of the original 2D game menus. Does not control the mod's F10 menu size.");
+            Add("MenuViewportY", "Internal game menu height", "Logical resolution of the original 2D game menus. Does not control the mod's F10 menu position.");
+            Add("StartupFullscreen", "Start fullscreen", "Choose whether the game starts fullscreen. Windowed mode (False) is the tested VR path; exclusive mode may prevent the requested resolution from applying correctly.");
+            Add("Brightness", "Brightness", "Image brightness level. Different sections use different scales; change only the section actually used by the game.");
+            Add("Contrast", "Contrast", "Image contrast level. May affect readability in the headset.");
+            Add("Gamma", "Gamma", "Image brightness curve. Large changes may hide shadow detail or blow out highlights in the headset.");
+            Add("UseVSync", "Vertical sync", "Synchronize presentation with the configured refresh rate. May add VR latency or interfere with runtime pacing; effects depend on the active graphics path.");
+            Add("VSync", "User vertical sync", "VSync preference saved by the game. May affect VR latency and frame pacing.");
+            Add("DesiredRefreshRate", "Requested refresh rate", "Refresh rate requested by the desktop renderer. Does not directly change OpenXR headset refresh rate.");
+            Add("MinDesiredFrameRate", "Desired minimum frame rate", "Internal target used for engine performance decisions. Not the headset refresh limit.");
+            Add("UseMultithreadedRendering", "Multithreaded rendering", "Allow the renderer to distribute work across threads. May change performance and VR frame pacing.");
+            Add("UseMultithreading", "Engine multithreading", "Enable general engine multithreading. May affect performance and frame pacing stability.");
+            Add("ReduceMouseLag", "Reduce mouse latency", "Special engine path to reduce input latency. Usually unnecessary with VR controllers and may affect performance.");
+            Add("Sync Mouse To Framerate", "Sync mouse to frames", "Tie mouse input to rendering cadence. Usually does not help motion controllers.");
+            Add("HorizontalFOV", "Horizontal field of view", "Horizontal FOV saved by the game. The custom VR DLL replaces it with full headset FOV during play.");
+            Add("bHorizontalFOVLock", "Lock horizontal FOV", "Lock saved by the game. Disabling it did not remove cropping in tests; leave unchanged because the VR DLL corrects FOV live.");
+            Add("HorizontalFOVLock", "Horizontal FOV lock", "Renderer field-of-view policy. Leave unchanged in this installation and let the VR DLL apply headset FOV.");
+            Add("ControlSensitivity", "Controller sensitivity", "Overall sensitivity selected in game options.");
+            Add("Sensitivity", "Sensitivity", "Sensitivity value stored in the game profile.");
+            Add("MouseSensitivity", "Mouse sensitivity", "Mouse sensitivity. Does not directly control VR controller turn speed, which is set in vrpreset.ini.");
+            Add("MouseAcceleration", "Mouse acceleration", "Make turning also depend on mouse movement speed.");
+            Add("MouseSmoothing", "Mouse smoothing", "Filter mouse input. This is not VR controller turn smoothing.");
+            Add("UseController", "Use gamepad", "Enable the client's gamepad input path. The mod generates gamepad input from VR controllers.");
+            Add("UseJoystick", "Use joystick", "Enable Windows client joystick support.");
+            Add("CaptureMouse", "Capture mouse", "Keep the cursor captured in the game window. May affect mouse use in the F10 menu.");
+            Add("AutoAim", "Automatic aim assist", "Game aim assist. The mod also provides lockOnDisabled to prevent magnetic aim in VR.");
+            Add("WantsXboxController", "Prefer Xbox controller", "Use the game's controller interface and input. Matches the VR mod's controller emulation.");
+            Add("InvertYAxis", "Invert vertical axis", "Invert the vertical axis of traditional input.");
+            Add("Vibration", "Controller vibration", "Enable game-requested vibration; mapping to VR controllers depends on the mod/runtime.");
+            Add("bMaintainUIScale", "Keep interface scale", "Try to preserve original HUD scale when resolution changes. Does not control the OpenXR HUD panel or the mod's F10 menu.");
+            Add("MouseIconScale", "Pointer size", "Mouse pointer scale in the game interface.");
+            Add("ScreenFlashes", "Screen flashes", "Allow damage flashes and other effects. May be intense or uncomfortable in VR.");
+            Add("Decals", "Decals", "Enable marks such as impacts and stains. Mainly affects quality and performance.");
+            Add("NoDynamicLights", "Disable dynamic lights", "Remove dynamic lights to improve performance at the cost of visual quality.");
+            Add("NoLighting", "Disable lighting", "Disable engine lighting. A diagnostic setting, not recommended during play.");
+            Add("LevelOfAnisotropy", "Anisotropic filtering", "Improve texture sharpness at oblique angles. Higher values use somewhat more GPU power.");
+            Add("UseTrilinear", "Trilinear filtering", "Smooth transitions between texture detail levels.");
+            Add("UsePrecaching", "Resource preloading", "Preload data to reduce later stutter, using more memory and increasing initial loading.");
+            Add("HighDetailActors", "High-detail characters", "Use detailed actors and characters.");
+            Add("SuperHighDetailActors", "Maximum-detail characters", "Enable the highest actor detail level.");
+            Add("UseHighDetailShadowMaps", "High-quality shadows", "Use higher-detail shadow maps at greater GPU cost.");
+            Add("Shadows", "Shadows", "Enable engine shadows. May have a noticeable VR impact.");
+            Add("RealTimeReflection", "Real-time reflections", "Enable dynamic reflections; improves the image and increases graphics load.");
+            Add("PostProcessing", "Post-processing", "Enable effects applied after rendering. Some may be uncomfortable or costly in VR.");
+            Add("UseDistortion", "Game graphics distortion", "Enable engine visual distortion. This is not headset optical correction, which is handled by the VR runtime.");
+            Add("UseFxaa", "Antialiasing FXAA", "Post-process edge smoothing. Lightweight, but may reduce headset image sharpness.");
+            Add("UseSoftwareAntiAliasing", "Software antialiasing", "Additional engine edge smoothing. May affect sharpness and performance.");
+            Add("HardwareOcclusion", "Hardware occlusion", "Avoid drawing hidden geometry. Usually improves performance.");
+            Add("TextureDetail", "Overall texture detail", "Overall texture quality. Higher values use more video memory.");
+            Add("FluidSurfaceDetail", "Fluid detail", "Quality of water and other fluid surfaces.");
+            Add("DynamicShadowDetail", "Dynamic shadow detail", "Quality of shadows that change in real time.");
+            Add("RenderDetail", "Rendering detail", "Overall renderer detail level.");
+            Add("UseHighDetailPostProcEffects", "High-quality post-processing", "Use higher-detail post-processing effects.");
+            Add("UseLinearSpace", "Linear color space", "Perform certain lighting and blending operations in linear space. May substantially change the image.");
+            Add("OverrideDesktopRefreshRate", "Override desktop refresh rate", "Allow the game to override monitor refresh rate. Does not control headset refresh rate.");
+            Add("AvoidHitches", "Avoid stutter", "Enable a renderer strategy to reduce stalls; may change memory usage or preloading.");
+            Add("SpeakerMode", "Speaker configuration", "Game audio channel layout. Stereo or the runtime's recommended setting usually suits VR headphones.");
+            Add("Use3DSound", "3D positional audio", "Enable the engine's 3D sound path. May affect spatial orientation in VR.");
+            Add("ReverseStereo", "Swap stereo channels", "Swap left and right. Leave off unless the channels are actually reversed.");
+            Add("MasterVolume", "Master volume", "Master game volume.");
+            Add("SFXVolume", "Effects volume", "Sound effect volume.");
+            Add("MusicVolume", "Music volume", "Music volume.");
+            Add("VoVolume", "Voice volume", "Dialogue and voice volume.");
+            Add("DialogSubtitles", "Dialogue subtitles", "Show conversation subtitles.");
+            Add("ArtSubtitles", "Art subtitles", "Show additional text or subtitles associated with game content.");
+            Add("language", "Language", "Language code or entry used by the corresponding section.");
+            Add("Coronas", "Light halos", "Enable halos around certain light sources. May add graphics load and appear intense in VR.");
+            Add("DecoLayers", "Decorative layers", "Enable decorative world layers. Disabling them may reduce detail and some graphics load.");
+            Add("Projectors", "Visual projectors", "Enable effects projected onto surfaces, such as lights or marks. May affect quality and performance.");
+            Add("ReportDynamicUploads", "Log dynamic uploads", "Renderer diagnostic option reporting dynamically uploaded resources; usually does not improve VR.");
+            Add("TextureDetailInterface", "Interface texture detail", "Original game interface texture quality. Does not change the mod's F10 menu size.");
+            Add("TextureDetailTerrain", "Terrain texture detail", "Quality of terrain and scene surface textures.");
+            Add("TextureDetailWeaponSkin", "Weapon texture detail", "Weapon model texture quality, especially visible up close in VR.");
+            Add("TextureDetailPlayerSkin", "Player texture detail", "Quality of textures on the player model.");
+            Add("TextureDetailWorld", "World texture detail", "Quality of general scene textures; higher values use more video memory.");
+            Add("TextureDetailRenderMap", "Rendered texture detail", "Quality of surfaces receiving game-generated images.");
+            Add("TextureDetailLightmap", "Lightmap detail", "Quality of precomputed scene lighting textures.");
+            Add("NoFractalAnim", "Disable fractal animation", "Disable certain procedural animations. May reduce visual motion and some graphics load.");
+            Add("ScaleHUDX", "Original HUD horizontal scale", "Horizontal adjustment of the game's 2D HUD. Does not control the OpenXR panel or the mod's F10 menu position.");
+            Add("MouseXMultiplier", "Horizontal mouse multiplier", "Scale horizontal mouse movement; this is not the turn speed configured in vrpreset.ini.");
+            Add("MouseYMultiplier", "Vertical mouse multiplier", "Scale vertical mouse movement; does not directly control VR controllers.");
+            Add("WindowedViewportXPos", "Window horizontal position", "Horizontal desktop window position. Does not move the image inside the headset.");
+            Add("WindowedViewportYPos", "Window vertical position", "Vertical desktop window position. Does not move the image inside the headset.");
+            Add("WindowedViewportXPosEditor", "Editor window X position", "Internal position reserved for engine tools; does not affect normal gameplay or VR.");
+            Add("WindowedViewportYPosEditor", "Editor window Y position", "Internal position reserved for engine tools; does not affect normal gameplay or VR.");
+            Add("MaxChannels", "Maximum audio channels", "Maximum simultaneous sounds. Lower values may cut sounds off; higher values use more resources.");
+            Add("MaxStreams", "Maximum audio streams", "Maximum audio tracks streamed from disk simultaneously.");
+            Add("StreamBufferSize", "Streaming audio buffer", "Buffer size for streamed audio. May affect dropouts, latency and memory.");
+            Add("AdapterNumber", "Graphics adapter", "GPU index for this rendering path. -1 lets the engine choose; an incorrect index may prevent startup.");
+            Add("TesselationFactor", "Tessellation factor", "Internal geometry detail factor for this rendering path. Actual effect depends on the active renderer.");
+            Add("CheckForOverflow", "Check for overflows", "Internal renderer diagnostic check; may affect performance and is normally disabled during play.");
+            Add("BatchRenderFlash", "Batch Flash rendering", "Batch drawing of the game's Flash interface. Changing it may affect menus and the HUD.");
+            Add("DetailTextures", "Detail textures", "Add fine texture layers to nearby surfaces; improves detail at some GPU and memory cost.");
+            Add("HDRSceneExpBias", "HDR exposure compensation", "Adjust base HDR scene exposure. Large changes may reduce visibility and VR comfort.");
+            Add("MaxSkeletalProjectorsPerActor", "Projectors per character", "Limit projected effects per animated actor. Higher values may increase graphics load.");
+            Add("StreamingDistanceScale", "Resource loading distance", "Scale visual resource loading distance. May affect sharpness, memory and VR stutter.");
+            Add("HighDetailShaders", "High-detail shaders", "Enable higher-quality shaders at greater GPU cost.");
+            Add("UseRippleSystem", "Water ripples", "Enable ripples and disturbances on water surfaces.");
+            Add("UseHighDetailSoftParticles", "High-quality soft particles", "Use particles with softer intersections against geometry; improves quality and increases graphics load.");
+            Add("UseSpecCubeMap", "Specular cubemap reflections", "Enable approximate cubemap reflections. May improve metallic and wet materials.");
+            Add("ForceGlobalLighting", "Force global lighting", "Force a global engine lighting path. An advanced setting that can substantially change the image.");
+            Add("CascadingWaterSimulationVelocity", "Water simulation speed", "Control the internal speed of certain cascading water effects.");
+            Add("MovementStick", "Movement stick", "Select the traditional gamepad stick used for movement. The mod maps VR controls to this input.");
+            Add("AutoCenter", "Auto-centering", "Make traditional view or input tend to recenter. May feel artificial in VR.");
+            Add("bReverb", "Reverb", "Enable environmental reverb for a stronger sense of room space.");
+            Add("bEAXEnabled", "EAX audio effects", "Enable legacy EAX effects if available; normally unnecessary with modern headset audio.");
+            Add("GameDifficulty", "Difficulty", "Difficulty level saved by the game.");
+            Add("AdaptiveTraining", "Adaptive training", "Allow the game to adapt certain tips or assistance to player progress.");
+            Add("NoVitaChamber", "Disable Vita-Chambers", "Prevent respawning through Vita-Chambers when enabled.");
+            Add("QuestArrow", "Objective arrow", "Show the directional objective guide in the game interface.");
+            Add("bShowShimmer", "Highlight interactive objects", "Show a glow on certain objects; may make them easier to find in the headset.");
+            Add("bHighlightFocussedItems", "Highlight focused items", "Highlight objects the player aims at or focuses on.");
+            Add("UseGamePlusData", "Use New Game+ data", "Allow the game to reuse compatible data from a completed playthrough.");
         }
 
         private static void Add(string key, string name, string description)
@@ -1581,19 +1581,19 @@ namespace BioshockVrLauncher
             if (!Descriptions.TryGetValue(entry.Key, out description))
             {
                 if (entry.Impact == IniImpact.Warning)
-                    description = "Ajuste interno del motor o de una plataforma distinta. No hay una interpretación segura para VR; modifícalo solo si sabes exactamente qué espera Unreal Engine.";
+                    description = "Internal engine setting or setting for another platform. No safe VR interpretation; change only if you know exactly what Unreal Engine expects.";
                 else if (entry.Impact == IniImpact.Performance)
-                    description = "Ajuste gráfico o de rendimiento del motor. Puede cambiar calidad, consumo de GPU/CPU o regularidad de fotogramas en VR; prueba un solo cambio cada vez.";
+                    description = "Engine graphics or performance setting. May affect quality, GPU/CPU usage or VR frame pacing; test one change at a time.";
                 else if (entry.Impact == IniImpact.VrDirect)
-                    description = "Ajuste relacionado con la imagen, entrada o interfaz que puede sentirse directamente dentro del visor. Guarda una copia y comprueba el resultado con cuidado.";
+                    description = "Image, input or interface setting that may be noticeable in the headset. Keep a backup and check the result carefully.";
                 else if (IsBoolean(entry.Value))
-                    description = "Activa o desactiva este comportamiento del juego. Es una opción general y no se ha identificado un efecto VR directo.";
+                    description = "Enable or disable this game behavior. A general option with no identified direct VR effect.";
                 else
-                    description = "Valor de configuración general del juego. No se ha identificado un efecto VR directo; se conserva visible para ofrecer acceso al Bioshock2SP.ini completo.";
+                    description = "General game setting. No direct VR effect identified; shown to provide access to the complete Bioshock2SP.ini.";
             }
             if (consoleSection)
-                description = "Copia para consola de «" + entry.FriendlyName +
-                    "». Esta sección no afecta a la versión de Windows ni al mod VR instalado; se muestra únicamente para que Bioshock2SP.ini esté completo.";
+                description = "Console copy of '" + entry.FriendlyName +
+                    "'. This section does not affect the Windows version or installed VR mod; shown only for a complete Bioshock2SP.ini view.";
             entry.Description = description;
         }
 
@@ -1623,17 +1623,17 @@ namespace BioshockVrLauncher
                 entry.Impact = IniImpact.Warning;
                 entry.Protected = true;
                 string selected = alternativeRenderer ? activeRenderer : activeAudio;
-                entry.Description = "Ajuste de una ruta alternativa que este Bioshock2SP.ini no tiene seleccionada. " +
-                    "La ruta activa es [" + selected + "]; cambiar este valor normalmente no afectará al juego ni a VR. " +
-                    "Se mantiene protegido para evitar confundir una copia inactiva con el ajuste efectivo.";
+                entry.Description = "Setting for an alternative path not selected by this Bioshock2SP.ini. " +
+                    "The active path is [" + selected + "]; changing this value normally will not affect the game or VR. " +
+                    "Kept protected to avoid confusing an inactive copy with the effective setting.";
             }
         }
 
         public static string ImpactText(IniImpact impact)
         {
-            if (impact == IniImpact.VrDirect) return "VR DIRECTO";
-            if (impact == IniImpact.Performance) return "REL. VR";
-            if (impact == IniImpact.Warning) return "AVISO";
+            if (impact == IniImpact.VrDirect) return "DIRECT VR";
+            if (impact == IniImpact.Performance) return "VR REL.";
+            if (impact == IniImpact.Warning) return "WARNING";
             return "GENERAL";
         }
 
@@ -1645,11 +1645,11 @@ namespace BioshockVrLauncher
 
         private static string Humanize(string key)
         {
-            if (string.IsNullOrEmpty(key)) return "Ajuste sin nombre";
+            if (string.IsNullOrEmpty(key)) return "Unnamed setting";
             string result = key.Replace('_', ' ');
             result = Regex.Replace(result, "([a-z0-9])([A-Z])", "$1 $2");
             result = Regex.Replace(result, "\\s+", " ").Trim();
-            return "Ajuste: " + result;
+            return "Setting: " + result;
         }
     }
 
@@ -1783,7 +1783,7 @@ namespace BioshockVrLauncher
             _toolTip.InitialDelay = 350;
             _toolTip.ReshowDelay = 100;
 
-            Text = GameProfile.DisplayName + " VR · DLSS/DLAA 0.2.13 · candidato";
+            Text = GameProfile.DisplayName + " VR · DLSS/DLAA 0.2.17 · English";
             try
             {
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -1801,7 +1801,7 @@ namespace BioshockVrLauncher
             if (selfTest)
             {
                 _dlssBackendStatus = new DlssBackendStatus();
-                _dlssBackendStatus.Summary = "Autoprueba sin archivos de usuario";
+                _dlssBackendStatus.Summary = "Self-test without user files";
                 return;
             }
             _gameExePath = !string.IsNullOrEmpty(Program.InitialGamePath) &&
@@ -1878,149 +1878,149 @@ namespace BioshockVrLauncher
         {
             List<ParamDef> p = new List<ParamDef>();
 
-            const string camera = "Cámara y escala";
-            p.Add(ParamDef.Number("worldScale", camera, "Escala del mundo",
-                "Unidades del juego por metro real. Subirla hace que el mundo se perciba más pequeño; bajarla, más grande. También cambia cuánto avanzas al moverte físicamente.",
-                "UU/metro", 10, 200, 1, 1, "100.0"));
-            p.Add(ParamDef.Number("headUpUu", camera, "Altura adicional de la cabeza",
-                "Desplaza el punto de vista verticalmente. Un valor positivo te eleva; uno negativo te baja, sin cambiar el tamaño del mundo.",
+            const string camera = "Camera and scale";
+            p.Add(ParamDef.Number("worldScale", camera, "World scale",
+                "Game units per real-world meter. Higher values make the world feel smaller; lower values make it feel larger. Also changes physical movement distance.",
+                "UU/meter", 10, 200, 1, 1, "100.0"));
+            p.Add(ParamDef.Number("headUpUu", camera, "Head height offset",
+                "Move the viewpoint vertically. Positive raises you; negative lowers you, without changing world size.",
                 "UU", -150, 150, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Number("headFwdUu", camera, "Desplazamiento frontal de la cabeza",
-                "Mueve el punto de vista hacia delante o hacia atrás respecto al cuerpo. Positivo significa hacia delante.",
+            p.Add(ParamDef.Number("headFwdUu", camera, "Head forward offset",
+                "Move the viewpoint forward or backward relative to the body. Positive moves forward.",
                 "UU", -80, 80, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Number("ipdMm", camera, "Distancia interpupilar virtual (IPD)",
-                "Separación entre las cámaras de ambos ojos. Normalmente debe coincidir con la IPD del visor; un valor incorrecto altera la escala percibida y puede cansar la vista.",
+            p.Add(ParamDef.Number("ipdMm", camera, "Virtual interpupillary distance (IPD)",
+                "Distance between the two eye cameras. Normally matches headset IPD; an incorrect value changes perceived scale and may cause eye strain.",
                 "mm", 55, 75, 0.5m, 1, "63.0"));
-            p.Add(ParamDef.Number("gameFovDeg", camera, "FOV objetivo del juego (avanzado)",
-                "Ángulo horizontal que el mod puede escribir en el juego. La DLL personalizada instalada prioriza el FOV completo del visor, por lo que normalmente no necesitas tocar este valor.",
-                "grados", 75, 150, 1, 1, "130.0"));
+            p.Add(ParamDef.Number("gameFovDeg", camera, "Target game FOV (advanced)",
+                "Horizontal angle the mod can write to the game. The custom DLL prioritizes the headset's full FOV, so this normally needs no adjustment.",
+                "degrees", 75, 150, 1, 1, "130.0"));
 
-            const string hands = "Manos y apuntado";
-            p.Add(ParamDef.Number("handScaleL", hands, "Tamaño de la mano izquierda",
-                "Multiplicador visual de la mano de plásmidos. 1,00 conserva el tamaño base; 1,10 la hace un 10 % mayor.",
-                "multiplicador", 0.2m, 4.0m, 0.01m, 3, "1.000"));
-            p.Add(ParamDef.Number("handScaleR", hands, "Tamaño de la mano derecha",
-                "Multiplicador visual de la mano del arma. 1,00 conserva el tamaño base; 1,10 la hace un 10 % mayor.",
-                "multiplicador", 0.2m, 4.0m, 0.01m, 3, "1.000"));
-            p.Add(ParamDef.Number("wScale", hands, "Tamaño de las armas",
-                "Escala uniforme del modelo del arma alrededor de la empuñadura. No modifica el tamaño de las manos ni del mundo.",
-                "multiplicador", 0.3m, 2.5m, 0.01m, 3, "1.000"));
-            p.Add(ParamDef.Number("aimTrimLPitch", hands, "Inclinación del apuntado izquierdo",
-                "Corrige arriba/abajo la dirección de disparo de la mano izquierda (plásmidos). No mueve el modelo de la mano.",
-                "grados", -90, 90, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimTrimLYaw", hands, "Giro del apuntado izquierdo",
-                "Corrige a izquierda/derecha la dirección de disparo de la mano izquierda (plásmidos).",
-                "grados", -90, 90, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimTrimRPitch", hands, "Inclinación del apuntado derecho",
-                "Corrige arriba/abajo la dirección de disparo de la mano derecha (armas). No mueve el modelo del arma.",
-                "grados", -90, 90, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimTrimRYaw", hands, "Giro del apuntado derecho",
-                "Corrige a izquierda/derecha la dirección de disparo de la mano derecha (armas).",
-                "grados", -90, 90, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimPosLFwd", hands, "Origen izquierdo: delante/atrás",
-                "Desplaza el punto desde el que nace el disparo del plásmido a lo largo de la dirección de la mano. No desplaza la mano visible.",
+            const string hands = "Hands and aiming";
+            p.Add(ParamDef.Number("handScaleL", hands, "Left hand size",
+                "Visual multiplier for the plasmid hand. 1.00 keeps the base size; 1.10 makes it 10 % larger.",
+                "multiplier", 0.2m, 4.0m, 0.01m, 3, "1.000"));
+            p.Add(ParamDef.Number("handScaleR", hands, "Right hand size",
+                "Visual multiplier for the weapon hand. 1.00 keeps the base size; 1.10 makes it 10 % larger.",
+                "multiplier", 0.2m, 4.0m, 0.01m, 3, "1.000"));
+            p.Add(ParamDef.Number("wScale", hands, "Weapon size",
+                "Uniform weapon model scale around the grip. Does not change hand or world size.",
+                "multiplier", 0.3m, 2.5m, 0.01m, 3, "1.000"));
+            p.Add(ParamDef.Number("aimTrimLPitch", hands, "Left aim pitch",
+                "Adjust the left hand's firing direction up/down (plasmids). Does not move the hand model.",
+                "degrees", -90, 90, 0.5m, 1, "0.0"));
+            p.Add(ParamDef.Number("aimTrimLYaw", hands, "Left aim yaw",
+                "Adjust the left hand's firing direction left/right (plasmids).",
+                "degrees", -90, 90, 0.5m, 1, "0.0"));
+            p.Add(ParamDef.Number("aimTrimRPitch", hands, "Right aim pitch",
+                "Adjust the right hand's firing direction up/down (weapons). Does not move the weapon model.",
+                "degrees", -90, 90, 0.5m, 1, "0.0"));
+            p.Add(ParamDef.Number("aimTrimRYaw", hands, "Right aim yaw",
+                "Adjust the right hand's firing direction left/right (weapons).",
+                "degrees", -90, 90, 0.5m, 1, "0.0"));
+            p.Add(ParamDef.Number("aimPosLFwd", hands, "Left origin: forward/back",
+                "Move the plasmid shot origin along the hand's direction. Does not move the visible hand.",
                 "cm", -30, 30, 0.1m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimPosLRight", hands, "Origen izquierdo: lateral",
-                "Desplaza lateralmente el origen del disparo izquierdo. Positivo va hacia la derecha local de la mano.",
+            p.Add(ParamDef.Number("aimPosLRight", hands, "Left origin: right",
+                "Move the left shot origin sideways. Positive moves toward the hand's local right.",
                 "cm", -30, 30, 0.1m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimPosLUp", hands, "Origen izquierdo: altura",
-                "Sube o baja el origen del disparo izquierdo respecto a la mano. Positivo significa arriba.",
+            p.Add(ParamDef.Number("aimPosLUp", hands, "Left origin: up",
+                "Raise or lower the left shot origin relative to the hand. Positive moves up.",
                 "cm", -30, 30, 0.1m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimPosRFwd", hands, "Origen derecho: delante/atrás",
-                "Desplaza el punto desde el que nace el disparo del arma a lo largo de la dirección de la mano. No desplaza el arma visible.",
+            p.Add(ParamDef.Number("aimPosRFwd", hands, "Right origin: forward/back",
+                "Move the weapon's shot origin along the hand's direction. Does not move the visible weapon.",
                 "cm", -30, 30, 0.1m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimPosRRight", hands, "Origen derecho: lateral",
-                "Desplaza lateralmente el origen del disparo del arma. Positivo va hacia la derecha local de la mano.",
+            p.Add(ParamDef.Number("aimPosRRight", hands, "Right origin: right",
+                "Move the weapon's shot origin sideways. Positive moves toward the hand's local right.",
                 "cm", -30, 30, 0.1m, 1, "0.0"));
-            p.Add(ParamDef.Number("aimPosRUp", hands, "Origen derecho: altura",
-                "Sube o baja el origen del disparo del arma respecto a la mano. Positivo significa arriba.",
+            p.Add(ParamDef.Number("aimPosRUp", hands, "Right origin: up",
+                "Raise or lower the weapon's shot origin relative to the hand. Positive moves up.",
                 "cm", -30, 30, 0.1m, 1, "0.0"));
-            p.Add(ParamDef.Boolean("laserOn", hands, "Láser de apuntado",
-                "Muestra una línea de puntos a lo largo del rayo real de apuntado. Es útil para calibrar; puede dejarse apagado al jugar.", false));
-            p.Add(ParamDef.Boolean("aimDotOn", hands, "Punto de mira del mod",
-                "Muestra un punto en la trayectoria real del disparo, independiente de la cruceta plana del juego.", false));
-            p.Add(ParamDef.Number("aimDotDistM", hands, "Distancia del punto de mira",
-                "Distancia a la que aparece el punto de mira del mod. Solo se aprecia cuando el punto está activado.",
-                "metros", 0.5m, 20, 0.1m, 2, "5.00"));
-            p.Add(ParamDef.Number("aimDotSizeDeg", hands, "Tamaño del punto de mira",
-                "Diámetro angular del punto; al medirse en grados conserva un tamaño aparente parecido a distintas distancias.",
-                "grados", 0.1m, 3.0m, 0.05m, 2, "0.50"));
+            p.Add(ParamDef.Boolean("laserOn", hands, "Aim laser",
+                "Show a dotted line along the actual aim ray. Useful for calibration; can be left off during play.", false));
+            p.Add(ParamDef.Boolean("aimDotOn", hands, "Mod aim dot",
+                "Show a dot on the actual shot path, independent of the game's flat crosshair.", false));
+            p.Add(ParamDef.Number("aimDotDistM", hands, "Aim dot distance",
+                "Distance at which the mod's aim dot appears. Only visible when the dot is enabled.",
+                "meters", 0.5m, 20, 0.1m, 2, "5.00"));
+            p.Add(ParamDef.Number("aimDotSizeDeg", hands, "Aim dot size",
+                "Angular dot diameter in degrees; maintains a similar apparent size at different distances.",
+                "degrees", 0.1m, 3.0m, 0.05m, 2, "0.50"));
 
-            const string movement = "Movimiento y giro";
-            p.Add(ParamDef.Boolean("autoVr", movement, "Activar el modo VR automáticamente",
-                "Aplica la configuración VR completa al iniciar el juego. Conviene mantenerlo activado para usar este lanzador.", true));
-            p.Add(ParamDef.Number("bodyRate", movement, "Suavidad con la que gira el cuerpo",
-                "Velocidad a la que el cuerpo alcanza la orientación de la cabeza. 0 hace el seguimiento instantáneo; valores mayores lo hacen progresivo.",
-                "por segundo", 0, 10, 0.05m, 2, "0.00"));
-            p.Add(ParamDef.Number("bodyDeadzoneDeg", movement, "Zona muerta del cuerpo",
-                "Diferencia de giro de la cabeza que se permite antes de que el cuerpo empiece a acompañarla. Más alta reduce pequeñas correcciones, pero puede hacer el inicio más brusco.",
-                "grados", 0, 60, 0.5m, 1, "0.0"));
-            p.Add(ParamDef.Boolean("moveDirInstant", movement, "Dirección de movimiento inmediata",
-                "Hace que la dirección al caminar siga la cabeza inmediatamente durante giros rápidos.", true));
-            p.Add(ParamDef.Number("turnScale", movement, "Velocidad del giro suave",
-                "Multiplicador aplicado al giro con la palanca. 1,00 es la velocidad base; menor gira más despacio y mayor, más rápido.",
-                "multiplicador", 0.1m, 4.0m, 0.05m, 2, "1.00"));
-            p.Add(ParamDef.Boolean("snapTurn", movement, "Giro por pasos",
-                "Sustituye el giro continuo por saltos de un ángulo fijo. Desactivado mantiene el giro suave.", false));
-            p.Add(ParamDef.Number("snapAngleDeg", movement, "Ángulo de cada paso",
-                "Número de grados de cada giro discreto. Solo tiene efecto si está activado el giro por pasos.",
-                "grados", 5, 180, 5, 0, "45"));
+            const string movement = "Movement and turning";
+            p.Add(ParamDef.Boolean("autoVr", movement, "Start VR automatically",
+                "Apply the full VR configuration when the game starts. Recommended on when using this launcher.", true));
+            p.Add(ParamDef.Number("bodyRate", movement, "Body turn smoothing",
+                "Rate at which the body catches up with head orientation. 0 follows instantly; higher values follow progressively.",
+                "per second", 0, 10, 0.05m, 2, "0.00"));
+            p.Add(ParamDef.Number("bodyDeadzoneDeg", movement, "Body dead zone",
+                "Head rotation allowed before the body starts following. Higher values reduce small corrections but may make the initial turn more abrupt.",
+                "degrees", 0, 60, 0.5m, 1, "0.0"));
+            p.Add(ParamDef.Boolean("moveDirInstant", movement, "Immediate movement direction",
+                "Make walking direction follow your head immediately during quick turns.", true));
+            p.Add(ParamDef.Number("turnScale", movement, "Smooth turn speed",
+                "Multiplier for stick turning. 1.00 is the base speed; lower is slower and higher is faster.",
+                "multiplier", 0.1m, 4.0m, 0.05m, 2, "1.00"));
+            p.Add(ParamDef.Boolean("snapTurn", movement, "Snap turning",
+                "Replace continuous turning with fixed-angle steps. Off keeps smooth turning.", false));
+            p.Add(ParamDef.Number("snapAngleDeg", movement, "Snap turn angle",
+                "Degrees in each snap turn. Only applies when snap turning is enabled.",
+                "degrees", 5, 180, 5, 0, "45"));
 
-            const string swing = "Ataque por gesto";
-            p.Add(ParamDef.Boolean("swingOn", swing, "Atacar al blandir la llave inglesa",
-                "Convierte un movimiento rápido de la mano derecha en una pulsación de ataque cuando llevas la llave inglesa.", true));
-            p.Add(ParamDef.Number("swingThreshold", swing, "Velocidad necesaria del gesto",
-                "Velocidad mínima que debe alcanzar la mano para atacar. Subirla exige un gesto más fuerte y reduce activaciones accidentales.",
+            const string swing = "Gesture attacks";
+            p.Add(ParamDef.Boolean("swingOn", swing, "Attack by swinging the wrench",
+                "Convert a fast right-hand motion into an attack press when holding the wrench.", true));
+            p.Add(ParamDef.Number("swingThreshold", swing, "Gesture activation speed",
+                "Minimum hand speed needed to attack. A higher value requires a stronger gesture and reduces accidental activation.",
                 "m/s", 0.3m, 10, 0.05m, 2, "3.60"));
-            p.Add(ParamDef.Number("swingRearm", swing, "Velocidad para rearmar el gesto",
-                "La mano debe volver a bajar de esta velocidad antes de aceptar otro golpe. Debe ser menor que la velocidad necesaria del gesto.",
+            p.Add(ParamDef.Number("swingRearm", swing, "Gesture reset speed",
+                "The hand must drop below this speed before another strike is accepted. Must be below the gesture activation speed.",
                 "m/s", 0.05m, 9, 0.05m, 2, "1.00"));
-            p.Add(ParamDef.Number("swingCooldownMs", swing, "Espera entre golpes",
-                "Tiempo mínimo entre dos ataques generados por el gesto. Aumentarlo evita golpes dobles.",
+            p.Add(ParamDef.Number("swingCooldownMs", swing, "Delay between strikes",
+                "Minimum time between gesture attacks. Increasing it prevents double strikes.",
                 "ms", 0, 2000, 10, 0, "300"));
-            p.Add(ParamDef.Number("swingPulseMs", swing, "Duración de la pulsación de ataque",
-                "Cuánto tiempo simula el mod que el gatillo permanece pulsado. Si es demasiado corto, el juego puede no detectar el golpe.",
+            p.Add(ParamDef.Number("swingPulseMs", swing, "Attack press duration",
+                "How long the mod holds the simulated trigger. If too short, the game may not detect the attack.",
                 "ms", 20, 500, 10, 0, "120"));
-            p.Add(ParamDef.Number("swingDelayMs", swing, "Retraso antes de atacar",
-                "Espera entre detectar el gesto y pulsar el ataque. 0 responde inmediatamente.",
+            p.Add(ParamDef.Number("swingDelayMs", swing, "Attack delay",
+                "Delay between detecting a gesture and pressing attack. 0 responds immediately.",
                 "ms", 0, 400, 10, 0, "0"));
-            p.Add(ParamDef.Boolean("swingHeadRel", swing, "Medir el gesto respecto a la cabeza",
-                "Resta el movimiento general de la cabeza al calcular la velocidad de la mano, reduciendo ataques accidentales al mover todo el cuerpo.", true));
+            p.Add(ParamDef.Boolean("swingHeadRel", swing, "Measure gestures relative to head",
+                "Subtract overall head movement when calculating hand speed, reducing accidental attacks while moving your body.", true));
 
-            const string cinema = "Cinemáticas y efectos";
-            p.Add(ParamDef.Boolean("cineBarsHidden", cinema, "Ocultar bandas negras de las cinemáticas",
-                "Omite las bandas panorámicas; la imagen que hay debajo sigue completa, sin recorte ni estiramiento.", true));
-            p.Add(ParamDef.Choice("cineDrive", cinema, "Comportamiento durante cinemáticas",
-                "Elige si la cámara VR sigue mandando, si se respeta totalmente la cámara dirigida del juego o si se permite mirar con la cabeza sobre esa cámara.",
+            const string cinema = "Cutscenes and effects";
+            p.Add(ParamDef.Boolean("cineBarsHidden", cinema, "Hide cutscene letterbox bars",
+                "Hide letterbox bars; the underlying image stays complete, without cropping or stretching.", true));
+            p.Add(ParamDef.Choice("cineDrive", cinema, "Cutscene behavior",
+                "Choose VR camera control, full game-directed camera control, or head movement on top of the game camera.",
                 new string[] {
-                    "0 · La VR sigue controlando la cámara",
-                    "1 · Cámara y manos dirigidas por el juego",
-                    "2 · Cámara del juego + movimiento de cabeza"
+                    "0 · VR camera",
+                    "1 · Game camera",
+                    "2 · Game + head"
                 }, 1));
-            p.Add(ParamDef.Boolean("cineSubsInFrame", cinema, "Subtítulos dentro de la imagen 3D",
-                "Activado incrusta los subtítulos en cada imagen ocular y pueden verse dobles. Desactivado los deja en el panel HUD, normalmente más legibles.", false));
-            p.Add(ParamDef.Boolean("effectsInFrame", cinema, "Efectos de pantalla en toda la vista",
-                "Coloca agua, daño y destellos sobre la vista completa en vez del panel HUD. Puede afectar también a algunos rellenos de las barras de salud y EVE.", false));
-            p.Add(ParamDef.Number("effectMaxVerts", cinema, "Límite de vértices para efectos (avanzado)",
-                "Máximo de vértices de un dibujo sin textura que el mod trata como efecto de pantalla. El valor 8 es el ajuste probado; conviene no cambiarlo salvo diagnóstico.",
-                "vértices", 3, 100, 1, 0, "8"));
-            p.Add(ParamDef.Boolean("postFxRtOnly", cinema, "Filtrar efectos por origen renderizado",
-                "Mantiene desenfoques como el del alcohol en la vista y evita confundir texturas normales del HUD con efectos. Activado es el ajuste recomendado.", true));
+            p.Add(ParamDef.Boolean("cineSubsInFrame", cinema, "Subtitles inside the 3D image",
+                "On embeds subtitles in each eye image, which may appear doubled. Off keeps them on the HUD panel, usually more readable.", false));
+            p.Add(ParamDef.Boolean("effectsInFrame", cinema, "Full-view screen effects",
+                "Place water, damage and flashes over the full view instead of the HUD panel. May also affect some health and EVE bar fills.", false));
+            p.Add(ParamDef.Number("effectMaxVerts", cinema, "Effect vertex limit (advanced)",
+                "Maximum vertices in an untextured draw treated as a screen effect. 8 is the tested value; change only for diagnostics.",
+                "vertices", 3, 100, 1, 0, "8"));
+            p.Add(ParamDef.Boolean("postFxRtOnly", cinema, "Filter effects by render source",
+                "Keep blur effects, such as alcohol blur, in the view without mistaking normal HUD textures for effects. Recommended on.", true));
 
-            const string hud = "HUD y ayudas";
-            p.Add(ParamDef.Boolean("lockOnDisabled", hud, "Desactivar ayuda magnética de apuntado",
-                "Evita que la asistencia de mando arrastre el apuntado hacia los enemigos. Activado suele ser más natural con controladores de movimiento.", true));
-            p.Add(ParamDef.Boolean("crosshairVisible", hud, "Mostrar la cruceta plana del juego",
-                "Vuelve a mostrar la cruceta 2D original. Es independiente del punto de mira tridimensional del mod.", false));
-            p.Add(ParamDef.Number("hudQuadDistM", hud, "Distancia del panel HUD",
-                "Distancia del panel flotante respecto a los ojos. Más lejos reduce su tamaño aparente si no aumentas también la anchura.",
-                "metros", 0.5m, 3.0m, 0.05m, 2, "1.30"));
-            p.Add(ParamDef.Number("hudQuadWidthM", hud, "Anchura del panel HUD",
-                "Anchura física del panel flotante. Aumentarla hace más grande el HUD dentro del visor.",
-                "metros", 0.3m, 3.0m, 0.05m, 2, "1.25"));
-            p.Add(ParamDef.Number("hudQuadUpM", hud, "Altura del panel HUD",
-                "Desplazamiento vertical del panel. Positivo lo sube y negativo lo baja.",
-                "metros", -1.0m, 1.0m, 0.05m, 2, "-0.10"));
+            const string hud = "HUD and aids";
+            p.Add(ParamDef.Boolean("lockOnDisabled", hud, "Disable magnetic aim assist",
+                "Prevent controller aim assist from pulling aim toward enemies. Usually feels more natural with motion controllers.", true));
+            p.Add(ParamDef.Boolean("crosshairVisible", hud, "Show the game's flat crosshair",
+                "Show the original 2D crosshair again. Independent of the mod's 3D aim dot.", false));
+            p.Add(ParamDef.Number("hudQuadDistM", hud, "HUD panel distance",
+                "Distance from the eyes to the floating panel. Farther away looks smaller unless width is also increased.",
+                "meters", 0.5m, 3.0m, 0.05m, 2, "1.30"));
+            p.Add(ParamDef.Number("hudQuadWidthM", hud, "HUD panel width",
+                "Physical width of the floating panel. Increasing it makes the HUD larger in the headset.",
+                "meters", 0.3m, 3.0m, 0.05m, 2, "1.25"));
+            p.Add(ParamDef.Number("hudQuadUpM", hud, "HUD panel height",
+                "Vertical panel offset. Positive raises it; negative lowers it.",
+                "meters", -1.0m, 1.0m, 0.05m, 2, "-0.10"));
 
             return GameProfile.IsBioShock2 ? Bs2Profile.AdaptDefinitions(p) : p;
         }
@@ -2043,7 +2043,7 @@ namespace BioshockVrLauncher
             header.Controls.Add(title);
 
             Label subtitle = new Label();
-            subtitle.Text = "Mod original de Mohamad Balouza · Fork DLSS/DLAA de Beren5556";
+            subtitle.Text = "Original mod by Mohamad Balouza · DLSS/DLAA fork by Beren5556";
             subtitle.ForeColor = SystemColors.GrayText;
             subtitle.Font = new Font("Segoe UI", 8.25f, FontStyle.Regular);
             subtitle.AutoSize = true;
@@ -2087,34 +2087,34 @@ namespace BioshockVrLauncher
             buttons.Padding = new Padding(0);
             footer.Controls.Add(buttons);
 
-            _launchButton = MakeButton("Guardar e iniciar", Blue, Color.White, 130);
+            _launchButton = MakeButton("Save and launch", Blue, Color.White, 130);
             _launchButton.Click += delegate { SaveAndLaunch(); };
             buttons.Controls.Add(_launchButton);
 
-            _saveButton = MakeButton("Guardar", SystemColors.Control, SystemColors.ControlText, 72);
+            _saveButton = MakeButton("Save", SystemColors.Control, SystemColors.ControlText, 72);
             _saveButton.Click += delegate { SaveConfiguration(true); };
             buttons.Controls.Add(_saveButton);
 
-            Button reload = MakeButton("Recargar", SystemColors.Control, SystemColors.ControlText, 75);
+            Button reload = MakeButton("Reload", SystemColors.Control, SystemColors.ControlText, 75);
             reload.Click += delegate { LoadConfiguration(true); };
             buttons.Controls.Add(reload);
 
             _statusLabel = new Label();
-            _statusLabel.Text = "Preparando configuración…";
+            _statusLabel.Text = "Preparing configuration…";
             _statusLabel.ForeColor = Muted;
             _statusLabel.AutoEllipsis = true;
             _statusLabel.SetBounds(8, 2, 655, 18);
             _statusLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             footer.Controls.Add(_statusLabel);
             ContextMenuStrip fileMenu = new ContextMenuStrip();
-            fileMenu.Items.Add("Abrir vrpreset.ini", null, delegate { OpenConfigurationFile(); });
-            fileMenu.Items.Add("Abrir " + GameProfile.IniName, null, delegate { OpenGameIniFile(); });
-            fileMenu.Items.Add("Ver copias de seguridad", null, delegate { OpenBackupFolder(); });
+            fileMenu.Items.Add("Open vrpreset.ini", null, delegate { OpenConfigurationFile(); });
+            fileMenu.Items.Add("Open " + GameProfile.IniName, null, delegate { OpenGameIniFile(); });
+            fileMenu.Items.Add("View backups", null, delegate { OpenBackupFolder(); });
             fileMenu.Items.Add(new ToolStripSeparator());
-            fileMenu.Items.Add("Créditos y licencias", null, delegate { ShowCreditsAndLicenses(); });
+            fileMenu.Items.Add("Credits and licenses", null, delegate { ShowCreditsAndLicenses(); });
             if (!FinalDlssEdition)
-                fileMenu.Items.Add("Abrir upscaler.ini", null, delegate { OpenUpscalerConfigurationFile(); });
-            Button files = MakeButton("Archivos y ayuda ▾", SystemColors.Control, SystemColors.ControlText, 135);
+                fileMenu.Items.Add("Open upscaler.ini", null, delegate { OpenUpscalerConfigurationFile(); });
+            Button files = MakeButton("Files and help ▾", SystemColors.Control, SystemColors.ControlText, 135);
             files.SetBounds(8, 23, 135, 26);
             files.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             files.ContextMenuStrip = fileMenu;
@@ -2130,14 +2130,14 @@ namespace BioshockVrLauncher
             _tabs.BringToFront();
 
             string[] categoryOrder = new string[] {
-                "Cámara y escala", "Manos y apuntado", "Movimiento y giro",
-                "Cinemáticas y efectos", "HUD y ayudas"
+                "Camera and scale", "Hands and aiming", "Movement and turning",
+                "Cutscenes and effects", "HUD and aids"
             };
             AddResolutionTab();
             foreach (string category in categoryOrder)
                 AddCategoryTab(category);
             if (GameProfile.IsBioShock2) AddWeaponsTab();
-            else AddCategoryTab("Ataque por gesto");
+            else AddCategoryTab("Gesture attacks");
 
             InitializeHiddenIniEditor();
 
@@ -2195,8 +2195,8 @@ namespace BioshockVrLauncher
 
         private void AddWeaponsTab()
         {
-            TabPage page = new TabPage("Armas");
-            page.Name = "Armas";
+            TabPage page = new TabPage("Weapons");
+            page.Name = "Weapons";
             page.Padding = new Padding(8);
             ComboBox select = new ComboBox();
             select.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -2220,7 +2220,7 @@ namespace BioshockVrLauncher
                 int row = 0;
                 foreach (ParamDef definition in _definitions)
                 {
-                    if (definition.Category != "Armas" ||
+                    if (definition.Category != "Weapons" ||
                         !definition.Key.StartsWith(Bs2Profile.WeaponClasses[weapon] + ".", StringComparison.Ordinal)) continue;
                     table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                     AddParameterRow(table, row++, definition);
@@ -2244,32 +2244,32 @@ namespace BioshockVrLauncher
 
         private void AddDiagnosticsTab()
         {
-            TabPage page = new TabPage("Diagnóstico");
-            page.Name = "Diagnóstico";
+            TabPage page = new TabPage("Diagnostics");
+            page.Name = "Diagnostics";
             page.Padding = new Padding(8);
             FlowLayoutPanel actions = new FlowLayoutPanel();
             actions.Dock = DockStyle.Top;
             actions.Height = 38;
-            Button refresh = MakeButton("Actualizar", SystemColors.Control, SystemColors.ControlText, 95);
+            Button refresh = MakeButton("Refresh", SystemColors.Control, SystemColors.ControlText, 95);
             refresh.Click += delegate { RefreshDiagnostics(); };
             actions.Controls.Add(refresh);
-            Button copy = MakeButton("Copiar informe", SystemColors.Control, SystemColors.ControlText, 130);
+            Button copy = MakeButton("Copy report", SystemColors.Control, SystemColors.ControlText, 130);
             copy.Click += delegate
             {
-                try { RefreshDiagnostics(); Clipboard.SetText(_diagnostics.Text); SetStatus("Diagnóstico copiado.", Success); }
-                catch (Exception ex) { SetStatus("No se pudo copiar: " + ex.Message, Color.Firebrick); }
+                try { RefreshDiagnostics(); Clipboard.SetText(_diagnostics.Text); SetStatus("Diagnostics copied.", Success); }
+                catch (Exception ex) { SetStatus("Could not copy: " + ex.Message, Color.Firebrick); }
             };
             actions.Controls.Add(copy);
-            Button open = MakeButton("Abrir datos VR", SystemColors.Control, SystemColors.ControlText, 125);
+            Button open = MakeButton("Open VR data", SystemColors.Control, SystemColors.ControlText, 125);
             open.Click += delegate
             {
                 try
                 {
                     if (Directory.Exists(GameProfile.LocalDirectory))
                         Process.Start(new ProcessStartInfo("explorer.exe", "\"" + GameProfile.LocalDirectory + "\"") { UseShellExecute = true });
-                    else SetStatus("La carpeta VR aún no existe; se creará al guardar.", Warning);
+                    else SetStatus("The VR directory does not exist yet; it will be created when saving.", Warning);
                 }
-                catch (Exception ex) { SetStatus("No se pudo abrir: " + ex.Message, Color.Firebrick); }
+                catch (Exception ex) { SetStatus("Could not open: " + ex.Message, Color.Firebrick); }
             };
             actions.Controls.Add(open);
             _diagnostics = new TextBox();
@@ -2278,7 +2278,7 @@ namespace BioshockVrLauncher
             _diagnostics.ScrollBars = ScrollBars.Both;
             _diagnostics.WordWrap = false;
             _diagnostics.Dock = DockStyle.Fill;
-            _diagnostics.Font = new Font("Consolas", 9);
+            _diagnostics.Font = new Font("Consoles", 9);
             page.Controls.Add(_diagnostics);
             page.Controls.Add(actions);
             _tabs.TabPages.Add(page);
@@ -2288,42 +2288,42 @@ namespace BioshockVrLauncher
         {
             if (_diagnostics == null) return;
             StringBuilder info = new StringBuilder();
-            info.AppendLine(GameProfile.DisplayName + " VR DLSS/DLAA · 0.2.13 candidato");
-            info.AppendLine("Fecha UTC: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture));
+            info.AppendLine(GameProfile.DisplayName + " VR DLSS/DLAA · 0.2.17 English");
+            info.AppendLine("UTC date: " + DateTime.UtcNow.ToString("u", CultureInfo.InvariantCulture));
             info.AppendLine("Steam AppID: " + GameProfile.AppId);
-            info.AppendLine("Ejecutable: " + (_gameExePath ?? "(no encontrado)"));
+            info.AppendLine("Executable: " + (_gameExePath ?? "(not found)"));
             try
             {
                 if (!string.IsNullOrEmpty(_gameExePath) && File.Exists(_gameExePath))
                 {
                     string hash = Bs2Profile.Hash(_gameExePath);
                     info.AppendLine("SHA-256: " + hash);
-                    info.AppendLine("Compilación compatible: " + (hash == GameProfile.ExeHash ? "sí" : "NO"));
+                    info.AppendLine("Compatible build: " + (hash == GameProfile.ExeHash ? "yes" : "NO"));
                 }
             }
-            catch (Exception ex) { info.AppendLine("Hash no disponible: " + ex.Message); }
-            info.AppendLine("Datos específicos BS2: " + GameProfile.LocalDirectory);
-            info.AppendLine("Resolución efectiva: " + _sharedIniPath);
-            info.AppendLine("Espejo y gráficos: " + _gameIniPath);
+            catch (Exception ex) { info.AppendLine("Hash unavailable: " + ex.Message); }
+            info.AppendLine("BS2-specific data: " + GameProfile.LocalDirectory);
+            info.AppendLine("Effective resolution: " + _sharedIniPath);
+            info.AppendLine("Mirror and graphics: " + _gameIniPath);
             foreach (string file in new string[] { _configPath, _weaponsPath, _dlssConfigPath, _sharedIniPath, _gameIniPath })
-                info.AppendLine((File.Exists(file) ? "[existe] " : "[ausente] ") + file);
+                info.AppendLine((File.Exists(file) ? "[exists] " : "[missing] ") + file);
             int width, height;
             if (TryGetRenderDimensions(out width, out height))
                 info.AppendLine("Render Shared.ini: " + width + " × " + height +
-                    " | espejo SP: " + (MirrorMatches(width, height) ? "sincronizado" : "distinto/incompleto"));
+                    " | SP mirror: " + (MirrorMatches(width, height) ? "synchronized" : "distinto/incompleto"));
             info.AppendLine("Backend: " + DetectDlssBackend().Summary);
             try
             {
                 using (RegistryKey machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32))
                 using (RegistryKey xr = machine.OpenSubKey(@"SOFTWARE\Khronos\OpenXR\1"))
-                    info.AppendLine("Runtime OpenXR x86: " + (xr == null ? "(sin registro)" : Convert.ToString(xr.GetValue("ActiveRuntime"), CultureInfo.InvariantCulture)));
+                    info.AppendLine("Runtime OpenXR x86: " + (xr == null ? "(no log)" : Convert.ToString(xr.GetValue("ActiveRuntime"), CultureInfo.InvariantCulture)));
             }
             catch (Exception ex) { info.AppendLine("OpenXR: " + ex.Message); }
-            info.AppendLine("Comprobación de arranque: proceso nuevo " + GameProfile.ProcessName + ", ruta exacta, ventana y respuesta durante al menos 3 segundos.");
-            info.AppendLine("Nota: una ventana operativa confirma el arranque del juego; no valida la calidad de imagen ni la sesión del visor.");
+            info.AppendLine("Startup check: new process " + GameProfile.ProcessName + ", exact path, window and responsiveness for at least 3 seconds.");
+            info.AppendLine("Note: a working window confirms game startup; it does not validate image quality or the headset session.");
             string logPath = Path.Combine(GameProfile.LocalDirectory, "bioshockvr.log");
             info.AppendLine();
-            info.AppendLine("Últimas líneas del registro: " + logPath);
+            info.AppendLine("Latest log lines: " + logPath);
             try
             {
                 if (File.Exists(logPath))
@@ -2338,20 +2338,20 @@ namespace BioshockVrLauncher
                         }
                     }
                 }
-                else info.AppendLine("(El juego todavía no ha generado un registro BS2.)");
+                else info.AppendLine("(The game has not generated a BS2 log yet.)");
             }
-            catch (Exception ex) { info.AppendLine("No se pudo leer: " + ex.Message); }
+            catch (Exception ex) { info.AppendLine("Could not read: " + ex.Message); }
             _diagnostics.Text = info.ToString();
         }
 
         private static string ShortCategoryName(string category)
         {
-            if (category == "Cámara y escala") return "Cámara";
-            if (category == "Manos y apuntado") return "Manos";
-            if (category == "Movimiento y giro") return "Giro";
-            if (category == "Ataque por gesto") return "Gestos";
-            if (category == "Cinemáticas y efectos") return "Cine";
-            if (category == "HUD y ayudas") return "HUD";
+            if (category == "Camera and scale") return "Camera";
+            if (category == "Hands and aiming") return "Hands";
+            if (category == "Movement and turning") return "Turning";
+            if (category == "Gesture attacks") return "Gestures";
+            if (category == "Cutscenes and effects") return "Cinematics";
+            if (category == "HUD and aids") return "HUD";
             return category;
         }
 
@@ -2359,14 +2359,14 @@ namespace BioshockVrLauncher
         // ImageTab.cs supplies the simplified public view; other tabs are unchanged.
         private void InitializeImageBackingControls()
         {
-            TabPage page = new TabPage("Imagen");
-            page.Name = "Imagen y resolución";
+            TabPage page = new TabPage("Image");
+            page.Name = "Image and resolution";
             page.UseVisualStyleBackColor = true;
             page.Padding = new Padding(10);
             page.AutoScroll = true;
 
             Label title = new Label();
-            title.Text = "Imagen VR · Normal, DLAA y DLSS 4.5";
+            title.Text = "VR image · Normal, DLAA and DLSS 4.5";
             title.Font = new Font("Segoe UI Semibold", 12f, FontStyle.Bold);
             title.ForeColor = Navy;
             title.AutoSize = true;
@@ -2374,7 +2374,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(title);
 
             Label explanation = new Label();
-            explanation.Text = "Arriba se muestra el render del juego. El perfil de salida VR y la calidad DLSS de abajo ofrecen los mismos tramos que los controles dentro del juego. Normal y DLAA trabajan al 100 %.";
+            explanation.Text = "The game render is shown above. The VR output profile and DLSS quality below offer the same steps as the in-game controls. Normal and DLAA operate at 100 %.";
             explanation.ForeColor = Muted;
             explanation.AutoSize = true;
             explanation.MaximumSize = new Size(820, 0);
@@ -2392,29 +2392,29 @@ namespace BioshockVrLauncher
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 165));
             page.Controls.Add(layout);
 
-            layout.Controls.Add(MakeCompactLabel("Perfil"), 0, 0);
+            layout.Controls.Add(MakeCompactLabel("Profile"), 0, 0);
             _resolutionPreset = new ComboBox();
             _resolutionPreset.DropDownStyle = ComboBoxStyle.DropDownList;
             _resolutionPreset.Width = 245;
-            _resolutionPreset.Items.Add("Personalizada / actual");
-            _resolutionPreset.Items.Add("1920 × 1080 · juego plano");
+            _resolutionPreset.Items.Add("Custom / current");
+            _resolutionPreset.Items.Add("1920 × 1080 · flat-screen");
             foreach (int size in SquareResolutionSteps)
                 _resolutionPreset.Items.Add(size + " × " + size);
             _resolutionPreset.SelectedIndexChanged += ResolutionPresetChanged;
             layout.SetColumnSpan(_resolutionPreset, 3);
             layout.Controls.Add(_resolutionPreset, 1, 0);
 
-            layout.Controls.Add(MakeCompactLabel("Anchura"), 0, 1);
+            layout.Controls.Add(MakeCompactLabel("Width"), 0, 1);
             _resolutionWidth = MakeResolutionNumber();
             _resolutionWidth.ValueChanged += ResolutionValueChanged;
             layout.Controls.Add(_resolutionWidth, 1, 1);
-            layout.Controls.Add(MakeCompactLabel("Altura"), 2, 1);
+            layout.Controls.Add(MakeCompactLabel("Height"), 2, 1);
             _resolutionHeight = MakeResolutionNumber();
             _resolutionHeight.ValueChanged += ResolutionValueChanged;
             layout.Controls.Add(_resolutionHeight, 3, 1);
 
             _squareResolution = new CheckBox();
-            _squareResolution.Text = "Mantener resolución cuadrada (recomendado para VR)";
+            _squareResolution.Text = "Keep square resolution (recommended for VR)";
             _squareResolution.Checked = true;
             _squareResolution.AutoSize = true;
             _squareResolution.Padding = new Padding(0, 6, 0, 0);
@@ -2423,7 +2423,7 @@ namespace BioshockVrLauncher
             layout.Controls.Add(_squareResolution, 0, 2);
 
             _resolutionLoadLabel = new Label();
-            _resolutionLoadLabel.Text = "Resolución pendiente de cargar…";
+            _resolutionLoadLabel.Text = "Resolution awaiting load…";
             _resolutionLoadLabel.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Bold);
             _resolutionLoadLabel.ForeColor = Blue;
             _resolutionLoadLabel.AutoSize = true;
@@ -2431,7 +2431,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(_resolutionLoadLabel);
 
             GroupBox fxaaGroup = new GroupBox();
-            fxaaGroup.Text = "FXAA DEL JUEGO · NO ES DLSS";
+            fxaaGroup.Text = "GAME FXAA · NOT DLSS";
             fxaaGroup.ForeColor = Navy;
             fxaaGroup.Location = new Point(14, 222);
             fxaaGroup.Size = new Size(820, 108);
@@ -2440,7 +2440,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(fxaaGroup);
 
             _fxaaEnabled = new CheckBox();
-            _fxaaEnabled.Text = "Activar FXAA del juego";
+            _fxaaEnabled.Text = "Enable game FXAA";
             _fxaaEnabled.Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold);
             _fxaaEnabled.ForeColor = TextDark;
             _fxaaEnabled.AutoSize = true;
@@ -2449,7 +2449,7 @@ namespace BioshockVrLauncher
             fxaaGroup.Controls.Add(_fxaaEnabled);
 
             Label fxaaExplanation = new Label();
-            fxaaExplanation.Text = "Suaviza dientes de sierra antes de que el mod copie la imagen al visor. Puede reducir aliasing y algo de parpadeo espacial, a cambio de una ligera pérdida de nitidez. No es TAA ni DLSS.";
+            fxaaExplanation.Text = "Smooth edges before the mod copies the image to the headset. May reduce aliasing and some spatial shimmer, with a slight loss of sharpness. This is not TAA or DLSS.";
             fxaaExplanation.ForeColor = Muted;
             fxaaExplanation.AutoSize = true;
             fxaaExplanation.MaximumSize = new Size(760, 0);
@@ -2457,7 +2457,7 @@ namespace BioshockVrLauncher
             fxaaGroup.Controls.Add(fxaaExplanation);
 
             _fxaaStateLabel = new Label();
-            _fxaaStateLabel.Text = "Estado pendiente de cargar…";
+            _fxaaStateLabel.Text = "Status awaiting load…";
             _fxaaStateLabel.Font = new Font("Segoe UI Semibold", 8.25f, FontStyle.Bold);
             _fxaaStateLabel.ForeColor = Blue;
             _fxaaStateLabel.AutoSize = true;
@@ -2465,7 +2465,7 @@ namespace BioshockVrLauncher
             fxaaGroup.Controls.Add(_fxaaStateLabel);
 
             Label warning = new Label();
-            warning.Text = "ARRANQUE VR EN VENTANA  ·  Al guardar se desactiva la pantalla completa en ambos INI para conservar la resolución elegida. No cambia la visualización dentro del visor. Guarda con el juego cerrado. Un 10 % más por eje supone un 21 % más de píxeles.";
+            warning.Text = "WINDOWED VR STARTUP  ·  Saving disables fullscreen in both INI files to preserve the selected resolution. The view inside the headset is unchanged. Save with the game closed. 10 % more per axis means 21 % more pixels.";
             warning.BackColor = SystemColors.Info;
             warning.ForeColor = SystemColors.InfoText;
             warning.Padding = new Padding(10);
@@ -2475,7 +2475,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(warning);
 
             GroupBox upscalerGroup = new GroupBox();
-            upscalerGroup.Text = "REESCALADO ESPACIAL EXPERIMENTAL · SIN DLSS / SIN DLAA";
+            upscalerGroup.Text = "EXPERIMENTAL SPATIAL UPSCALING · NO DLSS / NO DLAA";
             upscalerGroup.ForeColor = Navy;
             upscalerGroup.Location = new Point(14, 416);
             upscalerGroup.Size = new Size(820, 158);
@@ -2484,7 +2484,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(upscalerGroup);
 
             _upscalerEnabled = new CheckBox();
-            _upscalerEnabled.Text = "Activar en la DLL experimental";
+            _upscalerEnabled.Text = "Enable in the experimental DLL";
             _upscalerEnabled.Font = new Font("Segoe UI Semibold", 9f, FontStyle.Bold);
             _upscalerEnabled.ForeColor = TextDark;
             _upscalerEnabled.AutoSize = true;
@@ -2493,19 +2493,19 @@ namespace BioshockVrLauncher
             upscalerGroup.Controls.Add(_upscalerEnabled);
 
             Label upscalerExplanation = new Label();
-            upscalerExplanation.Text = "Para ganar rendimiento, baja la resolución de render del juego y conserva una salida OpenXR mayor. Es espacial experimental: no usa IA, DLSS ni DLAA; la DLL estable lo ignora. Al activarlo, DLSS se desactiva.";
+            upscalerExplanation.Text = "For better performance, lower the game render resolution and keep larger OpenXR output. Experimental spatial processing: no AI, DLSS or DLAA; the stable DLL ignores it. Enabling it disables DLSS.";
             upscalerExplanation.ForeColor = Muted;
             upscalerExplanation.AutoSize = true;
             upscalerExplanation.MaximumSize = new Size(770, 0);
             upscalerExplanation.Location = new Point(30, 42);
             upscalerGroup.Controls.Add(upscalerExplanation);
 
-            Button outputPlusTen = MakeSmallPresetButton("Salida +10 %", 92);
+            Button outputPlusTen = MakeSmallPresetButton("Output +10 %", 92);
             outputPlusTen.Location = new Point(650, 17);
             outputPlusTen.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             outputPlusTen.Click += delegate { ApplyUpscalerOutputPreset(1.10); };
             _toolTip.SetToolTip(outputPlusTen,
-                "Fija una salida un 10 % mayor por eje que el render actual, conserva la proporción y redondea a píxeles pares.");
+                "Set output 10 % larger per axis than the current render, preserving aspect ratio and rounding to even pixels.");
             upscalerGroup.Controls.Add(outputPlusTen);
 
             Button outputOneToOne = MakeSmallPresetButton("1:1", 50);
@@ -2513,10 +2513,10 @@ namespace BioshockVrLauncher
             outputOneToOne.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             outputOneToOne.Click += delegate { ApplyUpscalerOutputPreset(1.00); };
             _toolTip.SetToolTip(outputOneToOne,
-                "Iguala la salida OpenXR a la resolución renderizada por el juego: filtra, pero no amplía.");
+                "Match OpenXR output to the game render resolution: filtering without enlargement.");
             upscalerGroup.Controls.Add(outputOneToOne);
 
-            Label outputLabel = MakeCompactLabel("Salida VR");
+            Label outputLabel = MakeCompactLabel("VR output");
             outputLabel.Location = new Point(30, 78);
             upscalerGroup.Controls.Add(outputLabel);
 
@@ -2536,7 +2536,7 @@ namespace BioshockVrLauncher
             _upscalerOutputHeight.ValueChanged += UpscalerChanged;
             upscalerGroup.Controls.Add(_upscalerOutputHeight);
 
-            Label sharpnessLabel = MakeCompactLabel("Nitidez");
+            Label sharpnessLabel = MakeCompactLabel("Sharpness");
             sharpnessLabel.Location = new Point(365, 78);
             upscalerGroup.Controls.Add(sharpnessLabel);
 
@@ -2553,14 +2553,14 @@ namespace BioshockVrLauncher
             upscalerGroup.Controls.Add(_upscalerSharpness);
 
             Label sharpnessHint = new Label();
-            sharpnessHint.Text = "0,00 suave · 1,00 intensa";
+            sharpnessHint.Text = "0.00 soft · 1.00 strong";
             sharpnessHint.ForeColor = Muted;
             sharpnessHint.AutoSize = true;
             sharpnessHint.Location = new Point(501, 81);
             upscalerGroup.Controls.Add(sharpnessHint);
 
             _upscalerStateLabel = new Label();
-            _upscalerStateLabel.Text = "Estado pendiente de cargar…";
+            _upscalerStateLabel.Text = "Status awaiting load…";
             _upscalerStateLabel.Font = new Font("Segoe UI Semibold", 8.25f, FontStyle.Bold);
             _upscalerStateLabel.ForeColor = Blue;
             _upscalerStateLabel.AutoSize = true;
@@ -2569,7 +2569,7 @@ namespace BioshockVrLauncher
             upscalerGroup.Controls.Add(_upscalerStateLabel);
 
             GroupBox dlssGroup = new GroupBox();
-            dlssGroup.Text = "MODO DE IMAGEN · NORMAL / DLAA / DLSS 4.5";
+            dlssGroup.Text = "IMAGE MODE · NORMAL / DLAA / DLSS 4.5";
             dlssGroup.ForeColor = Navy;
             dlssGroup.BackColor = SystemColors.Control;
             dlssGroup.Location = new Point(14, FinalDlssEdition ? 292 : 584);
@@ -2578,7 +2578,7 @@ namespace BioshockVrLauncher
             page.Controls.Add(dlssGroup);
 
             _dlssBackendStateLabel = new Label();
-            _dlssBackendStateLabel.Text = "BACKEND · comprobación pendiente…";
+            _dlssBackendStateLabel.Text = "BACKEND · verification pending…";
             _dlssBackendStateLabel.Font = new Font("Segoe UI Semibold", 8.25f, FontStyle.Bold);
             _dlssBackendStateLabel.ForeColor = Warning;
             _dlssBackendStateLabel.AutoSize = true;
@@ -2586,7 +2586,7 @@ namespace BioshockVrLauncher
             _dlssBackendStateLabel.Location = new Point(14, 20);
             dlssGroup.Controls.Add(_dlssBackendStateLabel);
 
-            Label dlssModeLabel = MakeCompactLabel("Modo");
+            Label dlssModeLabel = MakeCompactLabel("Mode");
             dlssModeLabel.Location = new Point(14, 48);
             dlssGroup.Controls.Add(dlssModeLabel);
 
@@ -2595,9 +2595,9 @@ namespace BioshockVrLauncher
             _dlssMode.Width = 235;
             _dlssMode.Location = new Point(66, 49);
             _dlssMode.Items.AddRange(new object[] {
-                "Normal · resolución nativa",
-                "DLAA 4.5 · resolución nativa",
-                "DLSS 4.5 SR · reescalado"
+                "Normal · native resolution",
+                "DLAA 4.5 · native resolution",
+                "DLSS 4.5 SR · upscaling"
             });
             _dlssMode.SelectedIndexChanged += DlssChanged;
             dlssGroup.Controls.Add(_dlssMode);
@@ -2607,7 +2607,7 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(runtimeLabel);
 
             _dlssRuntime = new TextBox();
-            _dlssRuntime.Text = "310.7.0 · probada";
+            _dlssRuntime.Text = "310.7.0 · tested";
             _dlssRuntime.ReadOnly = true;
             _dlssRuntime.TabStop = false;
             _dlssRuntime.BackColor = Color.White;
@@ -2617,7 +2617,7 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(_dlssRuntime);
 
             LinkLabel openDlss = new LinkLabel();
-            openDlss.Text = "Abrir dlss.ini";
+            openDlss.Text = "Open dlss.ini";
             openDlss.LinkColor = Blue;
             openDlss.AutoSize = true;
             openDlss.Location = new Point(704, 53);
@@ -2626,7 +2626,7 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(openDlss);
 
             Label dlssExplanation = new Label();
-            dlssExplanation.Text = "Normal conserva el render nativo. DLAA suaviza bordes a resolución nativa y DLSS reconstruye una salida mayor desde un render más pequeño. Ambos usan profundidad, movimiento e historial independiente por ojo. No incluye DLSS 5 Neural Rendering.";
+            dlssExplanation.Text = "Normal keeps native rendering. DLAA smooths edges at native resolution; DLSS reconstructs larger output from a smaller render. Both use depth, motion and separate history per eye. Does not include DLSS 5 Neural Rendering.";
             dlssExplanation.ForeColor = Muted;
             dlssExplanation.AutoSize = true;
             dlssExplanation.MaximumSize = new Size(785, 0);
@@ -2641,11 +2641,11 @@ namespace BioshockVrLauncher
             _dlssPreset.DropDownStyle = ComboBoxStyle.DropDownList;
             _dlssPreset.Width = 232;
             _dlssPreset.Location = new Point(66, 113);
-            _dlssPreset.Items.Add("Automático recomendado · K/M/L según ratio");
+            _dlssPreset.Items.Add("Recommended automatic · K/M/L by ratio");
             _dlssPreset.SelectedIndexChanged += DlssChanged;
             dlssGroup.Controls.Add(_dlssPreset);
 
-            Label qualityLabel = MakeCompactLabel("Calidad SR");
+            Label qualityLabel = MakeCompactLabel("SR quality");
             qualityLabel.Location = new Point(326, 112);
             dlssGroup.Controls.Add(qualityLabel);
 
@@ -2654,21 +2654,21 @@ namespace BioshockVrLauncher
             _dlssQuality.Width = 245;
             _dlssQuality.Location = new Point(404, 113);
             _dlssQuality.Items.AddRange(new object[] {
-                "Ultra rendimiento · 1/3 (≈ 33 %)",
+                "Ultra performance · 1/3 (≈ 33 %)",
                 "40 %",
-                "Rendimiento · 50 %",
-                "Equilibrado · 58 %",
+                "Performance · 50 %",
+                "Balanced · 58 %",
                 "60 %",
-                "Calidad · 2/3 (≈ 67 %)",
+                "Quality · 2/3 (≈ 67 %)",
                 "70 %",
                 "80 %",
                 "90 %",
-                "Personalizado / AUTO"
+                "Custom / AUTO"
             });
             _dlssQuality.SelectedIndexChanged += DlssChanged;
             dlssGroup.Controls.Add(_dlssQuality);
 
-            Label dlssSharpnessLabel = MakeCompactLabel("Nitidez DLSS (%)");
+            Label dlssSharpnessLabel = MakeCompactLabel("DLSS sharpness (%)");
             dlssSharpnessLabel.Location = new Point(667, 112);
             dlssGroup.Controls.Add(dlssSharpnessLabel);
             _dlssSharpness = new NumericUpDown();
@@ -2680,9 +2680,9 @@ namespace BioshockVrLauncher
             _dlssSharpness.ValueChanged += DlssChanged;
             dlssGroup.Controls.Add(_dlssSharpness);
             _toolTip.SetToolTip(_dlssSharpness,
-                "Nitidez opcional después de DLSS, igual que F1/F2/F3. 0 % conserva la imagen anterior. No cambia resolución ni calidad. Solo actúa en DLSS.");
+                "Optional sharpening after DLSS, as with F1/F2/F3. 0 % keeps the original image. Does not change resolution or quality. Applies only in DLSS.");
 
-            Label dlssOutputLabel = MakeCompactLabel("Salida VR");
+            Label dlssOutputLabel = MakeCompactLabel("VR output");
             dlssOutputLabel.Location = new Point(14, 148);
             dlssGroup.Controls.Add(dlssOutputLabel);
 
@@ -2706,15 +2706,15 @@ namespace BioshockVrLauncher
             _dlssOutputPreset.DropDownStyle = ComboBoxStyle.DropDownList;
             _dlssOutputPreset.Width = 309;
             _dlssOutputPreset.Location = new Point(340, 149);
-            _dlssOutputPreset.Items.Add("Perfil de salida VR · personalizado");
+            _dlssOutputPreset.Items.Add("VR output profile · custom");
             foreach (int size in SquareResolutionSteps)
-                _dlssOutputPreset.Items.Add(size + " × " + size + " · por ojo");
+                _dlssOutputPreset.Items.Add(size + " × " + size + " · per eye");
             _dlssOutputPreset.SelectedIndexChanged += DlssOutputPresetChanged;
             dlssGroup.Controls.Add(_dlssOutputPreset);
             _toolTip.SetToolTip(_dlssOutputPreset,
-                "Mismos tramos que F1/F2/F3. Conserva la calidad DLSS y recalcula el render. En Normal y DLAA, render y salida son iguales.");
+                "Same steps as F1/F2/F3. Keeps DLSS quality and recalculates render size. In Normal and DLAA, render and output match.");
 
-            Label nearPlaneLabel = MakeCompactLabel("Plano cercano · automático");
+            Label nearPlaneLabel = MakeCompactLabel("Near plane · automatic");
             nearPlaneLabel.Location = new Point(14, 182);
             dlssGroup.Controls.Add(nearPlaneLabel);
 
@@ -2735,7 +2735,7 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(nearPlaneUnit);
 
             Label nearPlaneHint = new Label();
-            nearPlaneHint.Text = "Base BS2: 10,0 UU. El MOD usa la proyección observada por ojo; no requiere ajuste manual.";
+            nearPlaneHint.Text = "BS2 baseline: 10.0 UU. The mod uses the observed per-eye projection; no manual adjustment is needed.";
             nearPlaneHint.ForeColor = Muted;
             nearPlaneHint.AutoSize = true;
             nearPlaneHint.MaximumSize = new Size(510, 0);
@@ -2747,7 +2747,7 @@ namespace BioshockVrLauncher
             _dlssNearPlane.Visible = false;
 
             _dlssSettingsStateLabel = new Label();
-            _dlssSettingsStateLabel.Text = "Configuración DLSS pendiente de cargar…";
+            _dlssSettingsStateLabel.Text = "DLSS configuration awaiting load…";
             _dlssSettingsStateLabel.Font = new Font("Segoe UI Semibold", 8.25f, FontStyle.Bold);
             _dlssSettingsStateLabel.ForeColor = Blue;
             _dlssSettingsStateLabel.AutoSize = true;
@@ -2756,11 +2756,11 @@ namespace BioshockVrLauncher
             dlssGroup.Controls.Add(_dlssSettingsStateLabel);
 
             _toolTip.SetToolTip(_dlssPreset,
-                "Solo lectura en esta fase: el host actual no consume un preset manual. Usa el mapeo recomendado K/M/L según modo y ratio.");
+                "Read-only in this phase: the current host does not use a manual preset. It uses the recommended K/M/L mapping based on mode and ratio.");
             _toolTip.SetToolTip(_dlssQuality,
-                "En DLSS SR puedes elegir un ratio canónico. La salida no cambia; se ajusta la resolución interna del juego. Un ajuste fino no canónico se muestra como Personalizado / AUTO.");
+                "In DLSS SR, choose a standard ratio. Output stays unchanged; the game's internal resolution is adjusted. Other fine-tuned ratios appear as Custom / AUTO.");
             _toolTip.SetToolTip(_dlssNearPlane,
-                "Plano cercano de la proyección en unidades del juego, usado solo para reconstrucción temporal. Recomendado: 10,0 UU. No modifica altura ni FOV.");
+                "Projection near plane in game units, used only for temporal reconstruction. Recommended: 10.0 UU. Does not change height or FOV.");
 
             _tabs.TabPages.Add(page);
         }
@@ -2804,7 +2804,7 @@ namespace BioshockVrLauncher
         private void InitializeHiddenIniEditor()
         {
             TabPage page = new TabPage("Bioshock2SP.ini");
-            page.Name = "Bioshock2SP.ini completo";
+            page.Name = "Full Bioshock2SP.ini";
             page.UseVisualStyleBackColor = true;
             page.Padding = new Padding(7);
 
@@ -2815,7 +2815,7 @@ namespace BioshockVrLauncher
             toolbar.Padding = new Padding(2, 3, 0, 0);
             page.Controls.Add(toolbar);
 
-            toolbar.Controls.Add(MakeToolbarLabel("Sección:"));
+            toolbar.Controls.Add(MakeToolbarLabel("Section:"));
             _iniSectionFilter = new ComboBox();
             _iniSectionFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             _iniSectionFilter.Width = 145;
@@ -2827,7 +2827,7 @@ namespace BioshockVrLauncher
             _iniImpactFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             _iniImpactFilter.Width = 108;
             _iniImpactFilter.Items.AddRange(new object[] {
-                "Todo", "VR directo", "Relacionado VR", "Avisos", "Modificados"
+                "All", "Direct VR", "VR related", "Warnings", "Modified"
             });
             _iniImpactFilter.SelectedIndexChanged += delegate { RebuildIniGrid(); };
             toolbar.Controls.Add(_iniImpactFilter);
@@ -2839,14 +2839,14 @@ namespace BioshockVrLauncher
             toolbar.Controls.Add(_iniSearch);
 
             _allowRiskyEdits = new CheckBox();
-            _allowRiskyEdits.Text = "Desbloquear";
+            _allowRiskyEdits.Text = "Unlock";
             _allowRiskyEdits.AutoSize = true;
             _allowRiskyEdits.Padding = new Padding(5, 4, 0, 0);
             _allowRiskyEdits.CheckedChanged += delegate { RebuildIniGrid(); };
             toolbar.Controls.Add(_allowRiskyEdits);
 
             Button restore = new Button();
-            restore.Text = "Restaurar fila";
+            restore.Text = "Restore row";
             restore.AutoSize = true;
             restore.Height = 26;
             restore.FlatStyle = FlatStyle.Flat;
@@ -2870,7 +2870,7 @@ namespace BioshockVrLauncher
             _iniDetail.Dock = DockStyle.Fill;
             _iniDetail.AutoEllipsis = true;
             _iniDetail.ForeColor = Muted;
-            _iniDetail.Text = "Selecciona una fila para ver qué hace y si puede afectar a VR.";
+            _iniDetail.Text = "Select a row to see what it does and whether it may affect VR.";
             detailPanel.Controls.Add(_iniDetail);
 
             _iniGrid = new DataGridView();
@@ -2892,11 +2892,11 @@ namespace BioshockVrLauncher
             _iniGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5f, FontStyle.Bold);
             _iniGrid.DefaultCellStyle.Font = new Font("Segoe UI", 8.5f);
             _iniGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(51, 112, 166);
-            _iniGrid.Columns.Add(MakeIniColumn("Impacto", "Alcance", 82, true));
-            _iniGrid.Columns.Add(MakeIniColumn("Ajuste", "Ajuste en castellano", 175, true));
-            _iniGrid.Columns.Add(MakeIniColumn("Valor", "Valor", 125, false));
-            _iniGrid.Columns.Add(MakeIniColumn("Clave", "Clave original", 170, true));
-            DataGridViewTextBoxColumn sectionColumn = MakeIniColumn("Seccion", "Sección", 220, true);
+            _iniGrid.Columns.Add(MakeIniColumn("Impact", "Scope", 82, true));
+            _iniGrid.Columns.Add(MakeIniColumn("Setting", "Setting in English", 175, true));
+            _iniGrid.Columns.Add(MakeIniColumn("Value", "Value", 125, false));
+            _iniGrid.Columns.Add(MakeIniColumn("Key", "Original key", 170, true));
+            DataGridViewTextBoxColumn sectionColumn = MakeIniColumn("Section", "Section", 220, true);
             sectionColumn.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             sectionColumn.MinimumWidth = 150;
             _iniGrid.Columns.Add(sectionColumn);
@@ -2974,7 +2974,7 @@ namespace BioshockVrLauncher
             _toolTip.SetToolTip(label, definition.Description);
             _toolTip.SetToolTip(editor, definition.Description);
             _toolTip.SetToolTip(description, definition.Description + Environment.NewLine +
-                                             "Parámetro interno: " + definition.Key);
+                                             "Internal parameter: " + definition.Key);
             table.Controls.Add(label, 0, row);
             table.Controls.Add(editor, 1, row);
             table.Controls.Add(unit, 2, row);
@@ -2986,7 +2986,7 @@ namespace BioshockVrLauncher
             if (definition.Kind == ParamKind.Boolean)
             {
                 CheckBox box = new CheckBox();
-                box.Text = "Activado";
+                box.Text = "On";
                 box.AutoSize = true;
                 box.ForeColor = TextDark;
                 box.CheckedChanged += delegate { MarkDirty(); };
@@ -3179,7 +3179,7 @@ namespace BioshockVrLauncher
                 {
                     _fxaaEnabled.Enabled = false;
                     _fxaaEnabled.Checked = false;
-                    _fxaaStateLabel.Text = "No se encontró una clave única [Engine.RenderConfig] UseFxaa.";
+                    _fxaaStateLabel.Text = "A unique [Engine.RenderConfig] UseFxaa key was not found.";
                     _fxaaStateLabel.ForeColor = Color.Firebrick;
                     return;
                 }
@@ -3187,7 +3187,7 @@ namespace BioshockVrLauncher
                 {
                     _fxaaEnabled.Enabled = false;
                     _fxaaEnabled.Checked = false;
-                    _fxaaStateLabel.Text = "Valor no reconocido: UseFxaa=" + entry.Value + ". Corrígelo en INI completo.";
+                    _fxaaStateLabel.Text = "Unrecognized value: UseFxaa=" + entry.Value + ". Correct it in the full INI editor.";
                     _fxaaStateLabel.ForeColor = Color.Firebrick;
                     return;
                 }
@@ -3203,9 +3203,9 @@ namespace BioshockVrLauncher
 
         private void UpdateFxaaSummary(IniEntry entry, bool enabled)
         {
-            string pending = entry != null && entry.Changed ? "PENDIENTE DE GUARDAR  ·  " : "";
+            string pending = entry != null && entry.Changed ? "UNSAVED  ·  " : "";
             _fxaaStateLabel.Text = pending + "UseFxaa=" + (enabled ? "1" : "0") +
-                "  ·  " + (enabled ? "activado" : "desactivado");
+                "  ·  " + (enabled ? "enabled" : "disabled");
             _fxaaStateLabel.ForeColor = entry != null && entry.Changed ? Warning : Blue;
         }
 
@@ -3215,7 +3215,7 @@ namespace BioshockVrLauncher
             IniEntry entry = FindIniEntry("Engine.RenderConfig", "UseFxaa");
             if (entry == null)
             {
-                SetStatus("No se puede cambiar FXAA: la clave UseFxaa falta o está duplicada.", Color.Firebrick);
+                SetStatus("Cannot change FXAA: the UseFxaa key is missing or duplicated.", Color.Firebrick);
                 LoadFxaaControl();
                 return;
             }
@@ -3223,8 +3223,8 @@ namespace BioshockVrLauncher
             UpdateFxaaSummary(entry, _fxaaEnabled.Checked);
             RecalculateGameIniDirty();
             RebuildIniGrid();
-            SetStatus("FXAA " + (_fxaaEnabled.Checked ? "activado" : "desactivado") +
-                " en la edición. Pulsa Guardar para aplicarlo al siguiente inicio.", Blue);
+            SetStatus("FXAA " + (_fxaaEnabled.Checked ? "enabled" : "disabled") +
+                " in the editor. Click Save to apply it on the next launch.", Blue);
         }
 
         private void LoadResolutionControls()
@@ -3245,7 +3245,7 @@ namespace BioshockVrLauncher
                 _resolutionWidth.Enabled = false;
                 _resolutionHeight.Enabled = false;
                 _resolutionPreset.Enabled = false;
-                _resolutionLoadLabel.Text = "Faltan claves de resolución únicas y válidas en " + (GameProfile.IsBioShock2 ? "Shared.ini" : "Bioshock.ini") + ".";
+                _resolutionLoadLabel.Text = "Unique, valid resolution keys are missing from " + (GameProfile.IsBioShock2 ? "Shared.ini" : "Bioshock.ini") + ".";
                 _resolutionLoadLabel.ForeColor = Color.Firebrick;
                 return;
             }
@@ -3284,7 +3284,7 @@ namespace BioshockVrLauncher
             IniEntry sy = FindIniEntry("SharedOptions", "ViewportY");
             if (sx == null || sy == null)
             {
-                SetStatus("No se puede cambiar resolución: falta la pareja única de Shared.ini.", Color.Firebrick);
+                SetStatus("Cannot change resolution: the unique Shared.ini pair is missing.", Color.Firebrick);
                 return;
             }
             string width = ((int)_resolutionWidth.Value).ToString(CultureInfo.InvariantCulture);
@@ -3313,7 +3313,7 @@ namespace BioshockVrLauncher
             IniEntry fy = FindIniEntry("WinDrv.WindowsClient", "FullscreenViewportY");
             if (wx == null || wy == null || fx == null || fy == null)
             {
-                SetStatus("No se puede cambiar la resolución: faltan claves únicas en la sección PC.", Color.Firebrick);
+                SetStatus("Cannot change resolution: unique keys are missing from the PC section.", Color.Firebrick);
                 return;
             }
             string width = ((int)_resolutionWidth.Value).ToString(CultureInfo.InvariantCulture);
@@ -3331,12 +3331,12 @@ namespace BioshockVrLauncher
         {
             double megapixels = (double)width * (double)height / 1000000.0;
             double ratio = height == 0 ? 0.0 : (double)width / (double)height;
-            string shape = Math.Abs(ratio - 1.0) < 0.01 ? "cuadrada" : "relación " + ratio.ToString("0.000", CultureInfo.CurrentCulture);
+            string shape = Math.Abs(ratio - 1.0) < 0.01 ? "square" : "ratio " + ratio.ToString("0.000", CultureInfo.CurrentCulture);
             _resolutionLoadLabel.Text = width.ToString(CultureInfo.CurrentCulture) + " × " +
                 height.ToString(CultureInfo.CurrentCulture) + "  ·  " +
                 megapixels.ToString("0.00", CultureInfo.CurrentCulture) + " MP  ·  " + shape +
-                (pairsMatch ? "  ·  Shared.ini + espejo SP sincronizados" :
-                              "  ·  Shared.ini gobierna; espejo SP distinto o incompleto");
+                (pairsMatch ? "  ·  Shared.ini + SP mirror synchronized" :
+                              "  ·  Shared.ini takes priority; SP mirror differs or is incomplete");
             _resolutionLoadLabel.ForeColor = pairsMatch ? Blue : Warning;
             UpdateUpscalerSummary();
             if (_syncingDlss) return;
@@ -3413,12 +3413,12 @@ namespace BioshockVrLauncher
             if (settings.OutputWidth < 1024 || settings.OutputWidth > 8192 ||
                 settings.OutputHeight < 1024 || settings.OutputHeight > 8192)
             {
-                problem = "La salida VR debe estar entre 1024 y 8192 píxeles por eje.";
+                problem = "VR output must be between 1024 and 8192 pixels per axis.";
                 return false;
             }
             if (settings.Sharpness < 0m || settings.Sharpness > 1m)
             {
-                problem = "La nitidez debe estar entre 0,00 y 1,00.";
+                problem = "Sharpness must be between 0.00 and 1.00.";
                 return false;
             }
 
@@ -3430,12 +3430,12 @@ namespace BioshockVrLauncher
             int renderWidth, renderHeight;
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
-                problem = "No se puede comprobar la relación de aspecto porque falta una resolución válida del juego.";
+                problem = "Cannot check the aspect ratio because a valid game resolution is missing.";
                 return false;
             }
             if (settings.OutputWidth < renderWidth || settings.OutputHeight < renderHeight)
             {
-                problem = "La salida VR no puede ser menor que la resolución renderizada por el juego; eso sería reducción, no reescalado.";
+                problem = "VR output cannot be smaller than the game render resolution; that would be downsampling, not upscaling.";
                 return false;
             }
 
@@ -3443,7 +3443,7 @@ namespace BioshockVrLauncher
                                                         settings.OutputWidth,
                                                         settings.OutputHeight))
             {
-                problem = "La salida VR debe conservar exactamente la relación de aspecto de " +
+                problem = "VR output must exactly preserve the aspect ratio of " +
                     renderWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                     renderHeight.ToString(CultureInfo.CurrentCulture) + ".";
                 return false;
@@ -3483,13 +3483,13 @@ namespace BioshockVrLauncher
                 _upscalerSharpness.Value = settings.Sharpness;
                 _upscalerDirty = false;
                 _upscalerLoadWarning = valid ? null :
-                    "upscaler.ini contiene valores incompletos o no válidos: " + warning;
+                    "upscaler.ini contains incomplete or invalid values: " + warning;
             }
             catch (Exception ex)
             {
                 _upscalerLoadedContent = string.Empty;
                 _upscalerDirty = false;
-                _upscalerLoadWarning = "No se pudo leer upscaler.ini: " + ex.Message;
+                _upscalerLoadWarning = "Could not read upscaler.ini: " + ex.Message;
                 _upscalerEnabled.Enabled = false;
                 _upscalerOutputWidth.Enabled = false;
                 _upscalerOutputHeight.Enabled = false;
@@ -3557,8 +3557,8 @@ namespace BioshockVrLauncher
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
                 MessageBox.Show(this,
-                    "No se puede calcular el preset porque no hay una resolución de render válida en Bioshock2SP.ini.",
-                    "Preset de salida VR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Cannot calculate the preset because Bioshock2SP.ini has no valid render resolution.",
+                    "VR output preset", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -3570,9 +3570,9 @@ namespace BioshockVrLauncher
                                                                        out outputHeight))
             {
                 MessageBox.Show(this,
-                    "No cabe una salida un 10 % mayor dentro del límite seguro de 8192 píxeles por eje. " +
-                    "Baja primero la resolución de render del juego.",
-                    "Preset de salida VR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Output 10 % larger would exceed the safe limit of 8192 pixels per axis. " +
+                    "Lower the game render resolution first.",
+                    "VR output preset", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -3594,8 +3594,8 @@ namespace BioshockVrLauncher
             else
                 UpdateUpscalerSummary();
             SetStatus(scale > 1.0001
-                ? "Preset aplicado: salida OpenXR +10 % por eje, con proporción conservada."
-                : "Preset aplicado: salida OpenXR 1:1 con el render del juego.", Blue);
+                ? "Preset applied: OpenXR output +10 % per axis, preserving aspect ratio."
+                : "Preset applied: 1:1 OpenXR output matching the game render.", Blue);
         }
 
         private void UpdateUpscalerSummary()
@@ -3606,7 +3606,7 @@ namespace BioshockVrLauncher
 
             if (!string.IsNullOrEmpty(_upscalerLoadWarning))
             {
-                _upscalerStateLabel.Text = "REVISAR · " + _upscalerLoadWarning;
+                _upscalerStateLabel.Text = "CHECK · " + _upscalerLoadWarning;
                 _upscalerStateLabel.ForeColor = Color.Firebrick;
                 return;
             }
@@ -3615,7 +3615,7 @@ namespace BioshockVrLauncher
             string problem;
             if (!TryValidateUpscalerSettings(settings, out problem))
             {
-                _upscalerStateLabel.Text = "REVISAR · " + problem;
+                _upscalerStateLabel.Text = "CHECK · " + problem;
                 _upscalerStateLabel.ForeColor = Color.Firebrick;
                 return;
             }
@@ -3623,27 +3623,27 @@ namespace BioshockVrLauncher
             int renderWidth, renderHeight;
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
-                _upscalerStateLabel.Text = (_upscalerDirty ? "PENDIENTE · " : string.Empty) +
-                    "DESACTIVADO · salida preparada " +
+                _upscalerStateLabel.Text = (_upscalerDirty ? "PENDING · " : string.Empty) +
+                    "OFF · output ready " +
                     settings.OutputWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                     settings.OutputHeight.ToString(CultureInfo.CurrentCulture) +
-                    " · no hay resolución de entrada para comparar";
+                    " · no input resolution to compare";
                 _upscalerStateLabel.ForeColor = _upscalerDirty ? Warning : Muted;
                 return;
             }
             double axisScale = (double)settings.OutputWidth / renderWidth;
             string effect = Math.Abs(axisScale - 1.0) < 0.001
-                ? "filtrado 1:1, sin ampliar"
-                : axisScale.ToString("0.00", CultureInfo.CurrentCulture) + "× por eje";
-            string prefix = _upscalerDirty ? "PENDIENTE · " :
-                (File.Exists(_upscalerConfigPath) ? string.Empty : "SIN ARCHIVO · ");
+                ? "1:1 filtering, no enlargement"
+                : axisScale.ToString("0.00", CultureInfo.CurrentCulture) + "× per axis";
+            string prefix = _upscalerDirty ? "PENDING · " :
+                (File.Exists(_upscalerConfigPath) ? string.Empty : "FILE MISSING · ");
             _upscalerStateLabel.Text = prefix +
-                (settings.Enabled ? "ACTIVO" : "DESACTIVADO") + " · " +
+                (settings.Enabled ? "ACTIVE" : "OFF") + " · " +
                 renderWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                 renderHeight.ToString(CultureInfo.CurrentCulture) + " → " +
                 settings.OutputWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                 settings.OutputHeight.ToString(CultureInfo.CurrentCulture) + " · " + effect +
-                " · nitidez " + settings.Sharpness.ToString("0.00", CultureInfo.CurrentCulture);
+                " · sharpness " + settings.Sharpness.ToString("0.00", CultureInfo.CurrentCulture);
             _upscalerStateLabel.ForeColor = _upscalerDirty ? Warning : Blue;
         }
 
@@ -3653,10 +3653,10 @@ namespace BioshockVrLauncher
             string problem;
             if (TryValidateUpscalerSettings(settings, out problem)) return true;
             MessageBox.Show(this,
-                "No se puede guardar la configuración del reescalado espacial:\n\n" + problem +
-                "\n\nLa salida debe ser igual o mayor que la imagen del juego y conservar su proporción.",
-                "Revisar reescalado espacial", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            SelectTab("Imagen y resolución");
+                "Cannot save the spatial upscaling configuration:\n\n" + problem +
+                "\n\nOutput must be at least as large as the game image and preserve its aspect ratio.",
+                "Check spatial upscaling", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            SelectTab("Image and resolution");
             return false;
         }
 
@@ -3689,31 +3689,31 @@ namespace BioshockVrLauncher
                 settings.SrScaleDenominator <= settings.SrScaleNumerator ||
                 settings.SrScaleDenominator > 8192)
             {
-                problem = "La preferencia de calidad DLSS no es válida. Selecciona de nuevo un tramo.";
+                problem = "The DLSS quality preference is invalid. Select a step again.";
                 return false;
             }
             if (settings.Runtime != DlssConfigDocument.RequiredRuntime)
             {
-                problem = "Esta edición exige exactamente el runtime DLSS 310.7.0.";
+                problem = "This edition requires exactly DLSS runtime 310.7.0.";
                 return false;
             }
             if (settings.Preset != "auto" && settings.Preset != "K" &&
                 settings.Preset != "M" && settings.Preset != "L")
             {
-                problem = "El preset DLSS debe ser Automático, K, M o L.";
+                problem = "The DLSS preset must be Automatic, K, M or L.";
                 return false;
             }
             if (settings.NearPlaneUu < 0.1m || settings.NearPlaneUu > 1000.0m)
             {
-                problem = "El plano cercano debe estar entre 0,1 y 1000,0 UU. " +
-                          "Debe corresponder al plano de proyección utilizado por el adaptador de " + GameProfile.DisplayName + ".";
+                problem = "The near plane must be between 0.1 and 1000.0 UU. " +
+                          "It must match the projection plane used by the adapter for " + GameProfile.DisplayName + ".";
                 return false;
             }
             if (settings.OutputWidth < 1024 || settings.OutputWidth > 8192 ||
                 settings.OutputHeight < 1024 || settings.OutputHeight > 8192 ||
                 (settings.OutputWidth & 1) != 0 || (settings.OutputHeight & 1) != 0)
             {
-                problem = "La salida DLSS debe tener dimensiones pares entre 1024 y 8192 píxeles.";
+                problem = "DLSS output must have even dimensions between 1024 and 8192 pixels.";
                 return false;
             }
             if (settings.Mode == DlssMode.Off)
@@ -3722,19 +3722,19 @@ namespace BioshockVrLauncher
             int renderWidth, renderHeight;
             if (!TryGetRenderDimensions(out renderWidth, out renderHeight))
             {
-                problem = "No se puede validar DLSS porque falta una resolución render válida del juego.";
+                problem = "Cannot validate DLSS because a valid game render resolution is missing.";
                 return false;
             }
             if (renderWidth < 1024 || renderHeight < 1024)
             {
-                problem = "DLAA/DLSS necesita un render de al menos 1024 píxeles por eje. Aumenta la resolución; Normal permite conservar la actual.";
+                problem = "DLAA/DLSS requires at least 1024 render pixels per axis. Increase resolution; Normal allows the current value.";
                 return false;
             }
             if (!UpscalerConfigDocument.HasExactAspect(renderWidth, renderHeight,
                                                         settings.OutputWidth,
                                                         settings.OutputHeight))
             {
-                problem = "La salida DLSS debe conservar exactamente la relación de aspecto de " +
+                problem = "DLSS output must exactly preserve the aspect ratio of " +
                     renderWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                     renderHeight.ToString(CultureInfo.CurrentCulture) + ".";
                 return false;
@@ -3744,7 +3744,7 @@ namespace BioshockVrLauncher
             {
                 if (settings.OutputWidth != renderWidth || settings.OutputHeight != renderHeight)
                 {
-                    problem = "DLAA procesa a resolución nativa: la entrada y la salida deben ser idénticas.";
+                    problem = "DLAA processes at native resolution: input and output must match.";
                     return false;
                 }
                 return true;
@@ -3752,8 +3752,8 @@ namespace BioshockVrLauncher
 
             if (settings.OutputWidth <= renderWidth || settings.OutputHeight <= renderHeight)
             {
-                problem = "DLSS Super Resolution exige una salida mayor que la resolución renderizada. " +
-                          "Para trabajar 1:1 selecciona DLAA.";
+                problem = "DLSS Super Resolution requires output larger than the render resolution. " +
+                          "Select DLAA for 1:1 processing.";
                 return false;
             }
             DlssQuality detected;
@@ -3764,8 +3764,8 @@ namespace BioshockVrLauncher
                 (!canonical && settings.Quality != DlssQuality.Custom))
             {
                 problem = canonical
-                    ? "El selector de calidad SR no coincide con la resolución interna canónica detectada."
-                    : "La relación render→salida no coincide con un tramo canónico y debe mostrarse como Personalizado / AUTO.";
+                    ? "The SR quality selector does not match the detected standard internal resolution."
+                    : "The render-to-output ratio does not match a standard step and must be shown as Custom / AUTO.";
                 return false;
             }
             return true;
@@ -3775,7 +3775,7 @@ namespace BioshockVrLauncher
         {
             if (settings.Preset != "auto") return settings.Preset;
             if (settings.Mode == DlssMode.Dlaa) return "K";
-            if (settings.Quality == DlssQuality.Custom) return "AUTO según ratio/NGX";
+            if (settings.Quality == DlssQuality.Custom) return "AUTO based on ratio/NGX";
             if (settings.Quality == DlssQuality.Quality ||
                 settings.Quality == DlssQuality.Balanced ||
                 settings.Quality == DlssQuality.Percent60 ||
@@ -3783,21 +3783,21 @@ namespace BioshockVrLauncher
                 settings.Quality == DlssQuality.Percent80 ||
                 settings.Quality == DlssQuality.Percent90) return "K";
             if (settings.Quality == DlssQuality.Performance) return "M";
-            return settings.Quality == DlssQuality.UltraPerformance ? "L" : "AUTO según ratio/NGX";
+            return settings.Quality == DlssQuality.UltraPerformance ? "L" : "AUTO based on ratio/NGX";
         }
 
         private static string DlssQualityName(DlssQuality quality)
         {
-            if (quality == DlssQuality.Balanced) return "Equilibrado";
-            if (quality == DlssQuality.Performance) return "Rendimiento";
-            if (quality == DlssQuality.UltraPerformance) return "Ultra rendimiento";
-            if (quality == DlssQuality.Custom) return "Personalizado / AUTO";
+            if (quality == DlssQuality.Balanced) return "Balanced";
+            if (quality == DlssQuality.Performance) return "Performance";
+            if (quality == DlssQuality.UltraPerformance) return "Ultra performance";
+            if (quality == DlssQuality.Custom) return "Custom / AUTO";
             if (quality == DlssQuality.Percent40) return "40 %";
             if (quality == DlssQuality.Percent60) return "60 %";
             if (quality == DlssQuality.Percent70) return "70 %";
             if (quality == DlssQuality.Percent80) return "80 %";
             if (quality == DlssQuality.Percent90) return "90 %";
-            return "Calidad";
+            return "Quality";
         }
 
         private void LoadDlssConfiguration()
@@ -3845,19 +3845,19 @@ namespace BioshockVrLauncher
                 _dlssDirty = false;
                 List<string> ignoredStoredValues = new List<string>();
                 if (!string.Equals(settings.Preset, "auto", StringComparison.OrdinalIgnoreCase))
-                    ignoredStoredValues.Add("preset manual " + settings.Preset + " guardado sin efecto");
+                    ignoredStoredValues.Add("manual preset " + settings.Preset + " saved but inactive");
                 _dlssNormalizationNote = ignoredStoredValues.Count == 0 ? null :
                     string.Join("; ", ignoredStoredValues.ToArray()) +
-                    ". El archivo no cambia hasta que hagas un cambio y pulses Guardar.";
+                    ". The file stays unchanged until you change a setting and click Save.";
                 _dlssLoadWarning = valid ? null :
-                    "dlss.ini contiene valores incompletos o no válidos: " + warning;
+                    "dlss.ini contains incomplete or invalid values: " + warning;
             }
             catch (Exception ex)
             {
                 _dlssLoadedContent = string.Empty;
                 _dlssDirty = false;
                 _dlssNormalizationNote = null;
-                _dlssLoadWarning = "No se pudo leer dlss.ini: " + ex.Message;
+                _dlssLoadWarning = "Could not read dlss.ini: " + ex.Message;
                 _dlssMode.Enabled = false;
                 _dlssPreset.Enabled = false;
                 _dlssQuality.Enabled = false;
@@ -3928,18 +3928,18 @@ namespace BioshockVrLauncher
                 if (selectedQuality == DlssQuality.Custom)
                 {
                     SynchronizeDlssQualityFromResolution();
-                    qualityStatus = "Personalizado / AUTO aparece automáticamente cuando el render no coincide con un tramo canónico; las resoluciones siguen editables.";
+                    qualityStatus = "Custom / AUTO appears automatically when the render does not match a standard step; resolutions remain editable.";
                 }
                 else
                 {
                     int renderWidth, renderHeight;
                     if (TryApplyDlssQualityToRender(selectedQuality,
                                                     out renderWidth, out renderHeight))
-                        qualityStatus = "Tramo " + DlssQualityName(selectedQuality) +
-                            " aplicado en memoria: render " +
+                        qualityStatus = "Step " + DlssQualityName(selectedQuality) +
+                            " applied in memory: render " +
                             renderWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                             renderHeight.ToString(CultureInfo.CurrentCulture) +
-                            "; la salida DLSS no ha cambiado. Pulsa Guardar para escribir Shared.ini y su espejo SP.";
+                            "; DLSS output has not changed. Click Save to write Shared.ini and its SP mirror.";
                     else
                         SynchronizeDlssQualityFromResolution();
                 }
@@ -4009,8 +4009,8 @@ namespace BioshockVrLauncher
                     GameProfile.IsBioShock2 ? "ViewportY" : "WindowedViewportY") == null)
             {
                 MessageBox.Show(this,
-                    "No se puede aplicar el tramo porque falta la pareja única ViewportX / ViewportY de Shared.ini.",
-                    "Calidad DLSS SR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "Cannot apply this step because the unique ViewportX / ViewportY pair is missing from Shared.ini.",
+                    "DLSS SR quality", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
@@ -4023,12 +4023,12 @@ namespace BioshockVrLauncher
                     numerator, denominator, out renderWidth, out renderHeight))
             {
                 MessageBox.Show(this,
-                    "No se puede obtener una resolución interna par, entre 1024 y 8192 píxeles, " +
-                    "que mantenga exactamente el aspecto de la salida " +
+                    "Cannot obtain an even internal resolution between 1024 and 8192 pixels " +
+                    "that exactly preserves the aspect ratio of output " +
                     outputWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                     outputHeight.ToString(CultureInfo.CurrentCulture) +
-                    " para ese tramo. Revisa primero la salida DLSS.",
-                    "Calidad DLSS SR", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    " for that step. Check DLSS output first.",
+                    "DLSS SR quality", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
@@ -4168,7 +4168,7 @@ namespace BioshockVrLauncher
 
             if (!string.IsNullOrEmpty(_dlssLoadWarning))
             {
-                _dlssSettingsStateLabel.Text = "REVISAR · " + _dlssLoadWarning;
+                _dlssSettingsStateLabel.Text = "CHECK · " + _dlssLoadWarning;
                 _dlssSettingsStateLabel.ForeColor = Color.Firebrick;
                 return;
             }
@@ -4177,19 +4177,19 @@ namespace BioshockVrLauncher
             string problem;
             if (!TryValidateDlssSettings(settings, out problem))
             {
-                _dlssSettingsStateLabel.Text = "REVISAR · " + problem;
+                _dlssSettingsStateLabel.Text = "CHECK · " + problem;
                 _dlssSettingsStateLabel.ForeColor = Color.Firebrick;
                 return;
             }
 
-            string prefix = _dlssDirty ? "PENDIENTE · " :
-                (File.Exists(_dlssConfigPath) ? string.Empty : "SIN ARCHIVO · ");
+            string prefix = _dlssDirty ? "PENDING · " :
+                (File.Exists(_dlssConfigPath) ? string.Empty : "FILE MISSING · ");
             if (settings.Mode == DlssMode.Off)
             {
                 _dlssSettingsStateLabel.Text = prefix +
-                    "DESACTIVADO · render nativo, sin ejecutar DLSS." +
+                    "OFF · native rendering, without running DLSS." +
                     (string.IsNullOrEmpty(_dlssNormalizationNote) ? string.Empty :
-                        " NOTA · " + _dlssNormalizationNote);
+                        " NOTE · " + _dlssNormalizationNote);
                 _dlssSettingsStateLabel.ForeColor = _dlssDirty ? Warning : Muted;
                 return;
             }
@@ -4198,11 +4198,11 @@ namespace BioshockVrLauncher
             TryGetRenderDimensions(out renderWidth, out renderHeight);
             string mode;
             if (settings.Mode == DlssMode.Dlaa)
-                mode = "DLAA 4.5 · 1:1 · calidad SR ignorada";
+                mode = "DLAA 4.5 · 1:1 · SR quality ignored";
             else if (settings.Quality == DlssQuality.Custom)
-                mode = "DLSS 4.5 SR · Personalizado / AUTO";
+                mode = "DLSS 4.5 SR · Custom / AUTO";
             else
-                mode = "DLSS 4.5 SR · tramo " + DlssQualityName(settings.Quality);
+                mode = "DLSS 4.5 SR · step " + DlssQualityName(settings.Quality);
             double inputPercent = settings.OutputWidth > 0
                 ? 100.0 * renderWidth / settings.OutputWidth
                 : 0.0;
@@ -4212,18 +4212,18 @@ namespace BioshockVrLauncher
                 settings.OutputWidth.ToString(CultureInfo.CurrentCulture) + " × " +
                 settings.OutputHeight.ToString(CultureInfo.CurrentCulture) +
                 (settings.Mode == DlssMode.SuperResolution
-                    ? " · entrada " + inputPercent.ToString("0.0", CultureInfo.CurrentCulture) + "%"
+                    ? " · input " + inputPercent.ToString("0.0", CultureInfo.CurrentCulture) + "%"
                     : string.Empty) +
                 " · preset auto→" + EffectiveDlssPreset(settings) +
                 (settings.Mode == DlssMode.SuperResolution &&
                  settings.Quality == DlssQuality.Custom
-                    ? " · NGX elegirá según el ratio real"
+                    ? " · NGX will choose based on the actual ratio"
                     : string.Empty) +
-                " · proyección capturada por ojo" +
-                (_dlssBackendStatus.Ready ? " · backend preparado" :
-                    " · se guardará, pero el backend aún no está operativo") +
+                " · projection captured per eye" +
+                (_dlssBackendStatus.Ready ? " · backend ready" :
+                    " · will be saved, but the backend is not operational yet") +
                 (string.IsNullOrEmpty(_dlssNormalizationNote) ? string.Empty :
-                    " · NOTA: " + _dlssNormalizationNote);
+                    " · NOTE: " + _dlssNormalizationNote);
             _dlssSettingsStateLabel.ForeColor = _dlssDirty ? Warning :
                 (_dlssBackendStatus.Ready && _dlssBackendStatus.RuntimeMatches ? Success : Blue);
         }
@@ -4234,10 +4234,10 @@ namespace BioshockVrLauncher
             string problem;
             if (TryValidateDlssSettings(settings, out problem)) return true;
             MessageBox.Show(this,
-                "No se puede guardar la configuración DLSS 4.5:\n\n" + problem +
-                "\n\nDLAA exige entrada=salida. DLSS SR exige una salida mayor y la misma proporción.",
-                "Revisar DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            SelectTab("Imagen y resolución");
+                "Cannot save the DLSS 4.5 configuration:\n\n" + problem +
+                "\n\nDLAA requires matching input/output. DLSS SR requires larger output with the same aspect ratio.",
+                "Check DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            SelectTab("Image and resolution");
             return false;
         }
 
@@ -4272,7 +4272,7 @@ namespace BioshockVrLauncher
         private DlssBackendStatus DetectDlssBackend()
         {
             DlssBackendStatus status = new DlssBackendStatus();
-            status.Summary = "BACKEND SIN CONFIRMAR · no se ha podido comprobar host64.";
+            status.Summary = "BACKEND UNCONFIRMED · could not check host64.";
             try
             {
                 List<string> candidates = new List<string>();
@@ -4307,7 +4307,7 @@ namespace BioshockVrLauncher
                 status.HostDirectory = selected;
                 if (string.IsNullOrEmpty(selected) || !Directory.Exists(selected))
                 {
-                    status.Summary = "BACKEND NO INSTALADO · falta la carpeta host64 junto al juego o al lanzador.";
+                    status.Summary = "BACKEND NOT INSTALLED · the host64 directory is missing beside the game or launcher.";
                     return status;
                 }
 
@@ -4326,7 +4326,7 @@ namespace BioshockVrLauncher
                 }
                 if (foundForbidden.Count > 0)
                 {
-                    status.Summary = "BACKEND NO PREPARADO · host64 contiene componentes ajenos a la fase limpia DLSS 4.5: " +
+                    status.Summary = "BACKEND NOT READY · host64 contains components outside the clean DLSS 4.5 setup: " +
                         string.Join(", ", foundForbidden.ToArray()) + ".";
                     return status;
                 }
@@ -4414,29 +4414,29 @@ namespace BioshockVrLauncher
                     status.CapabilityFound && capabilityValid;
 
                 if (!status.HostFound)
-                    status.Summary = "BACKEND INCOMPLETO · falta host64\\BioShockVR-DLSS45-Host64.exe.";
+                    status.Summary = "INCOMPLETE BACKEND · missing host64\\BioShockVR-DLSS45-Host64.exe.";
                 else if (!splitHosts && !reusableHost)
-                    status.Summary = "BACKEND INVÁLIDO · el host encontrado no es un ejecutable x64.";
+                    status.Summary = "INVALID BACKEND · the host found is not an x64 executable.";
                 else if (!status.RuntimeFound)
-                    status.Summary = "BACKEND INCOMPLETO · falta host64\\nvngx_dlss.dll 310.7.0.";
+                    status.Summary = "INCOMPLETE BACKEND · missing host64\\nvngx_dlss.dll 310.7.0.";
                 else if (!status.RuntimeIs64Bit)
-                    status.Summary = "BACKEND INCOMPATIBLE · nvngx_dlss.dll debe ser x64.";
+                    status.Summary = "INCOMPATIBLE BACKEND · nvngx_dlss.dll must be x64.";
                 else if (!status.CapabilityFound)
-                    status.Summary = "BACKEND INCOMPLETO · falta dlss-capabilities.ini; no se confirma la integración estéreo.";
+                    status.Summary = "INCOMPLETE BACKEND · dlss-capabilities.ini is missing; stereo integration is unconfirmed.";
                 else if (!capabilityValid || status.EyeHosts < 2)
-                    status.Summary = "BACKEND INVÁLIDO · el manifiesto debe declarar phase=DLSS45, eyeHosts=2 y runtime=310.7.0.";
+                    status.Summary = "INVALID BACKEND · the manifest must declare phase=DLSS45, eyeHosts=2 and runtime=310.7.0.";
                 else if (!status.RuntimeMatches)
-                    status.Summary = "BACKEND PREPARADO CON AVISO · nvngx_dlss.dll x64 " +
-                        (string.IsNullOrEmpty(status.RuntimeVersion) ? "de versión no identificada" :
+                    status.Summary = "BACKEND READY WITH WARNING · nvngx_dlss.dll x64 " +
+                        (string.IsNullOrEmpty(status.RuntimeVersion) ? "with an unidentified version" :
                             status.RuntimeVersion) +
-                        "; solo 310.7.0.0 está probada.";
+                        "; only 310.7.0.0 has been tested.";
                 else
-                    status.Summary = "BACKEND PREPARADO · host x64 · 2 ojos · nvngx_dlss.dll 310.7.0.0 probada.";
+                    status.Summary = "BACKEND READY · x64 host · 2 eyes · tested nvngx_dlss.dll 310.7.0.0.";
             }
             catch (Exception ex)
             {
                 status.Ready = false;
-                status.Summary = "BACKEND SIN CONFIRMAR · " + ex.Message;
+                status.Summary = "BACKEND UNCONFIRMED · " + ex.Message;
             }
             return status;
         }
@@ -4448,15 +4448,15 @@ namespace BioshockVrLauncher
                 return;
             _runtimeWarningShown = true;
             MessageBox.Show(this,
-                "Se ha detectado una versión distinta de nvngx_dlss.dll: " +
+                "A different nvngx_dlss.dll version was detected: " +
                 (string.IsNullOrEmpty(_dlssBackendStatus.RuntimeVersion)
-                    ? "no identificada" : _dlssBackendStatus.RuntimeVersion) + ".\r\n\r\n" +
-                "El instalador coloca y esta integración ha sido probada con NVIDIA DLSS " +
-                DlssConfigDocument.TestedRuntimeDisplay + ". Se permitirá continuar, pero con otras " +
-                "versiones no se garantizan el funcionamiento, la estabilidad ni la calidad de imagen. " +
-                "La sustitución corre por cuenta del usuario.\r\n\r\n" +
-                "Reinstalar esta versión restaura la DLL probada.",
-                "DLL de NVIDIA no probada", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ? "unidentified" : _dlssBackendStatus.RuntimeVersion) + ".\r\n\r\n" +
+                "The installer includes, and this integration was tested with, NVIDIA DLSS " +
+                DlssConfigDocument.TestedRuntimeDisplay + ". You may continue, but other " +
+                "versions are not guaranteed to work or provide the same stability or image quality. " +
+                "Replacing it is at your own risk.\r\n\r\n" +
+                "Reinstalling this version restores the tested DLL.",
+                "Untested NVIDIA DLL", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void PopulateIniFilters()
@@ -4466,7 +4466,7 @@ namespace BioshockVrLauncher
             foreach (IniEntry entry in _gameIniEntries)
                 if (!FinalDlssEdition || !IsFxaaEntry(entry)) sections.Add(entry.Section);
             _iniSectionFilter.Items.Clear();
-            _iniSectionFilter.Items.Add("Todas las secciones");
+            _iniSectionFilter.Items.Add("All sections");
             foreach (string section in sections) _iniSectionFilter.Items.Add(section);
             int index = selected == null ? -1 : _iniSectionFilter.Items.IndexOf(selected);
             _iniSectionFilter.SelectedIndex = index >= 0 ? index : 0;
@@ -4506,14 +4506,14 @@ namespace BioshockVrLauncher
 
                     string displayName = entry.FriendlyName;
                     if (entry.OccurrenceCount > 1)
-                        displayName += "  (elemento " + entry.Occurrence + " de " + entry.OccurrenceCount + ")";
+                        displayName += "  (item " + entry.Occurrence + " of " + entry.OccurrenceCount + ")";
                     int rowIndex = _iniGrid.Rows.Add(IniKnowledge.ImpactText(entry.Impact), displayName,
                                                      entry.Value, entry.Key, entry.Section);
                     DataGridViewRow row = _iniGrid.Rows[rowIndex];
                     row.Tag = entry;
                     bool protectedEntry = entry.Protected &&
                                            (_allowRiskyEdits == null || !_allowRiskyEdits.Checked);
-                    row.Cells["Valor"].ReadOnly = protectedEntry || IsPcResolutionEntry(entry);
+                    row.Cells["Value"].ReadOnly = protectedEntry || IsPcResolutionEntry(entry);
                     ApplyIniRowAppearance(row, entry);
                     shown++;
                 }
@@ -4541,24 +4541,24 @@ namespace BioshockVrLauncher
 
         private void IniGridCellBeginEdit(object sender, DataGridViewCellCancelEventArgs e)
         {
-            if (e.RowIndex < 0 || _iniGrid.Columns[e.ColumnIndex].Name != "Valor") return;
+            if (e.RowIndex < 0 || _iniGrid.Columns[e.ColumnIndex].Name != "Value") return;
             IniEntry entry = _iniGrid.Rows[e.RowIndex].Tag as IniEntry;
             if (IsPcResolutionEntry(entry))
             {
                 e.Cancel = true;
-                SetStatus("La resolución se edita de forma segura y conjunta en la pestaña Imagen.", Warning);
+                SetStatus("Resolution is edited safely and consistently in the Image tab.", Warning);
             }
             else if (entry != null && entry.Protected && !_allowRiskyEdits.Checked)
             {
                 e.Cancel = true;
-                SetStatus("Este ajuste interno está protegido. Activa «Desbloquear internos» para editarlo.", Warning);
+                SetStatus("This internal setting is protected. Enable 'Unlock internal settings' to edit it.", Warning);
             }
         }
 
         private void IniGridCellValueChanged(object sender, DataGridViewCellEventArgs e)
         {
             if (_rebuildingIniGrid || _loading || e.RowIndex < 0 ||
-                _iniGrid.Columns[e.ColumnIndex].Name != "Valor") return;
+                _iniGrid.Columns[e.ColumnIndex].Name != "Value") return;
             IniEntry entry = _iniGrid.Rows[e.RowIndex].Tag as IniEntry;
             if (entry == null) return;
             string value = Convert.ToString(_iniGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value,
@@ -4566,7 +4566,7 @@ namespace BioshockVrLauncher
             if (value.IndexOf('\r') >= 0 || value.IndexOf('\n') >= 0)
             {
                 _iniGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = entry.Value;
-                SetStatus("Un valor de INI no puede contener saltos de línea.", Color.Firebrick);
+                SetStatus("An INI value cannot contain line breaks.", Color.Firebrick);
                 return;
             }
             entry.Value = value;
@@ -4624,14 +4624,14 @@ namespace BioshockVrLauncher
             IniEntry entry = SelectedIniEntry();
             if (entry == null)
             {
-                _iniDetail.Text = "Selecciona una fila para ver qué hace y si puede afectar a VR.";
+                _iniDetail.Text = "Select a row to see what it does and whether it may affect VR.";
                 return;
             }
             string repeated = entry.OccurrenceCount > 1
-                ? " · elemento " + entry.Occurrence + " de " + entry.OccurrenceCount : string.Empty;
+                ? " · item " + entry.Occurrence + " of " + entry.OccurrenceCount : string.Empty;
             string protection = entry.Protected
-                ? " · PROTEGIDO POR DEFECTO" : string.Empty;
-            if (IsPcResolutionEntry(entry)) protection += " · editar en Imagen";
+                ? " · PROTECTED BY DEFAULT" : string.Empty;
+            if (IsPcResolutionEntry(entry)) protection += " · edit in Image";
             _iniDetail.Text = IniKnowledge.ImpactText(entry.Impact) + protection + repeated +
                 Environment.NewLine + "[" + entry.Section + "]  " + entry.Key +
                 Environment.NewLine + entry.Description;
@@ -4675,23 +4675,23 @@ namespace BioshockVrLauncher
                      _dlssDirty || _gameIniDirty;
             _saveButton.Enabled = _dirty || NeedsWindowedVrMode();
             if (_dirty)
-                SetStatus("Hay cambios pendientes de guardar.", Warning);
+                SetStatus("There are unsaved changes.", Warning);
             else if (_statusLabel != null &&
-                     _statusLabel.Text == "Hay cambios pendientes de guardar.")
-                SetStatus("No hay cambios pendientes.", Success);
+                     _statusLabel.Text == "There are unsaved changes.")
+                SetStatus("No pending changes.", Success);
         }
 
         private void UpdatePathStatus()
         {
-            _configStateLabel.Text = GameProfile.DisplayName + (GameProfile.IsBioShock2 ? "  ·  VR + armas + DLSS + Shared.ini" : "  ·  VR + gestos + DLSS");
+            _configStateLabel.Text = GameProfile.DisplayName + (GameProfile.IsBioShock2 ? "  ·  VR + weapons + DLSS + Shared.ini" : "  ·  VR + gestures + DLSS");
             if (!string.IsNullOrEmpty(_gameExePath) && File.Exists(_gameExePath))
             {
-                _gameStateLabel.Text = "JUEGO ENCONTRADO  ·  " + _gameExePath;
+                _gameStateLabel.Text = "GAME FOUND  ·  " + _gameExePath;
                 _launchButton.Enabled = !_launchPending;
             }
             else
             {
-                _gameStateLabel.Text = "JUEGO NO ENCONTRADO  ·  podrás localizar " + GameProfile.ExeName + " al iniciar";
+                _gameStateLabel.Text = "GAME NOT FOUND  ·  you can locate " + GameProfile.ExeName + " at launch";
                 _launchButton.Enabled = !_launchPending;
             }
             _dlssBackendStatus = DetectDlssBackend();
@@ -4705,8 +4705,8 @@ namespace BioshockVrLauncher
             {
                 DialogResult answer = MessageBox.Show(
                     this,
-                    "Hay cambios sin guardar. ¿Quieres descartarlos y volver a leer los ficheros?",
-                    "Recargar configuración",
+                    "There are unsaved changes. Discard them and reload the files?",
+                    "Reload configuration",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question);
                 if (answer != DialogResult.Yes)
@@ -4754,9 +4754,9 @@ namespace BioshockVrLauncher
                     _resolutionPreset.Enabled = false;
                     _fxaaEnabled.Enabled = false;
                     _fxaaEnabled.Checked = false;
-                    _resolutionLoadLabel.Text = "No se encuentra Bioshock2SP.ini en " + _gameIniPath;
+                    _resolutionLoadLabel.Text = "Bioshock2SP.ini was not found in " + _gameIniPath;
                     _resolutionLoadLabel.ForeColor = Color.Firebrick;
-                    _fxaaStateLabel.Text = "No se encuentra Bioshock2SP.ini.";
+                    _fxaaStateLabel.Text = "Bioshock2SP.ini was not found.";
                     _fxaaStateLabel.ForeColor = Color.Firebrick;
                 }
                 if (File.Exists(_sharedIniPath)) LoadResolutionControls();
@@ -4768,34 +4768,34 @@ namespace BioshockVrLauncher
                          _dlssDirty || _gameIniDirty;
                 _saveButton.Enabled = _dirty || NeedsWindowedVrMode();
                 if (finalPolicyAdjusted)
-                    SetStatus("La edición final desactivará FXAA y el antiguo reescalado espacial al guardar.", Warning);
+                    SetStatus("This edition will disable FXAA and legacy spatial upscaling when saving.", Warning);
                 else if (NeedsWindowedVrMode())
-                    SetStatus("Arranque VR: pulsa Guardar para preparar el modo ventana y evitar que la pantalla completa sustituya la resolución.", Warning);
+                    SetStatus("VR startup: click Save to prepare windowed mode and prevent fullscreen from overriding the resolution.", Warning);
                 else if (_dlssDirty && _upscalerDirty)
-                    SetStatus("Se detectaron DLSS y reescalado espacial activos a la vez. La interfaz ha dejado solo DLSS; pulsa Guardar para corregir ambos archivos.", Warning);
+                    SetStatus("DLSS and spatial upscaling were both active. The interface kept DLSS only; click Save to correct both files.", Warning);
                 else if (!string.IsNullOrEmpty(_dlssLoadWarning))
-                    SetStatus("Configuración cargada; revisa el aviso de dlss.ini en la pestaña Imagen.", Warning);
+                    SetStatus("Configuration loaded; check the dlss.ini warning in the Image tab.", Warning);
                 else if (!FinalDlssEdition && !string.IsNullOrEmpty(_upscalerLoadWarning))
-                    SetStatus("Configuración cargada; revisa el aviso de upscaler.ini en la pestaña Imagen.", Warning);
+                    SetStatus("Configuration loaded; check the upscaler.ini warning in the Image tab.", Warning);
                 else
                     SetStatus(File.Exists(_configPath)
-                        ? "Configuración VR, modos Normal/DLAA/DLSS 4.5 y " + _gameIniEntries.Count + " entradas de Bioshock2SP.ini cargadas sin modificar archivos."
-                        : "Falta vrpreset.ini; se muestran valores iniciales listos para guardar.",
+                        ? "VR configuration, Normal/DLAA/DLSS 4.5 modes and " + _gameIniEntries.Count + " Bioshock2SP.ini entries loaded without changing files."
+                        : "vrpreset.ini is missing; initial values are displayed and ready to save.",
                         File.Exists(_configPath) ? Success : Warning);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this,
-                    "No se ha podido leer la configuración:\n\n" + ex.Message,
-                    "Error al cargar", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("Error al leer vrpreset.ini.", Color.Firebrick);
+                    "Could not read the configuration:\n\n" + ex.Message,
+                    "Error loading", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Error reading vrpreset.ini.", Color.Firebrick);
             }
             finally
             {
                 _loading = false;
             }
             if (FinalDlssEdition && PrepareSquareImage())
-                SetStatus("La resolución cuadrada del visor está preparada. Pulsa Guardar para aplicarla.", Warning);
+                SetStatus("The square headset resolution is ready. Click Save to apply it.", Warning);
         }
 
         private void PopulateEditors(Dictionary<string, string> values)
@@ -4915,17 +4915,17 @@ namespace BioshockVrLauncher
                 if (expectedContent == (_loadedContent ?? string.Empty))
                     return true;
                 DialogResult answer = MessageBox.Show(this,
-                    "vrpreset.ini ha cambiado desde que abriste o recargaste el lanzador. " +
-                    "Puede haber sido modificado por el juego u otra aplicación.\n\n" +
-                    "¿Quieres aplicar sobre esa versión externa los valores que ves ahora?",
-                    "Configuración modificada externamente",
+                    "vrpreset.ini has changed since you opened or reloaded the launcher. " +
+                    "It may have been changed by the game or another application.\n\n" +
+                    "Apply the currently displayed values to that externally modified version?",
+                    "Configuration changed externally",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 return answer == DialogResult.Yes;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido comprobar vrpreset.ini:\n\n" + ex.Message,
-                    "Error al preparar el guardado", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "Could not check vrpreset.ini:\n\n" + ex.Message,
+                    "Error preparing to save", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }
@@ -4941,17 +4941,17 @@ namespace BioshockVrLauncher
                 if (expectedContent == (_upscalerLoadedContent ?? string.Empty))
                     return true;
                 DialogResult answer = MessageBox.Show(this,
-                    "upscaler.ini ha cambiado desde que abriste o recargaste el lanzador. " +
-                    "Puede haber sido modificado por el juego u otra aplicación.\n\n" +
-                    "¿Quieres aplicar sobre esa versión externa los valores que ves ahora?",
-                    "Reescalado modificado externamente",
+                    "upscaler.ini has changed since you opened or reloaded the launcher. " +
+                    "It may have been changed by the game or another application.\n\n" +
+                    "Apply the currently displayed values to that externally modified version?",
+                    "Upscaling changed externally",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 return answer == DialogResult.Yes;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido comprobar upscaler.ini:\n\n" + ex.Message,
-                    "Error al preparar el reescalado", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "Could not check upscaler.ini:\n\n" + ex.Message,
+                    "Error preparing upscaling", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }
@@ -4967,17 +4967,17 @@ namespace BioshockVrLauncher
                 if (expectedContent == (_dlssLoadedContent ?? string.Empty))
                     return true;
                 DialogResult answer = MessageBox.Show(this,
-                    "dlss.ini ha cambiado desde que abriste o recargaste el lanzador. " +
-                    "Puede haber sido modificado por el juego u otra aplicación.\n\n" +
-                    "¿Quieres aplicar sobre esa versión externa los valores que ves ahora?",
-                    "DLSS modificado externamente",
+                    "dlss.ini has changed since you opened or reloaded the launcher. " +
+                    "It may have been changed by the game or another application.\n\n" +
+                    "Apply the currently displayed values to that externally modified version?",
+                    "DLSS changed externally",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 return answer == DialogResult.Yes;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido comprobar dlss.ini:\n\n" + ex.Message,
-                    "Error al preparar DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "Could not check dlss.ini:\n\n" + ex.Message,
+                    "Error preparing DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;
             }
         }
@@ -4988,8 +4988,8 @@ namespace BioshockVrLauncher
             if (IsGameRunning())
             {
                 MessageBox.Show(this,
-                    "" + GameProfile.DisplayName + " está abierto. Ciérralo antes de guardar para evitar que el juego vuelva a sobrescribir el fichero al salir.",
-                    "Juego en ejecución", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "" + GameProfile.DisplayName + " is open. Close it before saving so the game does not overwrite the file on exit.",
+                    "Game running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
@@ -5000,7 +5000,7 @@ namespace BioshockVrLauncher
             if (!_dirty)
             {
                 if (showNoChanges)
-                    SetStatus("No hay cambios pendientes; el fichero ya está al día.", Success);
+                    SetStatus("No pending changes; the file is up to date.", Success);
                 return true;
             }
             if (_vrDirty && !ValidateBeforeSave())
@@ -5009,11 +5009,11 @@ namespace BioshockVrLauncher
             if (!FinalDlssEdition && _upscalerEnabled.Checked && _dlssMode.SelectedIndex > 0)
             {
                 MessageBox.Show(this,
-                    "DLSS 4.5 y el reescalado espacial no pueden estar activos a la vez. " +
-                    "Selecciona solo uno de los dos métodos.",
-                    "Métodos de imagen excluyentes", MessageBoxButtons.OK,
+                    "DLSS 4.5 and spatial upscaling cannot be active at the same time. " +
+                    "Select only one of the two methods.",
+                    "Mutually exclusive image methods", MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
-                SelectTab("Imagen y resolución");
+                SelectTab("Image and resolution");
                 return false;
             }
 
@@ -5052,7 +5052,7 @@ namespace BioshockVrLauncher
                 if (!SaveVrConfigurationCore(expectedVrContent))
                 {
                     if (savedGame)
-                        SetStatus("Bioshock2SP.ini sí se guardó; vrpreset.ini no se ha guardado.", Warning);
+                        SetStatus("Bioshock2SP.ini was saved; vrpreset.ini was not saved.", Warning);
                     return false;
                 }
                 savedVr = true;
@@ -5062,7 +5062,7 @@ namespace BioshockVrLauncher
                 if (!SaveUpscalerConfigurationCore(expectedUpscalerContent))
                 {
                     if (savedGame || savedVr)
-                        SetStatus("Los otros ficheros sí se guardaron; upscaler.ini no se ha guardado.", Warning);
+                        SetStatus("The other files were saved; upscaler.ini was not saved.", Warning);
                     return false;
                 }
                 savedUpscaler = true;
@@ -5072,7 +5072,7 @@ namespace BioshockVrLauncher
                 if (!SaveDlssConfigurationCore(expectedDlssContent))
                 {
                     if (savedGame || savedVr || savedUpscaler)
-                        SetStatus("Los otros ficheros sí se guardaron; dlss.ini no se ha guardado.", Warning);
+                        SetStatus("The other files were saved; dlss.ini was not saved.", Warning);
                     return false;
                 }
                 savedDlss = true;
@@ -5084,7 +5084,7 @@ namespace BioshockVrLauncher
             if (savedUpscaler) savedNames.Add("upscaler.ini");
             if (savedGame) savedNames.Add(GameProfile.IsBioShock2 ? "Shared.ini + Bioshock2SP.ini" : "Bioshock.ini");
             SetStatus(string.Join(" + ", savedNames.ToArray()) +
-                " guardado(s), verificado(s) y respaldado(s).", Success);
+                " saved, verified and backed up.", Success);
             return true;
         }
 
@@ -5117,9 +5117,9 @@ namespace BioshockVrLauncher
             }
             catch (InvalidDataException ex)
             {
-                MessageBox.Show(this, "No se puede preparar el arranque VR en ventana:\n\n" + ex.Message +
-                    "\n\nNo se ha guardado ningún archivo. Revisa los INI y recarga el lanzador.",
-                    "Configuración de ventana no válida", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Could not prepare windowed VR startup:\n\n" + ex.Message +
+                    "\n\nNo files were saved. Check the INI files and reload the launcher.",
+                    "Invalid window configuration", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
         }
@@ -5133,7 +5133,7 @@ namespace BioshockVrLauncher
                     ? File.ReadAllText(_upscalerConfigPath, Encoding.UTF8)
                     : string.Empty;
                 if (currentContent != (expectedContent ?? string.Empty))
-                    throw new IOException("upscaler.ini ha vuelto a cambiar durante el guardado. Recarga antes de intentarlo de nuevo.");
+                    throw new IOException("upscaler.ini changed again while saving. Reload before trying again.");
 
                 UpscalerSettings values = CollectUpscalerSettings();
                 string newContent = UpscalerConfigDocument.Render(currentContent, values);
@@ -5151,7 +5151,7 @@ namespace BioshockVrLauncher
                     verification.OutputWidth != values.OutputWidth ||
                     verification.OutputHeight != values.OutputHeight ||
                     verification.Sharpness != values.Sharpness)
-                    throw new InvalidDataException("No se pudo verificar upscaler.ini. " + warning);
+                    throw new InvalidDataException("Could not verify upscaler.ini. " + warning);
 
                 AtomicConfigBatch.Save(new ConfigWrite[] {
                     new ConfigWrite(_upscalerConfigPath, expectedContent, newContent, new UTF8Encoding(false))
@@ -5159,7 +5159,7 @@ namespace BioshockVrLauncher
 
                 string diskContent = File.ReadAllText(_upscalerConfigPath, Encoding.UTF8);
                 if (diskContent != newContent)
-                    throw new IOException("La comprobación final de upscaler.ini no coincide.");
+                    throw new IOException("Final upscaler.ini verification mismatch.");
                 _upscalerLoadedContent = diskContent;
                 _upscalerLoadWarning = null;
                 _upscalerDirty = false;
@@ -5173,9 +5173,9 @@ namespace BioshockVrLauncher
                     try { File.Delete(temporaryPath); } catch { }
                 }
                 MessageBox.Show(this,
-                    "No se ha podido guardar upscaler.ini:\n\n" + ex.Message,
-                    "Error al guardar reescalado", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("upscaler.ini no se ha guardado.", Color.Firebrick);
+                    "Could not save upscaler.ini:\n\n" + ex.Message,
+                    "Error saving upscaling settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("upscaler.ini was not saved.", Color.Firebrick);
                 return false;
             }
         }
@@ -5189,7 +5189,7 @@ namespace BioshockVrLauncher
                     ? File.ReadAllText(_dlssConfigPath, Encoding.UTF8)
                     : string.Empty;
                 if (currentContent != (expectedContent ?? string.Empty))
-                    throw new IOException("dlss.ini ha vuelto a cambiar durante el guardado. Recarga antes de intentarlo de nuevo.");
+                    throw new IOException("dlss.ini changed again while saving. Reload before trying again.");
 
                 DlssSettings values = CollectDlssSettings();
                 string newContent = DlssConfigDocument.Render(currentContent, values);
@@ -5214,7 +5214,7 @@ namespace BioshockVrLauncher
                     verification.SrScaleDenominator != values.SrScaleDenominator ||
                     verification.SharpnessPercent != values.SharpnessPercent ||
                     verification.NearPlaneUu != values.NearPlaneUu)
-                    throw new InvalidDataException("No se pudo verificar dlss.ini. " + warning);
+                    throw new InvalidDataException("Could not verify dlss.ini. " + warning);
 
                 AtomicConfigBatch.Save(new ConfigWrite[] {
                     new ConfigWrite(_dlssConfigPath, expectedContent, newContent, new UTF8Encoding(false))
@@ -5222,7 +5222,7 @@ namespace BioshockVrLauncher
 
                 string diskContent = File.ReadAllText(_dlssConfigPath, Encoding.UTF8);
                 if (diskContent != newContent)
-                    throw new IOException("La comprobación final de dlss.ini no coincide.");
+                    throw new IOException("Final dlss.ini verification mismatch.");
                 _dlssLoadedContent = diskContent;
                 _dlssLoadWarning = null;
                 _dlssNormalizationNote = null;
@@ -5237,9 +5237,9 @@ namespace BioshockVrLauncher
                     try { File.Delete(temporaryPath); } catch { }
                 }
                 MessageBox.Show(this,
-                    "No se ha podido guardar dlss.ini:\n\n" + ex.Message,
-                    "Error al guardar DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("dlss.ini no se ha guardado.", Color.Firebrick);
+                    "Could not save dlss.ini:\n\n" + ex.Message,
+                    "Error saving DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("dlss.ini was not saved.", Color.Firebrick);
                 return false;
             }
         }
@@ -5255,7 +5255,7 @@ namespace BioshockVrLauncher
                 Dictionary<string, string> weaponValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (ParamDef definition in _definitions)
                 {
-                    bool weapon = definition.Category == "Armas";
+                    bool weapon = definition.Category == "Weapons";
                     (weapon ? weaponDefinitions : vrDefinitions).Add(definition);
                     (weapon ? weaponValues : vrValues)[definition.Key] = values[definition.Key];
                 }
@@ -5275,9 +5275,9 @@ namespace BioshockVrLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido guardar vrpreset.ini y weapons.ini:\n\n" + ex.Message,
-                    "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("Guardado VR incompleto. Revisa el aviso y recarga.", Color.Firebrick);
+                MessageBox.Show(this, "Could not save vrpreset.ini and weapons.ini:\n\n" + ex.Message,
+                    "Error saving", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("VR save incomplete. Check the warning and reload.", Color.Firebrick);
                 return false;
             }
         }
@@ -5300,11 +5300,11 @@ namespace BioshockVrLauncher
             for (int i = 0; i < shown; i++)
                 list.AppendLine("• [" + sensitive[i].Section + "] " + sensitive[i].Key);
             if (sensitive.Count > shown)
-                list.AppendLine("• …y " + (sensitive.Count - shown) + " ajuste(s) más");
+                list.AppendLine("• …and " + (sensitive.Count - shown) + " more setting(s)");
             DialogResult answer = MessageBox.Show(this,
-                "Has modificado ajustes internos, protegidos o especialmente sensibles para VR:\n\n" +
-                list.ToString() + "\nSe creará una copia de seguridad, pero un valor incorrecto puede impedir que el juego arranque o alterar el progreso. ¿Quieres continuar?",
-                "Confirmar cambios delicados", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                "You changed internal, protected or VR-sensitive settings:\n\n" +
+                list.ToString() + "\nA backup will be created, but an incorrect value could prevent startup or affect progress. Continue?",
+                "Confirm sensitive changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
             return answer == DialogResult.Yes;
         }
 
@@ -5313,7 +5313,7 @@ namespace BioshockVrLauncher
             int sectionCount = Regex.Matches(_gameIniLoadedContent ?? string.Empty,
                 @"(?m)^\[WinDrv\.WindowsClient\]\r?$").Count;
             if (sectionCount != 1)
-                throw new InvalidDataException("Se esperaba una sola sección [WinDrv.WindowsClient] y se encontraron " + sectionCount + ".");
+                throw new InvalidDataException("Expected one [WinDrv.WindowsClient] section; found " + sectionCount + ".");
             string[] keys = new string[] {
                 "WindowedViewportX", "WindowedViewportY", "FullscreenViewportX", "FullscreenViewportY"
             };
@@ -5337,10 +5337,10 @@ namespace BioshockVrLauncher
             if (changedFxaa != null)
             {
                 if (fxaaCount != 1)
-                    throw new InvalidDataException("La clave [Engine.RenderConfig] UseFxaa falta o está duplicada.");
+                    throw new InvalidDataException("The [Engine.RenderConfig] UseFxaa key is missing or duplicated.");
                 bool enabled;
                 if (!TryParseIniSwitch(changedFxaa.Value, out enabled))
-                    throw new InvalidDataException("[Engine.RenderConfig] UseFxaa debe ser 0, 1, False o True.");
+                    throw new InvalidDataException("[Engine.RenderConfig] UseFxaa must be 0, 1, False or True.");
             }
             int width = 0, height = 0;
             for (int i = 0; i < keys.Length; i++)
@@ -5356,17 +5356,17 @@ namespace BioshockVrLauncher
                     }
                 }
                 if (count != 1 || found == null)
-                    throw new InvalidDataException("La clave PC " + keys[i] + " falta o está duplicada.");
+                    throw new InvalidDataException("The PC key " + keys[i] + " is missing or duplicated.");
                 if (!resolutionChanged)
                     continue;
                 int number;
                 if (!int.TryParse(found.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) ||
                     number < 1024 || number > 8192)
-                    throw new InvalidDataException(keys[i] + " debe estar entre 1024 y 8192.");
+                    throw new InvalidDataException(keys[i] + " must be between 1024 and 8192.");
                 if (i == 0) width = number;
                 if (i == 1) height = number;
                 if ((i == 2 && number != width) || (i == 3 && number != height))
-                    throw new InvalidDataException("Las resoluciones de ventana y pantalla completa deben guardarse sincronizadas.");
+                    throw new InvalidDataException("Windowed and fullscreen resolutions must be saved in sync.");
             }
             return true;
         }
@@ -5379,11 +5379,11 @@ namespace BioshockVrLauncher
                 IniEntry sx = FindIniEntry("SharedOptions", "ViewportX");
                 IniEntry sy = FindIniEntry("SharedOptions", "ViewportY");
                 if (sx == null || sy == null)
-                    throw new InvalidDataException("Shared.ini debe contener una pareja única ViewportX / ViewportY en [SharedOptions].");
+                    throw new InvalidDataException("Shared.ini must contain exactly one ViewportX / ViewportY pair in [SharedOptions].");
                 int width, height;
                 if (!int.TryParse(sx.Value.TrimEnd(';'), out width) || !int.TryParse(sy.Value.TrimEnd(';'), out height) ||
                     width < 640 || width > 8192 || height < 480 || height > 8192)
-                    throw new InvalidDataException("La resolución de Shared.ini está fuera de 640×480 a 8192×8192.");
+                    throw new InvalidDataException("The Shared.ini resolution is outside the 640×480 to 8192×8192 range.");
                 string sharedContent = GameIniDocument.Render(_sharedIniLoadedContent, _sharedIniEntries);
                 string spContent = GameIniDocument.Render(_gameIniLoadedContent, _gameIniEntries);
                 List<ConfigWrite> writes = new List<ConfigWrite>();
@@ -5408,9 +5408,9 @@ namespace BioshockVrLauncher
             catch (Exception ex)
             {
                 _loading = false;
-                MessageBox.Show(this, "No se han podido guardar Shared.ini y Bioshock2SP.ini:\n\n" + ex.Message,
-                    "Error al guardar imagen", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("No se completó el guardado de los INI del juego.", Color.Firebrick);
+                MessageBox.Show(this, "Could not save Shared.ini and Bioshock2SP.ini:\n\n" + ex.Message,
+                    "Error saving image settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Saving the game INI files did not complete.", Color.Firebrick);
                 return false;
             }
         }
@@ -5422,13 +5422,13 @@ namespace BioshockVrLauncher
             try
             {
                 if (!File.Exists(_gameIniPath))
-                    throw new FileNotFoundException("No se encuentra Bioshock.ini.", _gameIniPath);
+                    throw new FileNotFoundException("Bioshock.ini was not found.", _gameIniPath);
                 string currentContent = ReadGameIniText(_gameIniPath);
                 if (currentContent != (_gameIniLoadedContent ?? string.Empty))
                 {
                     DialogResult answer = MessageBox.Show(this,
-                        "Bioshock.ini ha cambiado desde que lo cargaste, probablemente porque el juego u otra aplicación lo ha escrito.\n\nRecarga el fichero antes de continuar para no perder esos cambios.",
-                        "Bioshock.ini modificado externamente", MessageBoxButtons.OK,
+                        "Bioshock.ini has changed since you loaded it, probably because the game or another application wrote to it.\n\nReload the file before continuing to avoid losing those changes.",
+                        "Bioshock.ini changed externally", MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                     return false;
                 }
@@ -5442,13 +5442,13 @@ namespace BioshockVrLauncher
 
                 List<IniEntry> verificationModel = GameIniDocument.Parse(newContent);
                 if (verificationModel.Count != _gameIniEntries.Count)
-                    throw new InvalidDataException("La estructura del INI cambió durante la preparación del guardado.");
+                    throw new InvalidDataException("The INI structure changed while preparing to save.");
                 for (int i = 0; i < verificationModel.Count; i++)
                 {
                     if (verificationModel[i].Section != _gameIniEntries[i].Section ||
                         verificationModel[i].Key != _gameIniEntries[i].Key ||
                         verificationModel[i].Value != _gameIniEntries[i].Value)
-                        throw new InvalidDataException("Falló la verificación de [" +
+                        throw new InvalidDataException("Verification failed for [" +
                             _gameIniEntries[i].Section + "] " + _gameIniEntries[i].Key + ".");
                 }
 
@@ -5459,7 +5459,7 @@ namespace BioshockVrLauncher
                     "Bioshock-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture) + ".ini");
                 File.Copy(_gameIniPath, backupPath, false);
                 if (!FilesHaveSameBytes(backupPath, _gameIniPath))
-                    throw new IOException("No se pudo verificar la copia de seguridad de Bioshock.ini.");
+                    throw new IOException("Could not verify the Bioshock.ini backup.");
 
                 temporaryPath = _gameIniPath + ".lanzador-" + Guid.NewGuid().ToString("N") + ".tmp";
                 File.WriteAllText(temporaryPath, newContent, _gameIniEncoding);
@@ -5470,12 +5470,12 @@ namespace BioshockVrLauncher
                 }
                 catch (Exception ex)
                 {
-                    throw new IOException("Windows no pudo sustituir Bioshock.ini de forma atómica. El original sigue protegido por la copia: " + ex.Message, ex);
+                    throw new IOException("Windows could not replace Bioshock.ini atomically. The original is still protected by the backup: " + ex.Message, ex);
                 }
 
                 string diskContent = ReadGameIniText(_gameIniPath);
                 if (diskContent != newContent)
-                    throw new IOException("La lectura final de Bioshock.ini no coincide con lo preparado.");
+                    throw new IOException("The final Bioshock.ini readback does not match the prepared content.");
                 _gameIniLoadedContent = diskContent;
                 _gameIniEntries = GameIniDocument.Parse(diskContent);
                 _gameIniDirty = false;
@@ -5495,9 +5495,9 @@ namespace BioshockVrLauncher
                 }
                 _loading = false;
                 MessageBox.Show(this,
-                    "No se han podido guardar los cambios de Bioshock.ini:\n\n" + ex.Message,
-                    "Error al guardar Bioshock.ini", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                SetStatus("Bioshock.ini no se ha guardado.", Color.Firebrick);
+                    "Could not save changes to Bioshock.ini:\n\n" + ex.Message,
+                    "Error saving Bioshock.ini", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Bioshock.ini was not saved.", Color.Firebrick);
                 return false;
             }
         }
@@ -5519,20 +5519,20 @@ namespace BioshockVrLauncher
             if (_launchPending) return;
             if (!string.IsNullOrEmpty(Program.SandboxRoot))
             {
-                SetStatus("Prueba aislada: el inicio del juego está desactivado.", Warning);
+                SetStatus("Isolated test: game startup is disabled.", Warning);
                 return;
             }
             if (IsGameRunning())
             {
-                MessageBox.Show(this, "" + GameProfile.DisplayName + " ya está ejecutándose. Cierra el juego antes de aplicar cambios o iniciar otra sesión.",
-                    "Juego en ejecución", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "" + GameProfile.DisplayName + " is already running. Close the game before applying changes or starting another session.",
+                    "Game running", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             if (string.IsNullOrEmpty(_gameExePath) || !File.Exists(_gameExePath))
             {
                 using (OpenFileDialog dialog = new OpenFileDialog())
                 {
-                    dialog.Title = "Localiza " + GameProfile.ExeName;
+                    dialog.Title = "Locate " + GameProfile.ExeName;
                     dialog.Filter = GameProfile.DisplayName + " Remastered|" + GameProfile.ExeName;
                     dialog.CheckFileExists = true;
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -5545,14 +5545,14 @@ namespace BioshockVrLauncher
             {
                 if (!GameProfile.VerifyExecutable(_gameExePath, out problem))
                 {
-                    MessageBox.Show(this, problem, "Versión del juego incompatible", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, problem, "Unsupported game version", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "No se ha podido verificar el ejecutable:\n\n" + ex.Message,
-                    "Error de verificación", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(this, "Could not verify the executable:\n\n" + ex.Message,
+                    "Verification error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             if (!SaveConfiguration(false)) return;
@@ -5584,11 +5584,11 @@ namespace BioshockVrLauncher
                 _launchTimer.Interval = 500;
                 _launchTimer.Tick += PollGameLaunch;
                 _launchTimer.Start();
-                SetStatus("Esperando a " + GameProfile.DisplayName + ": proceso nuevo, ruta verificada y ventana del juego…", Blue);
+                SetStatus("Waiting for " + GameProfile.DisplayName + ": new process, verified path and game window…", Blue);
             }
             catch (Exception ex)
             {
-                EndLaunchAttempt("No se pudo solicitar el inicio de " + GameProfile.DisplayName + ".\n\n" + ex.Message);
+                EndLaunchAttempt("Could not request startup for " + GameProfile.DisplayName + ".\n\n" + ex.Message);
             }
         }
 
@@ -5619,25 +5619,25 @@ namespace BioshockVrLauncher
             {
                 StopLaunchMonitor();
                 _launchPending = false;
-                SetStatus("" + GameProfile.DisplayName + " iniciado y comprobado.", Success);
+                SetStatus("" + GameProfile.DisplayName + " started and verified.", Success);
                 Close();
                 return;
             }
             if (outcome == LaunchOutcome.ExitedEarly)
             {
-                EndLaunchAttempt("" + GameProfile.DisplayName + " llegó a crear un proceso, pero terminó antes de confirmar una ventana operativa.\n\n" +
-                    "Revisa el registro VR en la pestaña Diagnóstico y el estado del juego en Steam. Los ajustes guardados se conservan.");
+                EndLaunchAttempt("" + GameProfile.DisplayName + " created a process, but exited before a working window could be confirmed.\n\n" +
+                    "Check the VR log in Diagnostics and the game's status in Steam. Your saved settings are retained.");
                 return;
             }
             if (outcome == LaunchOutcome.TimedOut)
             {
-                EndLaunchAttempt("No se ha confirmado el inicio de " + GameProfile.DisplayName + " en 60 segundos.\n\n" +
-                    "Steam abierto no confirma que el juego haya arrancado. Comprueba si Steam está actualizando el juego o mostrando un aviso. " +
-                    "También puedes revisar Diagnóstico. El lanzador permanece abierto y tus ajustes están guardados.");
+                EndLaunchAttempt("Startup has not been confirmed for " + GameProfile.DisplayName + " within 60 seconds.\n\n" +
+                    "An open Steam window does not confirm that the game started. Check whether Steam is updating the game or displaying a prompt. " +
+                    "You can also check Diagnostics. The launcher remains open and your settings have been saved.");
                 return;
             }
             int elapsed = (int)(DateTime.UtcNow - _launchRequestedUtc).TotalSeconds;
-            SetStatus("Esperando al proceso y ventana de " + GameProfile.DisplayName + "… " + elapsed + "/60 s", Blue);
+            SetStatus("Waiting for the process and window of " + GameProfile.DisplayName + "… " + elapsed + "/60 s", Blue);
         }
 
         private void StopLaunchMonitor()
@@ -5656,8 +5656,8 @@ namespace BioshockVrLauncher
             _launchButton.Enabled = true;
             _saveButton.Enabled = _dirty;
             RefreshDiagnostics();
-            SetStatus("No se ha confirmado el inicio; revisa Steam y Diagnóstico.", Color.Firebrick);
-            MessageBox.Show(this, problem, "" + GameProfile.DisplayName + " no ha iniciado correctamente",
+            SetStatus("Startup not confirmed; check Steam and Diagnostics.", Color.Firebrick);
+            MessageBox.Show(this, problem, "" + GameProfile.DisplayName + " did not start correctly",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
@@ -5751,12 +5751,12 @@ namespace BioshockVrLauncher
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this, "El fichero todavía no existe. Pulsa Guardar cambios para crearlo.",
-                                    "Configuración", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "The file does not exist yet. Click Save changes to create it.",
+                                    "Configuration", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir el fichero",
+                MessageBox.Show(this, ex.Message, "Could not open file",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5764,21 +5764,21 @@ namespace BioshockVrLauncher
         private void ShowCreditsAndLicenses()
         {
             MessageBox.Show(this,
-                "BioShock 1–2 VR · DLSS/DLAA 0.2.13\n" +
-                "Integración DLSS/DLAA y lanzador: Beren5556\n\n" +
-                "AGRADECIMIENTO ESPECIAL A MOHAMAD BALOUZA\n" +
-                "Creador de BioShock VR y de la implementación VR fundamental " +
-                "sobre la que se construye este fork. Sin su enorme trabajo, " +
-                "este proyecto no existiría. Publicado por VR-Stereo-Hub (MIT).\n" +
-                "Versión base exacta: BioShock VR v0.8.2\n" +
-                "Proyecto: https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr\n" +
-                "Creador: https://github.com/mohamad-balouza\n\n" +
-                "Host DLSS: Jean-Laurent ROUZIES y NIGos (MIT).\n" +
-                "Utiliza NVIDIA DLSS SDK 310.7.0 bajo licencia NVIDIA.\n\n" +
-                "Proyecto comunitario no afiliado ni respaldado por 2K, " +
-                "Take-Two Interactive o NVIDIA. Las licencias completas se " +
-                "instalan junto al lanzador.",
-                "Créditos y licencias", MessageBoxButtons.OK,
+                "BioShock 1–2 VR · DLSS/DLAA 0.2.17 English\n" +
+                "DLSS/DLAA integration and launcher: Beren5556\n\n" +
+                "SPECIAL THANKS TO MOHAMAD BALOUZA\n" +
+                "Creator of BioShock VR and the fundamental VR implementation " +
+                "on which this fork is built. Without his tremendous work, " +
+                "this project would not exist. Published by VR-Stereo-Hub (MIT).\n" +
+                "Exact base version: BioShock VR v0.8.2\n" +
+                "Project: https://github.com/VR-Stereo-Hub/bioshock-trilogy-vr\n" +
+                "Creator: https://github.com/mohamad-balouza\n\n" +
+                "DLSS host: Jean-Laurent ROUZIES and NIGos (MIT).\n" +
+                "Uses NVIDIA DLSS SDK 310.7.0 under the NVIDIA license.\n\n" +
+                "Community project, not affiliated with or endorsed by 2K, " +
+                "Take-Two Interactive or NVIDIA. Full licenses are " +
+                "installed alongside the launcher.",
+                "Credits and licenses", MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
 
@@ -5795,12 +5795,12 @@ namespace BioshockVrLauncher
                 }
                 else
                     MessageBox.Show(this,
-                        "upscaler.ini todavía no existe. Cambia una opción del bloque experimental y pulsa Guardar para crearlo.",
-                        "Reescalado espacial", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        "upscaler.ini does not exist yet. Change an experimental option and click Save to create it.",
+                        "Spatial upscaling", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir upscaler.ini",
+                MessageBox.Show(this, ex.Message, "Could not open upscaler.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5818,12 +5818,12 @@ namespace BioshockVrLauncher
                 }
                 else
                     MessageBox.Show(this,
-                        "dlss.ini todavía no existe. Cambia una opción del bloque DLSS 4.5 y pulsa Guardar para crearlo. El archivo por sí solo no instala el backend.",
+                        "dlss.ini does not exist yet. Change a DLSS 4.5 option and click Save to create it. The file alone does not install the backend.",
                         "DLSS 4.5", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir dlss.ini",
+                MessageBox.Show(this, ex.Message, "Could not open dlss.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5839,12 +5839,12 @@ namespace BioshockVrLauncher
                     Process.Start(info);
                 }
                 else
-                    MessageBox.Show(this, "No se encuentra Shared.ini en:\n\n" + _sharedIniPath,
+                    MessageBox.Show(this, "Shared.ini was not found in:\n\n" + _sharedIniPath,
                                     "Shared.ini", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir Shared.ini",
+                MessageBox.Show(this, ex.Message, "Could not open Shared.ini",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5863,11 +5863,11 @@ namespace BioshockVrLauncher
                 ProcessStartInfo gameInfo = new ProcessStartInfo("explorer.exe", "\"" + gameDirectory + "\"");
                 gameInfo.UseShellExecute = true;
                 Process.Start(gameInfo);
-                SetStatus("Se han abierto las copias de vrpreset.ini, dlss.ini y Bioshock2SP.ini.", Success);
+                SetStatus("Opened the backups of vrpreset.ini, dlss.ini and Bioshock2SP.ini.", Success);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "No se pudo abrir la carpeta",
+                MessageBox.Show(this, ex.Message, "Could not open directory",
                                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -5894,46 +5894,46 @@ namespace BioshockVrLauncher
 
         internal bool RunSandboxRoundTrip()
         {
-            if (string.IsNullOrEmpty(Program.SandboxRoot)) throw new InvalidOperationException("La prueba requiere sandbox.");
+            if (string.IsNullOrEmpty(Program.SandboxRoot)) throw new InvalidOperationException("This test requires a sandbox.");
             if (_resolutionWidth.Value != 800 || _resolutionHeight.Value != 600)
-                throw new InvalidDataException("La interfaz no ha usado la resolución efectiva de Shared.ini.");
+                throw new InvalidDataException("The interface did not use the effective resolution from Shared.ini.");
             if (string.IsNullOrEmpty(_dlssMode.Text) || string.IsNullOrEmpty(_resolutionPreset.Text))
-                throw new InvalidDataException("Los selectores no muestran su valor.");
+                throw new InvalidDataException("The selectors do not display their values.");
             // The real regression starts from inherited fullscreen=True with
             // no edited controls. Use the same save path as Guardar/iniciar.
             _dirty = _vrDirty = _gameIniDirty = _dlssDirty = _upscalerDirty = false;
             UpdateDirtyState();
             if (!NeedsWindowedVrMode() || !_saveButton.Enabled || !SaveConfiguration(false) || NeedsWindowedVrMode())
-                throw new InvalidDataException("Guardar sin otros cambios no preparó el modo ventana heredado.");
+                throw new InvalidDataException("Saving without other changes did not prepare legacy windowed mode.");
             foreach (string path in new string[] { _sharedIniPath, _gameIniPath })
             {
                 if (!File.ReadAllText(path).Contains("StartupFullscreen=False"))
-                    throw new InvalidDataException("Modo ventana no persistido en " + path);
+                    throw new InvalidDataException("Windowed mode was not saved in " + path);
                 string savedHash = Bs2Profile.Hash(path);
                 if (!SaveConfiguration(false) || Bs2Profile.Hash(path) != savedHash)
-                    throw new InvalidDataException("Guardar ventana por segunda vez no es idempotente.");
+                    throw new InvalidDataException("Saving windowed mode a second time is not idempotent.");
             }
             _dlssMode.SelectedIndex = 1;
             string lowResolutionProblem;
             if (TryValidateDlssSettings(CollectDlssSettings(), out lowResolutionProblem))
-                throw new InvalidDataException("DLAA no debe aceptar render 800×600.");
+                throw new InvalidDataException("DLAA must not accept an 800×600 render resolution.");
             _dlssMode.SelectedIndex = 0;
             _squareResolution.Checked = true;
             _resolutionHeight.Value = 480;
             if (_resolutionWidth.Value != 640 || _resolutionHeight.Value != 640)
-                throw new InvalidDataException("Resolución cuadrada mínima inválida.");
+                throw new InvalidDataException("Invalid minimum square resolution.");
             if (_definitions.Count < 180 || _editors.Count != _definitions.Count)
-                throw new InvalidDataException("Faltan editores VR/armas.");
+                throw new InvalidDataException("VR/weapon editors missing.");
             for (int index = 1; index < ResolutionPresets.Items.Length; ++index)
             {
                 ResolutionPreset preset = ResolutionPresets.Items[index];
                 _resolutionPreset.SelectedIndex = index;
                 if (_resolutionWidth.Value != preset.Width || _resolutionHeight.Value != preset.Height ||
                     ResolutionPresetIndex(preset.Width, preset.Height) != index)
-                    throw new InvalidDataException("Selector de resolución desincronizado: " + preset);
+                    throw new InvalidDataException("Resolution selector out of sync: " + preset);
                 _dlssMode.SelectedIndex = preset.Width == preset.Height ? 1 : 0;
                 if (!SaveConfiguration(false) || !MirrorMatches(preset.Width, preset.Height))
-                    throw new InvalidDataException("No se guardó el perfil y su espejo: " + preset);
+                    throw new InvalidDataException("The profile and its mirror were not saved: " + preset);
                 if (_dlssMode.SelectedIndex == 1)
                 {
                     DlssSettings persisted;
@@ -5941,31 +5941,31 @@ namespace BioshockVrLauncher
                     if (!DlssConfigDocument.TryParse(File.ReadAllText(_dlssConfigPath), preset.Width, preset.Height,
                             out persisted, out note) || persisted.Mode != DlssMode.Dlaa ||
                         persisted.OutputWidth != preset.Width || persisted.OutputHeight != preset.Height)
-                        throw new InvalidDataException("DLAA no mantuvo 1:1 para " + preset);
+                        throw new InvalidDataException("DLAA did not keep 1:1 for " + preset);
                 }
             }
             _resolutionWidth.Value = 3010;
             if (_resolutionPreset.SelectedIndex != 0)
-                throw new InvalidDataException("La resolución personalizada perdió su selector.");
+                throw new InvalidDataException("The custom resolution lost its selector.");
             _resolutionWidth.Value = 2048;
             _resolutionHeight.Value = 2048;
             ApplyResolutionControlsToEntries();
             if (!SaveGameIniCore()) return false;
-            if (!MirrorMatches(2048, 2048)) throw new InvalidDataException("Espejo SP no sincronizado.");
+            if (!MirrorMatches(2048, 2048)) throw new InvalidDataException("SP mirror not synchronized.");
             _dlssMode.SelectedIndex = 1;
             if (!SaveDlssConfigurationCore(_dlssLoadedContent)) return false;
             DlssSettings settings;
             string warning;
             if (!DlssConfigDocument.TryParse(File.ReadAllText(_dlssConfigPath), 2048, 2048, out settings, out warning) ||
                 settings.Mode != DlssMode.Dlaa || settings.OutputWidth != 2048 || settings.OutputHeight != 2048)
-                throw new InvalidDataException("Guardado DLAA 1:1 incorrecto.");
+                throw new InvalidDataException("Incorrect 1:1 DLAA save.");
             _dlssMode.SelectedIndex = 2;
             _dlssOutputWidth.Value = 3072;
             _dlssOutputHeight.Value = 3072;
             if (!SaveDlssConfigurationCore(_dlssLoadedContent)) return false;
             if (!DlssConfigDocument.TryParse(File.ReadAllText(_dlssConfigPath), 2048, 2048, out settings, out warning) ||
                 settings.Mode != DlssMode.SuperResolution || settings.OutputWidth != 3072 || settings.OutputHeight != 3072)
-                throw new InvalidDataException("Guardado DLSS SR incorrecto.");
+                throw new InvalidDataException("Incorrect DLSS SR save.");
             _dlssMode.SelectedIndex = 0;
             if (!SaveDlssConfigurationCore(_dlssLoadedContent)) return false;
             string untouchedScale = ConfigDocument.Parse(_loadedContent)["worldScale"];
@@ -5977,15 +5977,15 @@ namespace BioshockVrLauncher
             if (vr.ContainsKey("PlayerDrill.aimTrimPitch") || weapons.ContainsKey("handOffFwdL") ||
                 weapons["PlayerDrill.aimTrimPitch"] != "21.50" || vr["handOffFwdL"] != "2.50" ||
                 vr["worldScale"] != untouchedScale)
-                throw new InvalidDataException("Aislamiento de los perfiles de armas fallido.");
+                throw new InvalidDataException("Weapon profile isolation failed.");
             _dirty = _vrDirty = _gameIniDirty = _dlssDirty = _upscalerDirty = false;
             return true;
         }
 
         internal void CaptureSandboxTabs(string directory)
         {
-            if (string.IsNullOrEmpty(Program.SandboxRoot)) throw new InvalidOperationException("La prueba requiere sandbox.");
-            foreach (string name in new string[] { "Imagen", "Manos", "Armas", "Diagnóstico" })
+            if (string.IsNullOrEmpty(Program.SandboxRoot)) throw new InvalidOperationException("This test requires a sandbox.");
+            foreach (string name in new string[] { "Image", "Hands", "Weapons", "Diagnostics" })
             {
                 foreach (TabPage tab in _tabs.TabPages)
                     if (tab.Text == name) { _tabs.SelectedTab = tab; break; }
@@ -6019,8 +6019,8 @@ namespace BioshockVrLauncher
             if (!_dirty)
                 return;
             DialogResult answer = MessageBox.Show(this,
-                "Hay cambios sin guardar. ¿Quieres guardarlos antes de cerrar?",
-                "Cambios pendientes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                "There are unsaved changes. Save them before closing?",
+                "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
             if (answer == DialogResult.Cancel)
                 e.Cancel = true;
             else if (answer == DialogResult.Yes && !SaveConfiguration(false))

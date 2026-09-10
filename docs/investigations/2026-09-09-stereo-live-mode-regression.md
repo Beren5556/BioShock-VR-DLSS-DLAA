@@ -1,58 +1,36 @@
-# Pérdida de estéreo tras cambio de modo — 9 septiembre 2026
+# Stereo loss after mode change — September 9, 2026
 
-Corregido en el código de 0.2.11 y pendiente de probar en visor. La revisión
-de interfaz de 0.2.10 se entregó por separado; no incluía esta solución.
+Historical record: fixed in 0.2.11 source, then pending headset testing. Separately delivered 0.2.10 UI revision did not contain this fix.
 
-## Evidencia conservada
+## Retained evidence
 
-`artifacts/stereo-regression-20260909-225743/bioshockvr.log` y `dlss.ini`.
-DLL instalada comprobada por SHA-256:
+artifacts/stereo-regression-20260909-225743/bioshockvr.log and dlss.ini.
+Verified installed DLL SHA-256:
 `FDCF823158C871E040C036A1ED2AF4D24B30A486227F0BFF5377411AE9B85952`.
-El inicio del log identifica 0.2.10, build `beren5556-v0.2.10-msi-steps`.
-No se ha modificado la instalación ni la configuración del usuario.
+Log identifies 0.2.10, build beren5556-v0.2.10-msi-steps.
+User installation/settings were not changed during diagnosis.
 
-## Secuencia observada
+## Observed sequence
 
-- 22:56:54.488: NORMAL → DLAA, salida 3428 × 3428; empieza la reconstrucción.
-- 22:56:55.972: ambos hosts listos; cambio confirmado. Sigue habiendo
-  construcciones L/R tras la reconstrucción.
-- 22:56:57.418: el watchdog de reentrada detecta 300 ms sin progreso.
-- 22:56:58.321: desactiva el estéreo por su umbral de 1,2 segundos.
-- 22:56:58.895: el puente informa timeout del ojo 1, fotograma 54.
-- 22:57:01.895: cierre de helpers agota 3000 ms y termina sus procesos propios.
-- Desde 22:57:03: vuelve el progreso a 72 presents/s, pero `2nd=0/s` y nunca
-  aparece `stereo RE-ARMED`. Cambiar de nuevo de modo no recupera el segundo ojo.
+- 22:56:54.488: NORMAL → DLAA, output 3428×3428; rebuilding starts.
+- 22:56:55.972: both hosts ready; change confirmed; L/R builds continue.
+- 22:56:57.418: reentry watchdog detects 300 ms without progress.
+- 22:56:58.321: stereo disabled at its 1.2-second threshold.
+- 22:56:58.895: bridge reports eye 1 timeout, frame 54.
+- 22:57:01.895: helper shutdown reaches 3000 ms and terminates owned processes.
+- From 22:57:03: progress returns to 72 presents/s, but 2nd=0/s and no stereo RE-ARMED. Further mode changes do not recover the second eye.
 
-## Diferencia respecto al fallo antiguo
+## Difference from the older failure
 
-La protección `ReconfigureWindow` sigue presente en la DLL actual y cubre
-la reconstrucción. Esta vez el timeout ocurre DESPUÉS de `APPLIED`, ya en
-evaluación DLAA. No es evidencia de que se haya eliminado el arreglo anterior.
+ReconfigureWindow protection remains in the current DLL and covers rebuilding. This timeout occurs **after APPLIED**, during DLAA evaluation; not evidence that the earlier fix was removed.
 
-Hipótesis a comprobar: espera acotada del puente confundida con bloqueo del
-motor, seguida de una recuperación demasiado dependiente de muestrear
-`g_activeDepth == 0` durante cinco ticks. No basta ampliar la ventana de
-reconstrucción ni forzar estéreo a ciegas: conservar la intención del usuario,
-la recuperación de fallos genuinos y la separación de ambos ojos.
+Hypothesis: bounded bridge wait mistaken for engine deadlock, followed by recovery overdependent on sampling g_activeDepth==0 for five ticks. Merely extending reconfiguration or blindly forcing stereo is insufficient: retain user intent, genuine-failure recovery and eye separation.
 
-## Corrección implementada en 0.2.11
+## Implemented 0.2.11 fix
 
-- `BoundedActivity` describe las esperas ya limitadas de IPC, fence de salida
-  y cierre de helpers. Los dos watchdogs consultan esa actividad, incluso
-  cuando el puente deja de estar listo por un fallo. No se cambian los tiempos
-  de espera, el protocolo ni el orden de entrega de los ojos. Un ámbito
-  anidado no renueva el plazo y un bloqueo más allá del límite vuelve a ser visible.
-- El watchdog ya no intenta reactivar estéreo desde su hilo muestreando
-  `g_activeDepth == 0`. `BuildDetour` lo recupera antes de etiquetar el ojo
-  izquierdo, en un nuevo build de gameplay y con al menos 500 ms de progreso.
-- Solo se recupera un apagado automático: se exige intención de estéreo activa,
-  motor no envenenado, renderizado inline, hooks activos, gameplay y CalcView
-  recientes. Un OFF explícito cancela esa intención aunque el watchdog ya hubiera
-  apagado estéreo. No se modifican cámara, configuración ni opciones de imagen.
-- Pruebas puras: 40/40. Cliente D3D11/WARP: 53/53, incluida espera real de
-  1,4 segundos que antes superaba el umbral de apagado; salida fallida del helper
-  sin espera GPU insatisfecha y sin mezclar ojos. Cero avisos D3D11 de depuración.
+- BoundedActivity describes already bounded IPC/output-fence/helper-exit waits. Both watchdogs consult it even after bridge readiness fails. Wait durations, protocol and eye delivery order unchanged. Nested scopes do not renew deadlines; beyond-limit stalls become visible again.
+- Watchdog no longer rearms from its own thread by sampling g_activeDepth==0. BuildDetour recovers before tagging the left eye, in a new gameplay build after at least 500 ms progress.
+- Only automatic disable recovers: requires stereo intent, unpoisoned engine, inline rendering, active hooks, gameplay and recent CalcView. Explicit OFF cancels intent even after watchdog disable. No camera/settings/image-option changes.
+- Pure tests 40/40. D3D11/WARP 53/53, including actual 1.4-second wait previously exceeding the disable threshold; failed-helper output without an unsatisfied GPU wait or cross-eye mixing. Zero D3D11 debug warnings.
 
-Límite: el test no reproduce NVIDIA ni el visor. El origen del timeout del host
-no está demostrado y no se afirma que todos esos timeouts desaparezcan.
-Se corrige la conversión de ese fallo recuperable en pérdida persistente de 3D.
+Limits: tests do not reproduce NVIDIA/headset. Host-timeout origin is unproven and disappearance of every timeout is not claimed. The fix prevents a recoverable failure becoming persistent 3D loss.

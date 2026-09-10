@@ -1,97 +1,79 @@
-# Roadmap BioShock 1–2 DLSS/DLAA
+# BioShock 1–2 DLSS/DLAA roadmap
 
-## Distribución 0.2.16 · cierre autorizado
+## English edition 0.2.17
 
-- [x] Corregir el límite de resolución DLSS y conservar la causa de un rechazo.
-- [x] Incorporar al paquete el perfil DLSS correcto del 2.
-- [x] Aceptación del usuario del funcionamiento de ambos mods (10/09/2026).
-- [x] Congelar los binarios validados sin recompilar núcleo ni lanzadores.
-- [x] MSI nativo único con desplegable individual y 46 archivos verificados.
-- [x] 130 comprobaciones / 22 operaciones MSI, incluida actualización 0.2.15,
-      recuperación ante fallos y preservación del otro juego.
-- [x] Autorización expresa de publicación en GitHub (10/09/2026).
-- Publicación de esta versión: [v0.2.16](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.16).
-- [ ] Validar instalación y recorrido de uso en otro ordenador.
-- [ ] Cambios de efectos gráficos BS2 en caliente (actualmente: lanzador y reinicio).
+- [x] Separate English branch preserving Spanish 0.2.16.
+- [x] English installer, both launchers, in-game text and documentation.
+- [x] Source-equivalence checks: runtime logic unchanged.
+- [x] Rebuild and validate core, both launchers and dual-game MSI.
+- [x] Cross-language upgrade/rollback tests with both games isolated.
+- [ ] New physical-headset smoke test of the English rebuild.
+- [ ] Full installation/use on another computer.
 
-El cierre de la distribución y sus pruebas se recoge en
-[RELEASE-0.2.16.md](RELEASE-0.2.16.md). Lo que sigue es historial de desarrollo,
-no una lista de bloqueos actuales de la entrega.
+See [English validation report](ENGLISH-0.2.17.md). Automated results are not a claim of new physical-headset acceptance.
 
-## Integración 0.2.13 autorizada · historial
+## Distribution 0.2.16 · authorized closure
 
-- [x] Preservar originales y snapshot del desarrollo BS2.
-- [x] Integrar optimizaciones y pantalla Imagen común.
-- [x] Construir selector con ambos MSI y migración beta BS2.
-- [x] Validar núcleo, lanzadores y transacciones en entornos aislados.
-- [ ] Validar el candidato BS2 con visor, agua, reconfiguración y cierre.
-- [ ] Comprobar coexistencia real e instalación en ambos órdenes.
-- [ ] Derivar cambios gráficos nativos en caliente para BS2 (hoy: lanzador y reinicio).
-- [ ] Validar en otro equipo y publicar tras aceptación.
+- [x] Fix DLSS resolution boundary and preserve rejection reasons.
+- [x] Include correct BS2 DLSS profile.
+- [x] User acceptance of both mods (2026-09-10).
+- [x] Freeze accepted binaries without rebuilding core/launchers.
+- [x] Single native MSI, individual dropdown, 46 verified files.
+- [x] 130 checks / 22 MSI operations including 0.2.15 upgrade, rollback and other-game preservation.
+- [x] Explicit GitHub publication authorization (2026-09-10).
+- Release: [v0.2.16](https://github.com/Beren5556/BioShock-VR-DLSS-DLAA/releases/tag/v0.2.16).
+- [ ] Validate installation/use on another computer.
+- [ ] Live BS2 graphics-effect changes (currently launcher/restart).
 
-Evidencia y límites: [integración 0.2.13](INTEGRATION-0.2.13.md).
-Los resultados 0.1.1 descritos debajo son históricos, no validan esta build.
+Closure/tests: [RELEASE-0.2.16.md](RELEASE-0.2.16.md). Below is development history, not current delivery blockers.
 
-## Candidato local 0.1.1-beta — trabajo autorizado
+## Authorized 0.2.13 integration · history
 
-Las mejoras que estaban «EN ESPERA» en BioShock 1 fueron autorizadas por el
-usuario para esta adaptación BS2. Esto no modifica ni regenera el paquete BS1.
+- [x] Preserve originals and BS2 development snapshot.
+- [x] Integrate optimizations/shared Image page.
+- [x] Build selector with both MSIs and BS2 beta migration.
+- [x] Isolated core, launcher and transaction validation.
+- [ ] At that stage: BS2 headset/water/reconfiguration/exit acceptance.
+- [ ] Real coexistence/install in both orders.
+- [ ] Native live BS2 graphics changes (launcher/restart supported).
+- [ ] Another computer and publication after acceptance.
 
-- [x] Separar instalación completada y fallo posterior al abrir el lanzador.
-- [x] Confirmar proceso nuevo `Bioshock2HD.exe`, ruta exacta y ventana respondiendo
-      durante tres segundos antes de cerrar el lanzador; timeout de 60 segundos.
-- [x] Restauración explicada, copias verificadas y limpieza de directorios propios
-      vacíos; cambios posteriores conservados con restauración parcial reanudable.
-- [x] Lanzador NORMAL/DLAA/DLSS, render/salida y ocho perfiles de armas BS2.
-- [x] Adaptador temporal BS2 y pruebas aisladas de profundidad/cámara.
-- [x] Cerrar validación técnica integrada de los tres modos y empaquetado local.
-- [x] Investigar y corregir el orden de cierre observado también en NORMAL;
-      salida nativa y limpieza OpenXR/DLSS comprobadas en laboratorio, incluidos
-      cancelación y guardado por menú. No equivale a validación en el visor.
-- [ ] Probar la nueva ruta DLSS/DLAA dentro del visor físico.
-      Primera ejecución real: VR/VDXR arrancó, pero DLAA se desactivó por
-      render exclusivo 2560×1600 frente a salida solicitada 3072². Lanzador
-      0.1.1.1 prepara ventana y amplía presets; pendiente repetir en visor.
-- [ ] Repetir instalación, arranque, acceso directo, modos y restauración en otro PC.
+Evidence/limits: [0.2.13 integration](INTEGRATION-0.2.13.md). Historical 0.1.1 results below do not validate that build.
 
-La base VR oficial 0.8.2 sí fue aceptada por el usuario con OpenXR/VDXR.
-No se da por realizada la prueba de la nueva versión en el visor ni en otro PC.
-Resultados del candidato inicial: [BS2-TEST-RESULTS.md](BS2-TEST-RESULTS.md).
-Corrección 0.1.1 y sus límites: [BS2-EXIT-FIX.md](BS2-EXIT-FIX.md).
+## Local 0.1.1-beta candidate — authorized historical work
 
-## Historial técnico heredado del mod original
+The user authorized BS1 improvements previously “ON HOLD” for this BS2 adaptation. This did not modify/regenerate the BS1 package.
 
-Los hitos siguientes se conservan como contexto de upstream y BioShock 1.
-Sus fechas, pruebas y marcas no certifican la adaptación DLSS/DLAA de BS2.
+- [x] Separate completed install from launcher-open failure.
+- [x] New Bioshock2HD.exe, exact path and responsive window for three seconds before launcher closes; 60-second timeout.
+- [x] Explained restoration, verified backups, empty owned-directory cleanup; later edits retained with resumable partial restoration.
+- [x] NORMAL/DLAA/DLSS launcher, render/output and eight BS2 weapon profiles.
+- [x] BS2 temporal adapter and isolated depth/camera tests.
+- [x] Three-mode integrated technical validation/local packaging.
+- [x] Investigate/fix shutdown ordering also observed in NORMAL; native exit and OpenXR/DLSS cleanup checked in lab, including menu cancellation/saving. Not headset certification.
+- [ ] New DLSS/DLAA path in a physical headset. First actual launch entered VR/VDXR, but DLAA disabled because exclusive render 2560×1600 differed from requested 3072² output. Launcher 0.1.1.1 prepares windowed mode/adds presets; headset repetition then pending.
+- [ ] Another-PC installation, launch, shortcut, modes and restoration.
 
-## Instalador 0.2.3
+Official VR 0.8.2 was user-accepted with OpenXR/VDXR. New-version headset/other-PC tests were not claimed complete.
+Initial results: [BS2-TEST-RESULTS.md](BS2-TEST-RESULTS.md).
+0.1.1 fix/limits: [BS2-EXIT-FIX.md](BS2-EXIT-FIX.md).
 
-Cambios autorizados e implementados para la candidata 0.2.3. La validación externa sigue siendo requisito antes de promoverla como versión estable.
+## Inherited original-mod technical history
 
-- [x] Separar el resultado de la instalación del intento de abrir el lanzador. Si los
-      archivos ya se instalaron correctamente pero Windows impide abrir el lanzador,
-      informar «instalación completada; no se pudo abrir el lanzador» y mostrar cómo
-      abrirlo manualmente, sin presentar la instalación como fallida.
-- [x] Confirmar el arranque real solicitado desde «Guardar e iniciar». Mantener el
-      lanzador abierto si Steam acepta el URI pero `BioshockHD.exe` no aparece dentro
-      de un plazo razonable; cerrarlo únicamente al confirmar el proceso del juego o
-      al iniciar correctamente la vía directa.
-- [x] Completar y explicar mejor la restauración: retirar directorios instalados que
-      hayan quedado vacíos y comunicar claramente qué configuración y copias de
-      seguridad se conservan. Cualquier opción de limpieza total deberá requerir una
-      confirmación expresa y no borrar ajustes por defecto.
-- [ ] Antes de promover esta beta como versión estable, repetir el recorrido básico completo en otro PC
-      para comprobar SmartScreen/antivirus, disponibilidad de .NET/Windows Script Host,
-      compatibilidad del `BioshockHD.exe` y apertura del acceso directo.
+Following milestones retain upstream/BS1 context. Their dates, tests and checkmarks do not certify BS2 DLSS/DLAA adaptation.
 
-## Lanzador - próxima versión
+## Historical installer 0.2.3
 
-- [ ] Forzar y verificar de forma transaccional el arranque en modo ventana antes de
-      **Guardar e iniciar**, escribiendo `[WinDrv.WindowsClient] StartupFullscreen=False`
-      en `Bioshock.ini`. La 0.2.3 solo recomienda ese valor, sincroniza las resoluciones
-      de ventana/pantalla completa y no pasa `-windowed`; por tanto, actualmente conserva
-      un posible `StartupFullscreen=True`. Mantener copia de seguridad, no iniciar si la
-      escritura/verificación falla y añadir una prueba específica para Steam y vía directa.
+Changes authorized/implemented for candidate 0.2.3; external validation remained required before stable promotion.
+
+- [x] Separate installation outcome from launcher-open attempt. If files succeeded but Windows blocks opening, report completed installation, explain manual launch and do not call install failed.
+- [x] Confirm actual Save and launch. Keep launcher open if Steam accepts the URI but BioshockHD.exe does not appear promptly; close only on confirmed process or successful direct start.
+- [x] Complete/explain restoration: remove empty installed directories and identify retained settings/backups. Any total cleanup requires explicit confirmation and must not delete preferences by default.
+- [ ] Before stable promotion, repeat full basic flow on another PC: SmartScreen/antivirus, .NET/Windows Script Host, executable compatibility and shortcut opening.
+
+## Historical launcher next-version item
+
+- [ ] Transactionally force/verify windowed launch before **Save and launch**, writing [WinDrv.WindowsClient] StartupFullscreen=False in Bioshock.ini. Version 0.2.3 only recommends it, synchronizes fullscreen/windowed resolutions and does not pass -windowed, so may retain StartupFullscreen=True. Preserve backup, do not launch on write/verification failure, and add Steam/direct-path tests.
 
 ## M0 - Skeleton: inject, log, overlay (~2 sessions)
 

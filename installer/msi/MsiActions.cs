@@ -90,7 +90,7 @@ namespace BioShockMsi
         {
             string result = Full(Path.Combine(root, relative));
             if (!result.StartsWith(Full(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Ruta fuera de la carpeta del paquete.");
+                throw new InvalidDataException("Path outside the package directory.");
             return result;
         }
         private static string Hash(string path)
@@ -111,14 +111,14 @@ namespace BioShockMsi
         }
         private static string Problem(string game, bool installing)
         {
-            if (string.IsNullOrWhiteSpace(game)) return "Selecciona la carpeta de " + GamePackage.Name + " Remastered.";
-            if (Full(game) == Path.GetPathRoot(Full(game)).TrimEnd('\\')) return "Selecciona la carpeta del juego, no una unidad completa.";
+            if (string.IsNullOrWhiteSpace(game)) return "Select the directory for " + GamePackage.Name + " Remastered.";
+            if (Full(game) == Path.GetPathRoot(Full(game)).TrimEnd('\\')) return "Select the game directory, not an entire drive.";
             if (installing)
             {
                 string exe = Path.Combine(game, GamePackage.ExeName);
-                if (!File.Exists(exe)) return "No se encuentra " + GamePackage.ExeName + ". Selecciona la carpeta Build\\Final del juego.";
+                if (!File.Exists(exe)) return "Not found: " + GamePackage.ExeName + ". Select the game's Build\\Final directory.";
                 if (!string.Equals(Hash(exe), GameHash, StringComparison.OrdinalIgnoreCase))
-                    return "Esta copia de " + GamePackage.Name + " Remastered no coincide con la versión Steam compatible.";
+                    return "This copy of " + GamePackage.Name + " Remastered does not match the supported Steam version.";
             }
             foreach (Process process in Process.GetProcesses())
             {
@@ -128,8 +128,8 @@ namespace BioShockMsi
                     if (name.Equals(Path.GetFileNameWithoutExtension(GamePackage.ExeName), StringComparison.OrdinalIgnoreCase) ||
                         name.StartsWith("BioShockVR-DLSS45-Host64", StringComparison.OrdinalIgnoreCase) ||
                         name.Equals(Path.GetFileNameWithoutExtension(GamePackage.LauncherName), StringComparison.OrdinalIgnoreCase) ||
-                        (GamePackage.Id == "bs2" && name.StartsWith("Instalador BioShock 2 VR", StringComparison.OrdinalIgnoreCase)))
-                        return "Cierra BioShock, el lanzador y los procesos del mod antes de continuar.";
+                        (GamePackage.Id == "bs2" && name.StartsWith("BioShock 2 VR Installer", StringComparison.OrdinalIgnoreCase)))
+                        return "Close BioShock, its launcher and mod processes before continuing.";
                 }
             }
             return string.Empty;
@@ -235,13 +235,13 @@ namespace BioShockMsi
                 if (!string.IsNullOrWhiteSpace(testRoot))
                 {
                     if (string.IsNullOrWhiteSpace(selected) || !Full(selected).StartsWith(Full(testRoot) + "\\", StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("La prueba MSI debe apuntar a un juego aislado dentro de su carpeta de prueba.");
+                        throw new InvalidDataException("The MSI test must target an isolated game inside its test directory.");
                     session["DesktopFolder"] = Child(testRoot, "Desktop") + "\\";
                     session["BVR_TESTROOT"] = Full(testRoot);
                 }
                 return ActionResult.Success;
             }
-            catch (Exception ex) { session.Log("Autodetección: " + ex.Message); return ActionResult.Success; }
+            catch (Exception ex) { session.Log("Auto-detection: " + ex.Message); return ActionResult.Success; }
         }
 
         [CustomAction]
@@ -254,7 +254,7 @@ namespace BioShockMsi
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
                 if (problem.Length == 0 && registered.Length > 0 &&
                     !string.Equals(Full(registered), game, StringComparison.OrdinalIgnoreCase))
-                    problem = "Ya hay una instalación MSI en otra carpeta. Desinstálala antes de cambiar de ubicación.";
+                    problem = "An MSI installation already exists in another directory. Uninstall it before changing location.";
                 session["BVR_ERROR"] = problem;
                 session["BVR_VALID"] = problem.Length == 0 ? "1" : "0";
                 if (problem.Length == 0)
@@ -294,7 +294,7 @@ namespace BioShockMsi
                 if (problem.Length > 0) throw new InvalidOperationException(problem);
                 string registered = RegistryValue(RegistryPath, "GameDirectory");
                 if (registered.Length > 0 && !string.Equals(Full(registered), game, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Ya hay una instalación MSI en otra carpeta. Desinstálala antes de cambiar de ubicación.");
+                    throw new InvalidOperationException("An MSI installation already exists in another directory. Uninstall it before changing location.");
                 string testRoot = session["BVR_TESTROOT"];
                 string local = session["LocalAppDataFolder"];
                 string roaming = session["AppDataFolder"];
@@ -305,11 +305,11 @@ namespace BioShockMsi
                     (string.IsNullOrWhiteSpace(testRoot) ||
                      !Path.GetFileName(Full(testRoot)).Equals("BvrMsiTest-" + PayloadPlan.TestFamily, StringComparison.OrdinalIgnoreCase) ||
                      !game.Equals(Child(testRoot, TestGameRelative()), StringComparison.OrdinalIgnoreCase)))
-                    throw new InvalidDataException("El paquete aislado requiere su carpeta privada de prueba.");
+                    throw new InvalidDataException("The isolated package requires its private test directory.");
                 if (!string.IsNullOrWhiteSpace(testRoot))
                 {
                     if (!game.StartsWith(Full(testRoot) + "\\", StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("La carpeta de juego de prueba no está aislada.");
+                        throw new InvalidDataException("The test game directory is not isolated.");
                     local = Child(testRoot, "Local");
                     roaming = Child(testRoot, "Roaming");
                     shortcut = Child(testRoot, @"Desktop\" + ShortcutName);

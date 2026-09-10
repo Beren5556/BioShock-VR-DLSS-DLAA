@@ -1,51 +1,58 @@
-# Instalador común BioShock 1–2 · 0.2.16
+# BioShock 1–2 common installer · 0.2.17 English
 
-Entrada vigente: `single-game/Prepare-Release.ps1` y `single-game/Build-Msi.ps1`.
-Un MSI nativo contiene ambos mods validados y permite seleccionar un juego por
-ejecución, con productos independientes y sin arranque automático. No es un
-EXE contenedor. Ver [construcción, migración y pruebas](../docs/RELEASE-0.2.16.md).
-El contenido inferior y `unified/` son referencias históricas.
+Current entry points:
+`single-game/Prepare-EnglishRelease.ps1` and
+`single-game/Build-Msi.ps1`.
 
-## Referencia histórica MSI 0.2.11
+One native MSI contains both complete mods. Its first-screen dropdown
+selects one game per run. Products, preferences and backups remain separate.
+Neither game nor launcher starts automatically. This is not an EXE wrapper.
 
-La nueva distribución se construye con `msi/Build-Msi.ps1`. Véase
-[Windows Installer](msi/README.md). El instalador EXE descrito debajo se
-conserva como herramienta y referencia de versiones anteriores.
+See [building](../docs/BUILDING.md),
+[testing](../docs/TESTING.md) and
+[English edition verification](../docs/ENGLISH-0.2.17.md).
 
-## Instalador autónomo anterior
+For the Spanish 0.2.16 pipeline, see
+[its release closure](../docs/RELEASE-0.2.16.md).
+The content below and `unified/` describe historical formats.
 
-El instalador WinForms contiene todo lo necesario para añadir el mod a una
-instalación compatible de BioShock Remastered. No presupone que BioShock VR
-esté instalado.
+## Historical BioShock 1 MSI 0.2.11
 
-La interfaz pública solo pide la carpeta Build\Final. Antes de escribir:
+That release used `msi/Build-Msi.ps1`; see
+[Windows Installer notes](msi/README.md). The earlier EXE installer is
+retained as tooling and historical reference, not the current delivery.
 
-- valida el ejecutable original compatible;
-- verifica por SHA-256 todos los recursos embebidos;
-- guarda un manifiesto recuperable y una copia de cada archivo sustituido;
-- no modifica los INI durante la instalación.
+## Earlier standalone EXE installer
 
-Restaurar devuelve byte a byte los archivos anteriores a la primera
-instalación y retira los que no existían.
+The WinForms installer included everything required to add the mod to a
+compatible BioShock Remastered installation. It did not require the original
+VR mod to be installed first.
 
-## Payload local
+The public UI asked only for the `Build\Final` directory. Before writing,
+it validated the compatible game executable, checked all embedded resource
+SHA-256 hashes and retained a recoverable manifest and backup of every
+replaced file. Installation did not modify the INIs.
 
-Los binarios de distribución no se almacenan sueltos en Git. La Release
-contiene el instalador probado y payload-manifest.json fija los hashes.
+Restore returned the files preceding the first installation byte for byte
+and removed files that had not existed.
 
-Para reconstruir localmente:
+## Historical local payload
 
-    .\installer\Import-Local-Payload.ps1 -PayloadDirectory C:\ruta\al\payload-validado
+Distribution binaries are not committed individually. The corresponding
+release carries the tested installer; `payload-manifest.json` pins the
+historical binary hashes.
+
+    .\installer\Import-Local-Payload.ps1 -PayloadDirectory C:\work\verified-payload
     .\installer\Build-Installer.ps1
 
-El directorio indicado debe tener la estructura definida en
-[payload-manifest.json](payload-manifest.json). El script rechaza cualquier
-archivo cuyo hash no coincida.
+The directory must match [payload-manifest.json](payload-manifest.json).
+The script rejects any mismatching hash. Those commands reproduce the old
+EXE format, not 0.2.17.
 
-La prueba integral requiere el BioshockHD.exe original compatible:
+Its full historical test required a legitimate compatible executable:
 
-    .\installer\Test-Installer.ps1 -GameExecutable C:\ruta\Build\Final\BioshockHD.exe
+    .\installer\Test-Installer.ps1 -GameExecutable C:\work\Build\Final\BioshockHD.exe
 
-La prueba usa copias aisladas, abre y cierra ambas interfaces por su PID exacto
-y ejerce instalación limpia, actualización, restauración y rechazo de rutas
-incorrectas.
+The test used isolated copies, opened and closed the two interfaces by exact
+PID, and exercised clean installation, upgrades, restoration and rejection
+of incompatible paths. See the current testing guide for the native dual MSI.

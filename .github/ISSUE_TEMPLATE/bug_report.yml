@@ -1,39 +1,39 @@
-name: Informe de fallo
-description: Comunicar un problema reproducible de la beta privada
-title: "[Fallo] "
+name: Bug report
+description: Report a reproducible problem with the BioShock 1–2 VR DLSS/DLAA fork
+title: "[Bug] "
 labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: BioShock 2 DLSS/DLAA. No adjuntes Bioshock2HD.exe, archivos del juego, credenciales ni volcados sin revisar.
+      value: Please identify the game. Do not attach game executables, assets, credentials or unreviewed memory dumps.
   - type: input
     id: version
     attributes:
-      label: Versión y SHA-256
-      placeholder: BS2 v0.1.0-beta · SHA-256 del instalador
+      label: Version, game and SHA-256
+      placeholder: 0.2.17 English, BioShock 2 Remastered, installer SHA-256
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Entorno
-      description: Windows, GPU, controlador, visor y runtime VR.
+      label: Environment
+      description: Windows, GPU, driver, headset and VR runtime.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Pasos para reproducir
+      label: Steps to reproduce
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Resultado esperado y resultado real
+      label: Expected and actual results
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Extractos de registro revisados
-      description: Retira nombres de usuario, rutas personales y cualquier dato sensible.
+      label: Reviewed log excerpts
+      description: Remove usernames, personal paths and any sensitive information.

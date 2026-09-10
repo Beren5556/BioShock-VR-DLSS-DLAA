@@ -1,131 +1,129 @@
-# Registro de cambios
+# Changelog
 
-Este proyecto sigue versiones con el formato MAJOR.MINOR.PATCH y sufijos de prepublicación cuando corresponde.
+This project uses MAJOR.MINOR.PATCH versions and prerelease suffixes where appropriate.
+
+## 0.2.17 English edition · 2026-09-11
+
+- English installer, launchers, in-game text and repository documentation on a separate branch; Spanish 0.2.16 remains available.
+- Rebuilt core and launchers with English text and version metadata. Rendering, temporal optimizations, settings, ownership and recovery logic are unchanged.
+- Identical verified NVIDIA runtime, host and game-specific profiles to 0.2.16.
+- Cross-language MSI upgrades retain the per-game installation identities.
+- Automated source-equivalence, runtime, launcher, installer, rollback and upgrade validation.
+
+This is a language-only release, not a new rendering implementation. See the [English edition report](docs/ENGLISH-0.2.17.md).
 
 ## 0.2.16 · BioShock 1–2 · 2026-09-10
 
-- Un único MSI distribuible, selección individual de juego y dos mods completos.
-- Incluye exactamente los núcleos y lanzadores cuyo funcionamiento confirmó el
-  usuario en ambos juegos; no se recompilan para empaquetarlos.
-- Corrige el redondeo DLSS al 50 % que podía quedar por debajo del mínimo de
-  NVIDIA. Un rechazo conserva el ajuste previo y su explicación en el overlay.
-- Incluye el perfil DLSS específico de BS2, omitido por el empaquetado anterior.
-- Conserva las cuatro optimizaciones temporales, perfiles separados, mejoras
-  del lanzador y la migración del acceso Beta corregida en 0.2.15.
-- Inventarios fijados por SHA-256 y pruebas de actualización desde 0.2.15 con
-  archivos realmente distintos; no se modifica el otro juego.
-- Documentación de instalación, recuperación, créditos y límites actualizada.
+- One distributable MSI, individual game selection and two complete mods.
+- Exactly the cores and launchers confirmed working by the user in both games; packaging does not rebuild them.
+- Fixed 50% DLSS rounding that could fall below NVIDIA's minimum. Rejection preserves the previous setting and explains it in the overlay.
+- Restored the BS2-specific DLSS profile omitted by earlier packaging.
+- Retained four temporal optimizations, separate profiles, launcher improvements and Beta shortcut migration fixed in 0.2.15.
+- SHA-256-pinned inventories and upgrades from 0.2.15 with genuinely different files; the other game is untouched.
+- Updated installation, recovery, credits and limitations documentation.
 
-La versión del instalador es 0.2.16 para ambos juegos; núcleo y lanzadores
-conservan la versión interna 0.2.13 de los binarios aceptados. La publicación
-utiliza el mismo MSI aprobado. Otro ordenador y F4 gráfico en caliente para BS2
-siguen pendientes.
-Detalle: [cierre 0.2.16](docs/RELEASE-0.2.16.md).
+Installer version 0.2.16 covers both games; accepted cores and launchers retain internal version 0.2.13. Publication uses the same approved MSI. Another computer and live F4 graphics changes for BS2 remain pending.
+Details: [0.2.16 closure](docs/RELEASE-0.2.16.md).
 
-## 0.2.13 · integración local · 2026-09-10
+## 0.2.13 · local integration · 2026-09-10
 
-- Selector EXE con los dos MSI internos; BS1 0.2.11 se conserva byte por byte.
-- BS2 integra optimizaciones temporales y la pantalla Imagen compartida,
-  manteniendo cámara, proyección, armas, rutas y guardas de salida específicas.
-- Guardado coordinado Shared/SP/DLSS y migración de originales de la beta BS2.
-- Pruebas aisladas del núcleo, lanzadores, instalación, rollback y reparación.
-- Pendientes: visor/rendimiento, coexistencia real, F4 gráfico BS2 y otro equipo.
+- EXE selector with two internal MSIs; BS1 0.2.11 preserved byte for byte.
+- BS2 integrates temporal optimizations and the shared Image page, retaining its camera, projection, weapons, paths and exit guards.
+- Coordinated Shared/SP/DLSS saving and original-backup migration from the BS2 beta.
+- Isolated core, launcher, installation, rollback and repair tests.
+- Pending at that stage: headset/performance, real coexistence, BS2 F4 graphics and another computer.
 
-No publicado. Detalle: [integración 0.2.13](docs/INTEGRATION-0.2.13.md).
+Not published. Details: [0.2.13 integration](docs/INTEGRATION-0.2.13.md).
 
 ## 0.2.11 · 2026-09-09
 
-Publicación del instalador probado, con las mejoras desarrolladas desde 0.2.3.
+Release of the tested installer and improvements developed since 0.2.3.
 
-- Instalador MSI completo con detección de carpeta, actualización y reparación,
-  acceso directo opcional y versionado e instrucciones finales de uso.
-- Corregidos los avisos de seguridad RBF y el conflicto de paquete instalado.
-- Lanzador compacto, Imagen simplificada y opciones gráficas contrastadas.
-- Reflejos y ondulaciones desactivados por defecto; se conservan preferencias
-  al actualizar. Cuatro optimizaciones de rendimiento mantenidas.
-- Menú F1 en el visor, F2 anterior y F3 siguiente; F4 solo para opciones gráficas.
-  Resolución de 100 en 100 píxeles y calidad DLSS de 5 en 5 puntos porcentuales.
-- Recuperación del segundo ojo tras una desactivación automática del watchdog.
-- NVIDIA 310.7.0.0 incluida; otras versiones x64 permitidas con advertencia.
-- Las releases 0.2.0-beta, 0.2.1-beta y 0.2.3-beta pasan a borradores.
+- Full MSI with folder detection, upgrade/repair, optional versioned shortcut and final usage instructions.
+- Fixed RBF security warnings and installed-package conflict.
+- Compact launcher, simplified Image page and verified graphics options.
+- Reflections and water ripples disabled by default; upgrades preserve preferences. Four performance optimizations retained.
+- Headset F1 menu, F2 previous and F3 next; F4 only for graphics options. Resolution in 100-pixel steps and DLSS quality in 5-percentage-point steps.
+- Second-eye recovery after automatic watchdog disable.
+- NVIDIA 310.7.0.0 included; other x64 versions allowed with a warning.
+- Releases 0.2.0-beta, 0.2.1-beta and 0.2.3-beta moved to drafts.
 
-Detalles y límites: [notas públicas](docs/releases/v0.2.11-public.md).
+Details and limits: [public notes](docs/releases/v0.2.11-public.md).
 
 ## 0.2.3-beta · 2026-09-08
 
-Revisión de fiabilidad del flujo de instalación, arranque y restauración.
+Installation, launch and restoration reliability update.
 
-### Cambiado
+### Changed
 
-- El instalador diferencia una instalación completada de un fallo posterior al abrir automáticamente el lanzador; en ese caso indica cómo abrirlo manualmente sin declarar fallida la instalación.
-- **Guardar e iniciar** mantiene abierto el lanzador hasta detectar `BioshockHD.exe`. Si Steam no abre el juego en 30 segundos, permite intentar el ejecutable directamente y conserva la ventana si tampoco puede iniciarlo.
-- **Restaurar situación anterior** elimina las carpetas del paquete que queden vacías e informa de que los ajustes personales y la copia de recuperación se conservan.
-- Las pruebas automatizadas cubren la limpieza de directorios y la migración real desde 0.2.2.
+- Installation success is distinguished from a later failure to open the launcher automatically. Manual launch instructions are shown without reporting installation failure.
+- **Save and launch** keeps the launcher open until it detects `BioshockHD.exe`. If Steam does not open the game within 30 seconds, direct launch is offered; failure leaves the launcher open.
+- **Restore previous state** removes empty package directories and explains that personal settings and the recovery backup remain.
+- Automated tests cover directory cleanup and actual migration from 0.2.2.
 
-### Validación pendiente
+### Validation pending
 
-- Recorrido completo en un segundo PC para comprobar SmartScreen/antivirus, dependencias de Windows, acceso directo y arranque real con visor antes de promover la beta como versión estable.
+- Full second-PC run covering SmartScreen/antivirus, Windows dependencies, shortcut and real headset launch before stable promotion.
 
 ## 0.2.2-beta · 2026-09-07
 
-Revisión de primera ejecución y compatibilidad avanzada del runtime, preparada a partir del primer feedback externo.
+First-run and advanced runtime compatibility update based on initial external feedback.
 
-### Cambiado
+### Changed
 
-- El instalador explica que BioShock Remastered debe ejecutarse una vez antes de instalar el mod y comprueba que `Bioshock.ini` ya exista.
-- El lanzador se cierra después de entregar correctamente el arranque del juego a Steam o al ejecutable directo.
-- El instalador mantiene NVIDIA DLSS 310.7.0.0 como runtime incluido, probado y recomendado.
-- Una `nvngx_dlss.dll` x64 diferente ya no queda bloqueada: el lanzador muestra una advertencia no bloqueante y el mod registra que se usa bajo responsabilidad del usuario.
+- The installer requires one prior BioShock Remastered launch and checks for `Bioshock.ini`.
+- The launcher closes after successfully handing launch to Steam or the direct executable.
+- NVIDIA DLSS 310.7.0.0 remains included, tested and recommended.
+- Other x64 `nvngx_dlss.dll` versions are no longer blocked: the launcher gives a nonblocking warning and the mod logs use at the user's own risk.
 
-### Sin cambios
+### Unchanged
 
-- Se conservan NORMAL, DLAA y DLSS 4.5, la selección automática K/M/L y el host estéreo por ojo.
-- No se incorpora DLSS 5 Neural Rendering.
+- NORMAL, DLAA and DLSS 4.5, automatic K/M/L selection and per-eye stereo host.
+- No DLSS 5 Neural Rendering integration.
 
 ## 0.2.1-beta · 2026-09-07
 
-Primera beta pública del fork, basada en el mismo núcleo funcional validado de 0.2.0-beta.
+First public fork beta, using the same validated functional core as 0.2.0-beta.
 
-### Cambiado
+### Changed
 
-- Créditos destacados y agradecimiento expreso a Mohamad Balouza por crear BioShock VR y realizar el trabajo fundamental sobre el que se apoya este fork.
-- Enlaces visibles al proyecto original y a su versión v0.8.2 en GitHub, el instalador, el lanzador y la documentación instalada.
-- Documentación, política de seguridad y metadatos preparados para publicación abierta.
-- Versión del lanzador y del instalador actualizada a 0.2.1 sin modificar el payload funcional del mod ni del host DLSS.
+- Prominent credits and explicit thanks to Mohamad Balouza for BioShock VR and its foundational work.
+- Visible original-project and v0.8.2 links on GitHub, in the installer, launcher and installed documentation.
+- Documentation, security policy and metadata prepared for public release.
+- Launcher and installer updated to 0.2.1 without functional mod/host payload changes.
 
-### Validación
+### Validation
 
-- Auditoría del árbol publicado y del historial añadido por el fork.
-- Verificación de licencias, procedencia, hashes, construcción y pruebas reversibles del instalador.
+- Published-tree and fork-history audit.
+- License, provenance, hash, build and reversible-installer checks.
 
 ## 0.2.0-beta · 2026-09-07
 
-Primera versión preparada para distribución entre probadores.
+First tester distribution.
 
-### Añadido
+### Added
 
-- Integración experimental DLSS 4.5 Super Resolution y DLAA para BioShock Remastered VR.
-- Transporte x86/x64 y procesamiento independiente para cada ojo.
-- Lanzador nativo de Windows con los modos NORMAL, DLAA y DLSS.
-- Instalador autónomo, verificado y reversible que no depende de una instalación previa del mod.
-- Detección estricta del ejecutable compatible y comprobación SHA-256 de 20 recursos embebidos.
-- Copia de seguridad y restauración byte a byte de archivos sustituidos.
-- Trazabilidad de fuentes, dependencias y binarios de la distribución.
+- Experimental DLSS 4.5 Super Resolution and DLAA for BioShock Remastered VR.
+- x86/x64 transport and independent per-eye processing.
+- Native Windows launcher with NORMAL, DLAA and DLSS.
+- Self-contained, verified, reversible installer requiring no earlier mod installation.
+- Strict compatible-executable detection and SHA-256 checking of 20 embedded resources.
+- Byte-for-byte backup/restoration of replaced files.
+- Source, dependency and distribution-binary traceability.
 
-### Cambiado
+### Changed
 
-- Interfaz del instalador reducida a una ruta de juego y su selector.
-- Aspecto del instalador y del lanzador adaptado a controles nativos de Windows.
-- Eliminada de la interfaz la pestaña completa de Bioshock.ini.
+- Installer reduced to a game path and browser.
+- Installer and launcher use native Windows controls.
+- Full Bioshock.ini tab removed from the interface.
 
-### Retirado de la edición publicada
+### Removed from the published edition
 
-- Controles de FXAA.
-- Controles del reescalado espacial experimental.
-- Cualquier opción o afirmación de compatibilidad con DLSS 5 Neural Rendering.
+- FXAA and experimental spatial-upscaling controls.
+- Any DLSS 5 Neural Rendering option or compatibility claim.
 
-### Validación
+### Validation
 
-- Self-test de 20 recursos.
-- Instalación limpia, actualización, restauración y rechazo de rutas incompatibles en copias aisladas.
-- Comprobación de que la prueba no alteró los archivos protegidos de la instalación real.
+- 20-resource self-test.
+- Clean installation, upgrade, restoration and incompatible-path rejection in isolated copies.
+- Protected files in the real installation remained unchanged.

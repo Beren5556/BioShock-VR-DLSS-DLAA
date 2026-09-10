@@ -1,96 +1,59 @@
-# Rendimiento — BioShock 1 VR DLSS/DLAA
+# Performance — BioShock 1 VR DLSS/DLAA
 
-## Estado de la investigación
+## Investigation status
 
-Investigación aparcada por decisión de Carlos el 9 de septiembre de 2026.
-Se conservan las optimizaciones y los controles que se han probado en el juego.
-No hay identificada una corrección adicional suficientemente concreta para
-seguir investigando la compatibilidad con los efectos más costosos.
+Investigation paused by Carlos on September 9, 2026. Tested optimizations and controls remain. No sufficiently specific additional fix was identified to continue investigating compatibility with the most expensive effects.
 
-La versión de cierre 0.2.7 consolida el mod, simplifica únicamente Imagen y
-añade Windows Installer (MSI), sin abrir el lanzador al finalizar. El mod
-conserva los valores, la rueda F1/F2/F3 y las optimizaciones probadas.
-La revisión 0.2.9 mantiene esas optimizaciones, añade una página gráfica al
-final de F1 y cambia los predeterminados según la decisión posterior de Carlos.
+Closure version 0.2.7 consolidated the mod, simplified only Image and added Windows Installer (MSI), without opening the launcher at completion. It retained values, F1/F2/F3 navigation and tested optimizations. Version 0.2.9 retained them, added a final F1 graphics page and changed defaults following Carlos's later decision.
 
-## Qué hemos aprendido
+## Findings
 
-Las pruebas de efectos usaron la misma DLL `0.2.6-perf5`, cambiando únicamente
-la configuración gráfica. Los resultados son observaciones de usuario en la
-escena probada, no porcentajes de mejora generalizables a todos los equipos.
+Effect tests used the same `0.2.6-perf5` DLL and changed graphics settings only. These are user observations in the tested scene, not improvement percentages generalizable to every computer.
 
-| Opción | Resultado observado |
+| Option | Observation |
 | --- | --- |
-| Reflejos en tiempo real | Mayor penalización identificada. Reduce mucho el margen en DLAA. |
-| Ondulaciones del agua | Penalización moderada, también con los reflejos apagados. |
-| Sombras | Añadieron un empeoramiento menor sobre la combinación anterior. Impacto moderado observado. |
-| Partículas suaves de alta calidad | Poco impacto percibido; la última prueba no aisló este ajuste del cambio de reflejos. |
-| Posprocesado, posprocesado de alta calidad, distorsión y shaders de alto detalle | No reprodujeron la caída importante al reactivarlos en la secuencia. |
-| Detalle de fluidos | No tuvo prueba independiente; el valor Alto estuvo presente en las tres pruebas extra. |
+| Real-time reflections | Largest identified penalty; substantially reduces DLAA headroom. |
+| Water ripples | Moderate penalty, also with reflections off. |
+| Shadows | Smaller additional worsening over the previous combination; moderate observed impact. |
+| High-quality soft particles | Little perceived impact; the last test did not isolate this setting from the reflection change. |
+| Post-processing, high-quality post-processing, distortion, high-detail shaders | Reenabling these in sequence did not reproduce the major drop. |
+| Fluid detail | No independent test; High was present in all three extra tests. |
 
-- No existe un techo fijo demostrado de DLAA en 3072: sin reflejos ni
-  ondulaciones se pudo subir la resolución por encima de ese valor con buen
-  funcionamiento, conservando el resto de efectos originales.
-- El vapor continuaba visible cuando el rendimiento era bueno. Su mera
-  presencia no basta para explicar el problema.
-- Reflejos y ondulaciones acumulan coste. No se ha cuantificado una interacción
-  superior a la suma de sus costes ni identificado un shader defectuoso.
-- Las pruebas localizan opciones que perjudican el rendimiento, pero no
-  separan completamente el coste propio del juego de una posible amplificación
-  por la integración temporal del mod. No prueban un fallo de NVIDIA.
-- El salto de latencia total de Virtual Desktop observado al cambiar de modo
-  sigue sin explicar. No se da por un error de su indicador ni se confunde con
-  el coste individual de un efecto.
+- No demonstrated fixed 3072 DLAA ceiling: with reflections/ripples off, resolution could be raised above this with good results while retaining other original effects.
+- Steam remained visible during good performance; its presence alone does not explain the problem.
+- Reflection/ripple costs accumulate. A greater-than-additive interaction was not quantified and no defective shader was identified.
+- Tests identify expensive settings, but do not fully separate game cost from possible amplification by the mod's temporal integration. They do not establish an NVIDIA bug.
+- The Virtual Desktop total-latency jump on mode changes remains unexplained. It is neither assumed to be an indicator error nor confused with one effect's cost.
 
-## Configuraciones contrastadas
+## Compared configurations
 
-| Configuración | Reflejos | Ondulaciones | Partículas de alta calidad | Resto de efectos de la batería |
+| Configuration | Reflections | Ripples | High-quality particles | Other tested effects |
 | --- | --- | --- | --- | --- |
-| Extra 1 | Desactivados | Desactivadas | Desactivadas | Activados; fluidos Alto |
-| Extra 2 | Desactivados | Activadas | Desactivadas | Activados; fluidos Alto |
-| Extra 3 | Activados | Activadas | Activadas | Activados; fluidos Alto |
+| Extra 1 | Off | Off | Off | On; fluids High |
+| Extra 2 | Off | On | Off | On; fluids High |
+| Extra 3 | On | On | On | On; fluids High |
 
-Extra 1 ofreció el mayor margen de rendimiento de esta batería. Extra 2 permite
-conservar las ondulaciones con una penalización menor que los reflejos.
+Extra 1 provided the greatest headroom. Extra 2 retains ripples with a smaller penalty than reflections.
 
-**Predeterminados desde 0.2.9, por decisión posterior del usuario:** reflejos
-y ondulaciones desactivados; las otras siete opciones activadas, fluidos en Alto.
-Partículas de alta calidad permanece activada. No se atribuye a esta combinación
-exacta una medición que no se haya hecho: toma como referencia lo aprendido en
-las pruebas extra. 0.2.7 y 0.2.8 usaban Extra 3 como predeterminado.
+**Defaults since 0.2.9, following the user's later decision:** reflections/ripples off; other seven options on, fluids High. High-quality particles remain on. No unperformed measurement is attributed to this exact combination; it follows the extra tests' findings. Versions 0.2.7/0.2.8 used Extra 3 defaults.
 
-Reflejos, ondulaciones y sombras llevan un asterisco rojo y un único pie
-«Alto impacto en el Rendimiento», según la simplificación solicitada para la
-interfaz. Ese aviso compartido no altera las diferencias observadas en la tabla.
-No bloquea la activación de ninguna opción y una actualización conserva los
-ajustes personales. «Valores predeterminados» permite adoptar la nueva selección.
-«Todo activado» se refiere exclusivamente a las nueve opciones contrastadas;
-no reactiva FXAA ni el antiguo reescalado espacial.
+Reflections, ripples and shadows have a red asterisk and one shared “High performance impact” footer, as requested for interface simplification. That warning does not erase the differences above or block any option. Upgrades retain preferences; **Defaults** adopts the new selection. **All on** refers only to the nine tested options, not FXAA or the old spatial upscaler.
 
-## Optimizaciones que se conservan
+## Retained optimizations
 
-- Solapamiento del trabajo temporal del ojo izquierdo con la escena derecha.
-- Reutilización de la captura de profundidad cuando no ha cambiado, evitando
-  copias redundantes sin retirar las necesarias tras escrituras.
-- Reutilización de la copia de color ya enviada y solapamiento de trabajo
-  independiente al final del fotograma.
-- Entrega al visor antes del trabajo exclusivo del espejo de escritorio en
-  la ruta temporal compatible.
+- Left-eye temporal work overlaps the right-eye scene.
+- Reuse unchanged depth captures, avoiding redundant copies while retaining copies after writes.
+- Reuse already submitted color and overlap independent frame-tail work.
+- Submit to the headset before desktop-mirror-only work on the compatible temporal path.
 
-La primera mejora importante fue confirmada en el juego. No se atribuye una
-ganancia individual demostrada a cada cambio posterior. Los contadores y
-modos A/B/C de diagnóstico no son nuevas optimizaciones ni opciones de usuario.
-Se conserva la sincronización necesaria entre ojos, juego y host DLSS.
+The first major improvement was confirmed in-game. No individually demonstrated gain is attributed to every later change. Diagnostic counters/A/B/C modes are not additional optimizations or user options. Required eye/game/DLSS-host synchronization remains.
 
-## Trazabilidad
+## Traceability
 
-El historial técnico se conserva en
-[Investigación de rendimiento](investigations/bioshock1-water-performance.md).
-Los INI, registros y resultados por prueba están en el archivo local
-`artifacts/effects-isolation-2026-09-09`, excluido de la distribución pública.
-La DLL común de la batería tiene SHA-256:
+Technical history: [performance investigation](investigations/bioshock1-water-performance.md).
+Per-test INIs/logs/results: local `artifacts/effects-isolation-2026-09-09`, excluded from public distribution.
+Common test DLL SHA-256:
 
 `79EA8CFB4058F6ECB592B6072C918EE5B800FA9D01730AB93B117CBA204DB8A2`.
 
-Esta conclusión se limita a BioShock 1. No modifica BioShock 2, el proyecto
-DLSS 5 ni la versión NVIDIA 310.7.0.0 probada.
+This conclusion is specific to BioShock 1. It did not modify BioShock 2, the DLSS 5 project or tested NVIDIA 310.7.0.0.

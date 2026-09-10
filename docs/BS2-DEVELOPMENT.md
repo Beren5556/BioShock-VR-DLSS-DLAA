@@ -1,65 +1,40 @@
-# BioShock 2 DLSS/DLAA — adaptación 0.1.1-beta
+# BioShock 2 DLSS/DLAA — historical 0.1.1-beta adaptation
 
-## Base y alcance
+## Base and scope
 
-Copia de trabajo independiente creada a partir del commit BS1
-`1de552a` y su candidato local 0.2.2, el 7/8 de septiembre de 2026.
-El repositorio y la instalación original de BioShock 1 siguen separados.
-No se ha publicado esta adaptación.
+Independent working copy created from BS1 commit `1de552a` and its local 0.2.2 candidate on September 7–8, 2026. At that stage, the BioShock 1 repository/installation remained separate and this adaptation was unpublished.
 
-La prueba inicial del MOD VR oficial 0.8.2 fue confirmada por el usuario:
-VirtualDesktopXR 1.0.10, Quest 3 y estéreo funcionando. Ese resultado valida
-la base VR; no acredita todavía la nueva ruta DLSS/DLAA.
+The user confirmed the initial official VR mod 0.8.2 test: VirtualDesktopXR 1.0.10, Quest 3 and working stereo. This validated the VR base, not yet the new DLSS/DLAA path.
 
-## Contrato propio de BioShock 2
+## BioShock 2 contract
 
-| Elemento | Valor |
+| Item | Value |
 |---|---|
 | Steam | AppID 409720 |
-| Ejecutable | Bioshock2HD.exe, x86 |
+| Executable | Bioshock2HD.exe, x86 |
 | SHA-256 | C2A31FB67B285C136203A4A6E739545177BE5753D972E6AEA0F44C65DDF22F8C |
-| Ajustes juego | Bioshock2SP.ini y Shared.ini |
-| Resolución efectiva | Shared.ini, sección SharedOptions |
-| Ajustes MOD y hosts | %LOCALAPPDATA%\BioshockVR\bs2 |
-| Capacidades paquete | game=bs2, adapter=bioshock2r, IPC v8 |
+| Game settings | Bioshock2SP.ini and Shared.ini |
+| Effective resolution | Shared.ini, SharedOptions |
+| Mod/host settings | %LOCALAPPDATA%\BioshockVR\bs2 |
+| Package capabilities | game=bs2, adapter=bioshock2r, IPC v8 |
 
-El núcleo genera los datos temporales del adaptador BioShock 2. La cámara,
-la etiqueta de dibujo y la proyección deben pertenecer al mismo ojo y dibujo;
-los datos ausentes o incoherentes provocan un respaldo sin DLSS para ese par.
-Cada ojo conserva un host NGX e historial independiente.
+The core generates BioShock 2 adapter temporal data. Camera, draw tag and projection must refer to the same eye/draw; missing or inconsistent data falls back without DLSS for that pair. Each eye retains an independent NGX host/history.
 
-El host x64 y NVIDIA DLSS 310.7.0.0 se reutilizan de la versión BS1: su
-contrato de recursos D3D11 e IPC no depende del ejecutable del juego.
-La DLL inyectada, el lanzador, los ajustes y el instalador sí se adaptan.
+The x64 host and NVIDIA DLSS 310.7.0.0 are reused from BS1: their D3D11-resource/IPC contract is game-executable-independent. The injected DLL, launcher, settings and installer are adapted.
 
-## Mejoras solicitadas incorporadas al alcance
+## Requested improvements included in scope
 
-- Separar instalación completada de fallo posterior al abrir el lanzador.
-- Confirmar un nuevo proceso del juego y su ruta antes de cerrar el lanzador.
-- Explicar qué restaura y conserva Restaurar, limpiar directorios propios
-  vacíos y conservar los cambios posteriores del usuario.
-- Preparar una comprobación reproducible en otro ordenador.
+- Distinguish completed installation from a subsequent launcher-open failure.
+- Confirm a new game process and its path before closing the launcher.
+- Explain restoration/preservation, remove empty owned directories and retain later user changes.
+- Prepare repeatable validation on another computer.
 
-## Validación
+## Validation at that stage
 
-[BS2-TEST-RESULTS.md](BS2-TEST-RESULTS.md) conserva los resultados del primer candidato 0.1.0-beta:
-los tres modos funcionaron en la partida aislada, incluido SR 2048² → 3072²,
-y el instalador y el lanzador superaron sus baterías. La versión 0.1.1 tiene
-identidad propia para los cambios posteriores en el cierre y se ha vuelto a
-probar localmente: cuatro cierres de ventana (plano/NORMAL/DLAA/SR), menú SR
-con cancelación/reanudación y guardar, y menú DLAA sin guardar, recargando el
-nuevo archivo SR. El instalador final superó 16 comprobaciones locales.
-Los hashes, resultados exactos, fallos intermedios y revisión del observador
-están en [BS2-EXIT-FIX.md](BS2-EXIT-FIX.md); las pruebas de juego usan la copia y
-el núcleo instrumentado LAB, no el juego real del usuario.
+[BS2-TEST-RESULTS.md](BS2-TEST-RESULTS.md) preserves first-candidate 0.1.0-beta results: all three modes worked in the isolated game, including SR 2048² → 3072²; installer/launcher suites passed.
 
-El diagnóstico original de la AV, observada también en NORMAL, se conserva en
-[BS2-EXIT-INVESTIGATION.md](BS2-EXIT-INVESTIGATION.md). La salida con código 0 de
-la protección antigua no equivalía a una liberación limpia. Los pases nuevos
-exigen aceptación nativa, limpieza XR completa, detach y código real 0; no
-ocultan las excepciones de primer chance manejadas de la sonda diagnóstica.
-El visor simulado comprueba ejecución, recursos y composición; no sustituye
-la apreciación visual del usuario ni valida universalmente todos los callers
-de salida o estados del motor. El visor real sigue pendiente para esta versión.
-La prueba con otro ordenador requiere
-acceso a otro equipo y permanece pendiente hasta realizarla.
+Version 0.1.1 has its own identity for later exit changes and was retested locally: four window closes (flat/NORMAL/DLAA/SR), SR menu cancel/resume/save and DLAA menu exit without saving, reloading the new SR save. The final installer passed 16 local checks. Exact hashes, results, intermediate failures and observer revision are in [BS2-EXIT-FIX.md](BS2-EXIT-FIX.md). Game tests use a copy and instrumented LAB core, not the user's actual game.
+
+The original AV diagnosis, also observed in NORMAL, remains in [BS2-EXIT-INVESTIGATION.md](BS2-EXIT-INVESTIGATION.md). The old guard's exit code 0 did not mean clean release. New passes require native acceptance, full XR cleanup, detach and actual code 0; handled first-chance exceptions from the diagnostic probe are not hidden.
+
+The simulated headset checks execution, resources and composition, not user-perceived visual quality or every exit caller/engine state. A real-headset test of this historical version remained pending. Another-PC testing requires access to that computer and is pending until performed.

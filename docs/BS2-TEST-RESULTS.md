@@ -1,122 +1,77 @@
-# BioShock 2 DLSS/DLAA 0.1.0-beta — resultados locales
+# BioShock 2 DLSS/DLAA 0.1.0-beta — historical local results
 
-Fecha: 8 de septiembre de 2026, madrugada (Europe/Madrid).
-Estado: candidato local para prueba en visor; no publicado ni instalado sobre
-el juego original. No se considera validado en otro ordenador.
+Date: early September 8, 2026 (Europe/Madrid).
+Status at that point: local headset-test candidate, neither published nor installed over the original game. Not validated on another computer.
 
-## Artefactos congelados
+## Frozen artifacts
 
-| Componente | SHA-256 |
+| Component | SHA-256 |
 |---|---|
-| Instalador 0.1.0-beta | A61BCCE385C0095645C67FE27A937E0D2B661E3C8CE2805F401C273EA73D9D6D |
-| Lanzador BS2 | 613772D164550745AB3A58924CF8A156EBCB95DE312869D01166361CA4A0EF8D |
-| bioshockvr.dll de producción | 8DFD11347E8B80623CC3678BD030BD9B77B76FACA9BEF3766C1E66E224D0554A |
+| 0.1.0-beta installer | A61BCCE385C0095645C67FE27A937E0D2B661E3C8CE2805F401C273EA73D9D6D |
+| BS2 launcher | 613772D164550745AB3A58924CF8A156EBCB95DE312869D01166361CA4A0EF8D |
+| Production bioshockvr.dll | 8DFD11347E8B80623CC3678BD030BD9B77B76FACA9BEF3766C1E66E224D0554A |
 
-El instalador contiene 21 recursos: ocho entradas de payload y trece documentos
-de uso/licencias. El proxy v0.8.2 original, host x64 y NVIDIA 310.7.0.0 están
-identificados en `installer/payload-manifest.json`. El ejecutable del juego
-no forma parte del paquete.
+The installer contains 21 resources: eight payload entries and thirteen usage/license documents. Original v0.8.2 proxy, x64 host and NVIDIA 310.7.0.0 are identified in `installer/payload-manifest.json`. The game executable is not packaged.
 
-## Pruebas de aplicaciones y empaquetado
+## Application and packaging tests
 
-- Compilación x86 de producción y de laboratorio: PASS.
-- WARP del contrato temporal BS2 actualizado: PASS (incluye identidad de pose,
-  planos finitos, captura requerida, historiales, resets y casos inválidos).
-- Lanzador `--self-test`: PASS; incluye parsers, resoluciones, valores BS2,
-  detección de cambios externos, backups/rollback y máquina de estados de arranque.
-- Helper real llamado `Bioshock2HD.exe`: exige ruta exacta, proceso nuevo y
-  ventana respondiendo durante tres segundos; no se ejecutó el juego real en
-  esta batería. Timeout, salida temprana y proceso antiguo no se aceptan.
-- QA `--self-test-ui`: PASS con INI ficticios, Shared.ini 800×600 autoritativo,
-  guardado/espejo 2048×2048, ocho armas, manos y claves desconocidas conservadas.
-- Inspección visual nativa del lanzador y del instalador: textos y controles
-  legibles; ambas aplicaciones cerradas después, sin instalar desde su UI.
-- Instalador: 13 grupos PASS, 21 recursos verificados y 21 archivos originales
-  distintos restaurados byte a byte. Incluye reparación, conflictos preservados,
-  copias corruptas, manifiesto BS1, acceso directo aislado, fallo tras seis
-  escrituras y separación instalación/apertura del lanzador.
-- Verificador de repositorio: PASS; inspecciona los recursos realmente
-  embebidos y rechaza la DLL real de laboratorio. En PowerShell 7 delega esta
-  lectura a Windows PowerShell 5.1 por la API de metadatos .NET Framework.
-- Guardas de rutas LAB: 19 casos PASS, incluidos escape `..`, ADS, relativas,
-  junction real en hoja y junction en un antecesor.
-- Entradas heredadas `tools/install`, `uninstall` y `package`: deshabilitadas y
-  comprobadas para fallar antes de escribir, evitando el inventario/rutas BS1.
+- Production/laboratory x86 compilation: PASS.
+- Updated BS2 temporal-contract WARP test: PASS, including pose identity, finite planes, required capture, histories, resets and invalid cases.
+- Launcher `--self-test`: PASS for parsers, resolutions, BS2 values, external-edit detection, backups/rollback and launch state machine.
+- Real helper named `Bioshock2HD.exe`: exact path, new process and three consecutive responsive-window seconds required. The actual game was not run in this suite. Timeout, early exit and old process rejected.
+- `--self-test-ui`: PASS with fake INIs, authoritative Shared.ini 800×600, 2048×2048 save/mirroring, eight weapons, hands and unknown-key preservation.
+- Native visual launcher/installer inspection: readable text/controls; both closed afterward without UI installation.
+- Installer: 13 groups PASS, 21 resources verified and 21 distinct original files restored byte for byte. Includes repair, preserved conflicts, corrupt backups, BS1 manifest, isolated shortcut, failure after six writes and install/launcher-open separation.
+- Repository verifier: PASS, inspecting actual embedded resources and rejecting the real LAB DLL. PowerShell 7 delegates this .NET Framework metadata read to Windows PowerShell 5.1.
+- LAB path guards: 19 PASS cases, including `..` escape, ADS, relative paths and real junctions at leaf/ancestor levels.
+- Legacy `tools/install`, `uninstall` and `package` entries disabled and checked to fail before writing, avoiding BS1 paths/inventory.
 
-Evidencia: `artifacts/tests/installer/summary.json`,
+Evidence: `artifacts/tests/installer/summary.json`,
 `artifacts/launcher-tests/final-ui-f21f47d92e4d442497dc018bcdebfc5f`,
-`scripts/Test-BS2-LabPathGuard.ps1` y `src/tools/temporal_guides_bs2_test`.
+`scripts/Test-BS2-LabPathGuard.ps1` and `src/tools/temporal_guides_bs2_test`.
 
-## Integración con partida y OpenXR simulado
+## Saved-game integration with simulated OpenXR
 
-Juego compatible: `Bioshock2HD.exe` x86, SHA-256
+Compatible x86 Bioshock2HD.exe SHA-256:
 `C2A31FB67B285C136203A4A6E739545177BE5753D972E6AEA0F44C65DDF22F8C`.
-Equipo local con RTX 4090; runtime de prueba `bvr-xrsim`. No se cambió el
-runtime OpenXR del registro. El simulador fue validado antes con xr_hello32.
 
-Se usa una copia física del juego y de las partidas, sin enlaces a originales,
-con perfil, INI, registros y hosts privados por ejecución. El núcleo de prueba
-tiene el mismo código funcional de render y una variante de aislamiento de
-rutas; **no es el binario distribuido**. Su SHA-256 es
+Local RTX 4090; test runtime `bvr-xrsim`, previously validated with xr_hello32. Registered OpenXR runtime unchanged.
+
+A physical game/save copy, without links to originals, used private per-run profiles, INIs, logs and hosts. The test core shares functional rendering code with a path-isolation variant; **it is not the distributed binary**. SHA-256:
 `A32EABCE3EE62A2EC502875AF45A21D19857E215A5630DB675A2B7D8A503E4F6`.
-El proxy de laboratorio tampoco se empaqueta.
+The lab proxy is not packaged either.
 
-| Modo | Render → salida por ojo | Ejecución | Resultado de partida |
+| Mode | Per-eye render → output | Run | Gameplay result |
 |---|---|---|---|
-| NORMAL | 1024² → 1024² | off-57e9251e | Estéreo y giro; ningún host DLSS abierto |
-| DLAA | 1024² → 1024² | dlaa-f0d5823b | 6357 imágenes por ojo; giro, pausa y reanudación |
-| DLSS SR | 1024² → 1536² | sr-7590efc3 | 9468 imágenes por ojo y giro |
-| DLSS SR alta | 2048² → 3072² | sr-e171beb2 | Al menos 7682 imágenes por ojo y giro |
+| NORMAL | 1024² → 1024² | off-57e9251e | Stereo and turning; no DLSS hosts |
+| DLAA | 1024² → 1024² | dlaa-f0d5823b | 6357 images per eye; turning, pause/resume |
+| DLSS SR | 1024² → 1536² | sr-7590efc3 | 9468 images per eye and turning |
+| High DLSS SR | 2048² → 3072² | sr-e171beb2 | At least 7682 images per eye and turning |
 
-En los tramos jugables estables de DLAA/SR: `coherent=1`, `hist=1`,
-`reject=none`, `pubs=1`, `projPubs=1`, `nearFar=10/65536`, `mixed=0`, `gap=0`.
-La proyección WORLD requiere el FPlayerSceneNode raíz de Draw y la misma pose
-publicada para ese ojo/dibujo. No se aceptan foreground ni nodos auxiliares.
+Stable DLAA/SR gameplay: `coherent=1`, `hist=1`, `reject=none`, `pubs=1`, `projPubs=1`, `nearFar=10/65536`, `mixed=0`, `gap=0`.
+WORLD projection requires Draw's root FPlayerSceneNode and the same published eye/draw pose. Foreground/auxiliary nodes are rejected.
 
-Los menús utilizan respaldo sin DLSS cuando faltan datos temporales; no son
-un fallo de inicialización NGX. Las etiquetas incompletas de transición se
-rechazan: una al cargar y otra al reanudar en DLAA, sin incremento recurrente
-durante los tramos estables. La pausa pasa a un único quad y la reanudación
-recupera dos vistas de proyección, historial y un nuevo epoch (8 → 10).
+Menus fall back without DLSS when temporal data is missing; this is not NGX initialization failure. Incomplete transition tags are rejected: one loading and one DLAA resume case, without recurring increases in stable segments. Pause switches to one quad; resume restores two projection views, history and a new epoch (8 → 10).
 
-Se conservaron capturas izquierda, derecha, SBS y JSON de escena/giro por modo.
-La inspección confirma imagen de juego en ambos ojos, no una valoración de
-nitidez, estelas o comodidad dentro de unas gafas reales.
+Left/right/SBS captures and scene/turning JSON were retained per mode. Inspection confirms game imagery in both eyes, not sharpness, ghosting or comfort in a real headset.
 
-La pasada alta no acredita 90 Hz sostenidos: los últimos tramos del registro
-marcan aproximadamente 71–73 pares por segundo. No se cambió la resolución
-del usuario ni se presenta esa combinación como un ajuste óptimo universal.
+The high-resolution pass does not establish sustained 90 Hz: final logged segments are approximately 71–73 pairs/s. User resolution was unchanged; this is not a universally optimal setting.
 
-Los recibos `artifacts/bs2-tests/game-copy.json` y `latest-run.json` localizan
-los registros privados bajo `D:\BioShock2VR-DLSS-Lab\game-<GUID>\runs`.
-Se conservan para reproducir las pruebas; la copia ocupa aproximadamente 21 GB.
+`artifacts/bs2-tests/game-copy.json` and `latest-run.json` locate private logs under `D:\BioShock2VR-DLSS-Lab\game-<GUID>\runs`. These are retained for reproduction; the copy occupies approximately 21 GB.
 
-## Incidencia observada al cerrar: pendiente
+## Exit issue observed: pending at that stage
 
-Todos los procesos respondieron a WM_CLOSE y terminaron sin quedar juegos ni
-hosts abiertos. Sin embargo, los registros muestran una AV `0xC0000005` durante
-el teardown, también en NORMAL sin NGX. Direcciones observadas: `+0x4FF0FE`
-(DLAA), `+0xC312D2` (NORMAL/SR) y `+0xC37362` (SR alta).
+All processes responded to WM_CLOSE and ended without leftover games/hosts. However, logs show teardown AV `0xC0000005`, also in NORMAL without NGX. Sites: `+0x4FF0FE` (DLAA), `+0xC312D2` (NORMAL/SR), `+0xC37362` (high SR).
 
-Upstream documentó fallos de salida antes de esta adaptación; su manejador
-genérico de teardown termina el proceso con código 0 y sin dump. Por tanto,
-**exit code 0 no demuestra un cierre sin errores**, ni ese mensaje genérico
-determina por sí solo la causa. No se ha corregido ni ocultado esta incidencia.
-La evidencia técnica y sus límites están en [BS2-TEMPORAL.md](BS2-TEMPORAL.md).
+Upstream documented exit crashes before this adaptation. Its generic teardown handler terminates with code 0 and no dump. Therefore **exit code 0 does not prove error-free shutdown**, and that generic message does not identify the cause. At this point the issue was neither fixed nor hidden. Evidence/limits: [BS2-TEMPORAL.md](BS2-TEMPORAL.md).
 
-## Conservación y pendientes
+## Preservation and pending work
 
-- Huella de 30 archivos originales (configuraciones BS1/BS2, partidas BS2,
-  ejecutable y DLL del juego real): idéntica antes y después.
-- El juego real conserva el mod VR oficial 0.8.2 y la configuración que el
-  usuario probó satisfactoriamente. No se ha desplegado el candidato encima.
-- No se modificó ni regeneró el paquete de BioShock 1; tampoco se publicó nada.
-- Pendiente: instalar el candidato y comparar NORMAL/DLAA/DLSS en el visor,
-  incluidas animaciones, HUD, cargas, cinemáticas y salida desde el menú.
-- Pendiente: recorrido completo del instalador/lanzador en otro ordenador.
-- Limitaciones conocidas: vectores solo de cámara y jitter cero; no hay
-  vectores propios para objetos/manos animados, ni DLSS 5/Frame Generation.
+- Thirty original protected files (BS1/BS2 configuration, BS2 saves, real executable/DLLs) identical before/after.
+- Real game retained official VR mod 0.8.2 and the user's successfully tested configuration; candidate not deployed over it.
+- No BS1 package modification/regeneration or publication.
+- Pending: install candidate and compare NORMAL/DLAA/DLSS in the headset, including animation, HUD, loading, cutscenes and menu exit.
+- Pending: full installer/launcher run on another computer.
+- Known limits: camera-only vectors, zero jitter, no independent animated-object/hand vectors, no DLSS 5/Frame Generation.
 
-Conclusión: motor, lanzador e instalador preparados y comprobados técnicamente
-en este equipo. Es una beta para aceptación en visor, no una versión final
-validada universalmente.
+Conclusion at that stage: engine, launcher and installer technically prepared/tested on this computer. A headset-acceptance beta, not a universally validated final release.

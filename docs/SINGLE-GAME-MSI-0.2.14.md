@@ -1,137 +1,79 @@
-# Instalador BioShock 1–2 · 0.2.14
+# BioShock 1–2 installer · historical 0.2.14
 
-> Histórico: sustituido por [0.2.15](SINGLE-GAME-MSI-0.2.15.md), que corrige
-> el acceso «Beta» del 2 y aplica la simplificación de textos solicitada.
-> El archivo entregado 0.2.14 se conserva sin sobrescribir.
+> Superseded by [0.2.15](SINGLE-GAME-MSI-0.2.15.md), fixing BS2's Beta shortcut and simplifying requested text. Delivered 0.2.14 remains unmodified.
 
-Requisito confirmado por Carlos el 10/09/2026: primero un desplegable para
-elegir **un juego**; después, el asistente normal únicamente para ese mod,
-independientemente de que ya esté instalado. El otro juego no se modifica.
-Ambos pueden estar instalados, abriendo dos veces el mismo MSI.
+Carlos confirmed on 2026-09-10: first a dropdown choosing **one game**, then the normal wizard only for that mod, installed or not. The other game is untouched. Both can be installed by opening the same MSI twice.
 
-## Entrega y contenido
+## Delivery and contents
 
-Un solo archivo `BioShock-1-2-VR-DLSS-DLAA-0.2.14-CANDIDATO.msi`, sin EXE
-contenedor. La versión **del instalador** es común a los dos juegos.
+One `BioShock-1-2-VR-DLSS-DLAA-0.2.14-CANDIDATO.msi`, no EXE wrapper. **Installer** version shared by both games.
 
-- BS1: los 23 archivos aceptados de 0.2.11, sin recompilar núcleo ni lanzador.
-- BS2: los 23 archivos del candidato 0.2.13, sin recompilar núcleo ni lanzador.
-- Los lanzadores se instalan en `Build\Final` del juego correspondiente.
-- Acceso directo opcional en el escritorio, independiente para cada juego.
-- El instalador no abre automáticamente el lanzador ni el juego al terminar.
-- Actualizar/reparar conserva preferencias; desinstalar conserva juego,
-  partidas, preferencias y copias recuperables, y restaura los archivos previos.
+- BS1: 23 accepted 0.2.11 files; core/launcher not rebuilt.
+- BS2: 23 candidate 0.2.13 files; core/launcher not rebuilt.
+- Launchers in each game's Build\Final.
+- Independent optional desktop shortcuts.
+- No automatic launcher/game startup at completion.
+- Upgrade/repair preserves preferences; uninstall preserves game, saves, preferences/recoverable backups and restores previous files.
 
-SHA-256 del candidato:
+Candidate SHA-256:
+`4F08745EC9054C6CB0EEBB76435566AE3311D151D6299E7318AEB602E97CA277`.
 
-`4F08745EC9054C6CB0EEBB76435566AE3311D151D6299E7318AEB602E97CA277`
+Agreed destination: **Desktop / Lanzadores MOD VR**. No replacement/deletion of 0.2.13 MSI or old EXE without authorization. Not published to GitHub.
 
-Destino acordado: **Escritorio / Lanzadores MOD VR**. No sustituir ni borrar
-el MSI 0.2.13 o el antiguo EXE sin autorización. No se ha publicado en GitHub.
+## MSI operation
 
-## Funcionamiento del MSI
+`installer/single-game` embeds two native Windows Installer instance transforms, bs1/bs2. Each has its own product/upgrade/path/registry/backup identity. Windows shows an entry for each installed mod, both version 0.2.14.
 
-`installer/single-game` utiliza dos transformaciones de instancia nativas de
-Windows Installer incluidas dentro del mismo MSI (`bs1` y `bs2`). Cada juego
-tiene identidad de producto, actualización, ruta, registro y copias propias.
-Windows muestra una entrada por mod instalado, ambas con versión 0.2.14.
+The base product only shows the dropdown; it installs/registers nothing. Next runs a UI-only action opening the same MSI for the chosen instance and closes the selector before any transaction. No nested MSI action or both-game default install.
 
-El producto base solo muestra el desplegable: no instala archivos ni se registra.
-Al pulsar Siguiente, una acción exclusiva de interfaz abre el mismo MSI para la
-instancia elegida y cierra el selector antes de iniciar ninguna transacción.
-No hay acción MSI anidada ni instalación de ambos juegos por defecto.
+The chosen wizard confirms directory/shortcut. If this version is installed, continue to repair/reinstall or uninstall only that mod. Other-game features are disabled; an additional check prevents planning their files even with external ADDLOCAL=ALL.
 
-En el asistente elegido se confirma carpeta y acceso; si ya existe esta versión,
-se puede continuar para reparar/reinstalar o desinstalar únicamente ese mod.
-Las características del otro juego están deshabilitadas y una comprobación
-adicional impide planificar sus archivos, incluso con `ADDLOCAL=ALL` externo.
+Upgrade codes and 46 predecessor component identifiers are retained. Standalone MSI upgrade removes only that product. From combined 0.2.13, only the selected game's features are removed; the other remains registered until selected. Migrating the last removes the old product.
 
-Se conservan los códigos de actualización y los 46 identificadores de
-componentes de los MSI de origen. La actualización de un MSI individual retira
-solo ese producto. Si procede del antiguo MSI conjunto 0.2.13, se retiran solo
-las características del juego elegido; las del otro siguen registradas hasta
-que ese juego se seleccione. Al migrar el último se retira el producto anterior.
+Old BS2 beta is recognized only when choosing BS2, preserving original-file traceability. Choosing BS1 does not adopt/reinstall BS2 beta.
 
-La beta antigua del 2 se reconoce únicamente al elegir el 2 y conserva la
-trazabilidad de sus originales. Elegir el 1 no adopta ni reinstala la beta del 2.
+References: [native instance transforms](https://learn.microsoft.com/en-us/windows/win32/msi/installing-multiple-instances-with-instance-transforms), [selective Upgrade removal](https://learn.microsoft.com/en-us/windows/win32/msi/upgrade-table).
 
-Referencias técnicas: [instancias nativas de Windows Installer](https://learn.microsoft.com/en-us/windows/win32/msi/installing-multiple-instances-with-instance-transforms),
-[retirada selectiva mediante Upgrade](https://learn.microsoft.com/en-us/windows/win32/msi/upgrade-table).
+## Message observed by Carlos
 
-## Mensaje observado por Carlos
+MsiInstaller at 2026-09-10 16:05:39 reported an unrecognized installer-backup file (1603). Historical BS1 Original.xml uses / in three host64 paths; 0.2.13 compared against backslash paths.
 
-El registro MsiInstaller del 10/09/2026 a las 16:05:39 mostró
-«Archivo no reconocido en la copia del instalador» (instalación 1603).
-El `Original.xml` histórico del 1 usa `/` en tres rutas `host64`; el paquete
-0.2.13 comparaba esas rutas con una lista que utilizaba `\`.
+MsiStorage.cs now normalizes separators **in memory only**, retaining the exact allowlist and rejecting duplicates, absolute paths, traversal and foreign files. User originals are not rewritten. MSI identities still derive from original canonical paths.
 
-`MsiStorage.cs` ahora normaliza los separadores **solo en memoria**, conserva
-la lista exacta de archivos permitidos y rechaza duplicados, rutas absolutas,
-traversal y archivos ajenos. No se reescribe la copia original del usuario.
-Los identificadores MSI siguen calculándose con las rutas canónicas originales.
+## Validation and limits
 
-## Validación y límites
+Final extraction checks 46 SHA-256 values, two embedded instances, 46 historical component identities, per-user scope and normal Windows elevation capability. No permissions/security policies or manual Windows Installer registry changes.
 
-La extracción del MSI final verifica los 46 SHA-256, las dos instancias
-incluidas, los 46 identificadores históricos de componentes, ámbito por usuario
-y capacidad de solicitar elevación normal de Windows. No se alteran permisos,
-políticas de seguridad ni el registro de Windows Installer manualmente.
+Private tests use BioShockVRInstallerTests identities and BvrMsiTest-<family> directories. Only legitimate executables needed for path validation are copied: **no full-game copies or game launches**. Real files/registrations checked before/after.
 
-La batería usa identidades privadas bajo `BioShockVRInstallerTests` y carpetas
-`BvrMsiTest-<familia>`. Copia únicamente los ejecutables legítimos necesarios para
-validar las rutas; **no copia los juegos completos ni ejecuta los juegos**.
-Comprueba los archivos y registros reales antes y después.
+Coverage: individual install/repair/shortcuts/uninstall, injected rollback, historical slash-path backups, standalone MSI + beta migration and combined-MSI separation. UI reviewed to confirmation then canceled before Apply.
 
-Cobertura: instalación individual, reparación, accesos independientes,
-desinstalación individual, fallos simulados y recuperación, copias históricas
-con `/`, migración de MSI individual + beta y separación del MSI conjunto.
-La interfaz se revisa hasta Confirmar y se cancela sin pulsar Aplicar.
+Final suite 2026-09-10: **161 checks, 24 operations, all PASS**.
 
-Batería final del 10/09/2026: **161 comprobaciones, 24 operaciones, todas PASS**.
-
-| Escenario | Comprobaciones | Operaciones |
+| Scenario | Checks | Operations |
 | --- | ---: | ---: |
-| Instalar, mantener y retirar cada juego por separado | 73 | 12 |
-| Separar una instalación conjunta 0.2.13 | 35 | 6 |
-| MSI previo del 1 + beta del 2, sin adopción cruzada | 53 | 6 |
+| Separate install/maintenance/removal | 73 | 12 |
+| Split combined 0.2.13 installation | 35 | 6 |
+| Previous BS1 MSI + BS2 beta, no cross-adoption | 53 | 6 |
 
-Los informes se conservan en
+Reports under
 `artifacts/single-game-isolated/ea32089c9d36404b994d146f03bcd183/single-game-0.2.14/`:
-`test-result.json`, `test-result-combined-upgrade.json` y
-`test-result-standalone-beta.json`. El MSI aislado de esta misma fuente tiene
-SHA-256 `DD644FD0CFA340DE6D88E413D4D7ABB68C8A7C6B5478EBEF0E9AAE6BD544FCC5`;
-solo difieren sus identidades/rutas de prueba respecto al candidato real.
-El contenido y las identidades históricas del candidato real están auditados
-por `artifacts/integration-0.2.14/msi/single-game/package-verification.json`.
+test-result.json, test-result-combined-upgrade.json, test-result-standalone-beta.json.
+Same-source isolated MSI SHA-256:
+`DD644FD0CFA340DE6D88E413D4D7ABB68C8A7C6B5478EBEF0E9AAE6BD544FCC5`.
+Only test identities/paths differ. Production candidate content/historical identities audited by
+`artifacts/integration-0.2.14/msi/single-game/package-verification.json`.
 
-Se probaron también los planes de mantenimiento de ambas instancias.
-`Installer.OpenProduct` expone la base sin su transformación; el test aplica
-la transformación incluida a una copia privada antes de ejecutar únicamente
-las acciones inmediatas de planificación. Las 24 operaciones de integración
-sí se realizan con `msiexec`, sus instancias y su registro nativos.
+Both-instance maintenance plans also tested. Installer.OpenProduct exposes the untransformed base; test applies its embedded transform to a private copy before running only immediate planning actions. All 24 integration operations actually use native msiexec/instances/registration.
 
-Esta revisión no certifica FPS, paridad gráfica en caliente ni calidad de BS2
-en visor. La prueba personal del nuevo instalador y la validación en otro PC
-siguen pendientes. No se modifica el estado de los juegos reales para entregar
-el archivo MSI.
+No FPS, live-graphics parity or BS2 headset-quality certification. User installer test/another-PC validation remained pending. Delivery does not modify actual games.
 
-## Construir y verificar
+## Build and verification
 
-`Build-Msi.ps1` requiere `-Bs1PayloadDirectory`, `-Bs2PayloadDirectory`,
-`-Bs2ManifestPath` y `-BuildToolsDirectory` (WiX 6.0.2). El manifiesto BS1
-aceptado se toma de `release/manifest-v0.2.11.json`. `-TestFamily <32 hex>` crea
-un paquete de prueba con identidades disjuntas; nunca distribuir ese paquete.
+Build-Msi.ps1 requires -Bs1PayloadDirectory, -Bs2PayloadDirectory, -Bs2ManifestPath and -BuildToolsDirectory (WiX 6.0.2). Accepted BS1 manifest: release/manifest-v0.2.11.json. -TestFamily <32 hex> creates disjoint test identities; never distribute it.
 
-`Verify-Package.ps1 -ManifestPath ... -BuildToolsDirectory ...` verifica el
-contenido. Añadir `-Bs1SourceMsi` y `-Bs2SourceMsi` compara también los GUID
-de los componentes del candidato real con los MSI originales.
+Verify-Package.ps1 -ManifestPath ... -BuildToolsDirectory ... checks contents. Add -Bs1SourceMsi/-Bs2SourceMsi to compare production candidate component GUIDs against originals.
 
-`Test-Msi.ps1` requiere el manifiesto aislado y las rutas `-Bs1Exe`/`-Bs2Exe`.
-`-PredecessorManifest` habilita la batería de actualización; `-FixtureBase`
-permite una carpeta nueva por escenario. Las recuperaciones del registro
-nativo se prueban en un proceso elevado con consentimiento normal de Windows.
-Las pruebas son silenciosas: sus fallos intencionados no se muestran a Carlos.
+Test-Msi.ps1 requires isolated manifest and -Bs1Exe/-Bs2Exe. -PredecessorManifest enables upgrade suite; -FixtureBase selects a new scenario directory. Native registration recovery is tested from normally elevated, consented processes. Silent tests do not expose intentional-failure dialogs to Carlos.
 
-Una vez entregada una versión, su archivo `release/SHA256SUMS-vX.Y.Z.txt`
-impide regenerarla bajo el mismo número. Cualquier cambio posterior exige
-otra versión.
+After delivery, release/SHA256SUMS-vX.Y.Z.txt blocks rebuilding that version. Later changes require another version.

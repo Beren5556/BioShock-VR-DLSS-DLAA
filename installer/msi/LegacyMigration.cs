@@ -52,13 +52,13 @@ namespace BioShockMsi
         }
         static bool LegacySwitch(string value)
         {
-            if(value!="0" && value!="1") throw new InvalidDataException("Indicador beta no válido.");
+            if(value!="0" && value!="1") throw new InvalidDataException("Invalid beta flag.");
             return value=="1";
         }
         static string RequireHash(string value)
         {
             if (!Regex.IsMatch(value ?? "", @"\A[0-9A-Fa-f]{64}\z"))
-                throw new InvalidDataException("SHA-256 beta no válido.");
+                throw new InvalidDataException("Invalid beta SHA-256.");
             return value.ToUpperInvariant();
         }
         static string LegacyRelative(string name)
@@ -67,21 +67,21 @@ namespace BioShockMsi
                 name.IndexOf('/')>=0 || Array.Exists(name.Split('\\'), delegate(string part) {
                     return part=="." || part==".." || part.Length==0 || part.Trim()!=part;
                 }))
-                throw new InvalidDataException("Ruta relativa beta no válida.");
+                throw new InvalidDataException("Invalid relative beta path.");
             return name;
         }
         static void NoLegacyLinks(string path, string anchor)
         {
             string current=Full(path), root=Full(anchor);
             if(current!=root && !current.StartsWith(root+"\\",StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Ruta fuera de las copias beta.");
+                throw new InvalidDataException("Path outside the beta backups.");
             for(;;) {
                 if((File.Exists(current)||Directory.Exists(current)) &&
                     (File.GetAttributes(current)&System.IO.FileAttributes.ReparsePoint)!=0)
-                    throw new InvalidDataException("No se migran copias beta a través de enlaces.");
+                    throw new InvalidDataException("Beta backups cannot be migrated through links.");
                 if(string.Equals(current,root,StringComparison.OrdinalIgnoreCase)) break;
                 current=Path.GetDirectoryName(current);
-                if(string.IsNullOrEmpty(current)) throw new InvalidDataException("Ancla de copia beta no válida.");
+                if(string.IsNullOrEmpty(current)) throw new InvalidDataException("Invalid beta backup anchor.");
             }
         }
         static LegacyInstallation ReadLegacy(CustomActionData data)
@@ -89,7 +89,7 @@ namespace BioShockMsi
             if(GamePackage.Id!="bs2" || !File.Exists(data["Legacy"])) return null;
             string path=data["Legacy"], root=Path.GetDirectoryName(path);
             NoLegacyLinks(path,root);
-            if(new FileInfo(path).Length>131072) throw new InvalidDataException("Manifiesto beta demasiado grande.");
+            if(new FileInfo(path).Length>131072) throw new InvalidDataException("Beta manifest too large.");
             var fields=new Dictionary<string,string>(StringComparer.Ordinal);
             var rows=new List<string[]>(); var directories=new List<string>();
             string[] allowed={"Format","GameId","Version","GameDirectory","BackupDirectory","ShortcutPath",
@@ -99,52 +99,52 @@ namespace BioShockMsi
                 if(line.Length==0) continue;
                 if(line.StartsWith("File|",StringComparison.Ordinal)) {
                     string[] parts=line.Split('|');
-                    if(parts.Length!=7) throw new InvalidDataException("Registro beta incompleto.");
+                    if(parts.Length!=7) throw new InvalidDataException("Incomplete beta record.");
                     rows.Add(parts); continue;
                 }
                 if(line.StartsWith("CreatedDirectory=",StringComparison.Ordinal)) {
                     directories.Add(LegacyRelative(DecodeLegacy(line.Substring(17)))); continue;
                 }
                 int at=line.IndexOf('=');
-                if(at<=0) throw new InvalidDataException("Campo beta no válido.");
+                if(at<=0) throw new InvalidDataException("Invalid beta field.");
                 string key=line.Substring(0,at);
                 if(Array.IndexOf(allowed,key)<0 || fields.ContainsKey(key))
-                    throw new InvalidDataException("Campo beta desconocido o duplicado: "+key);
+                    throw new InvalidDataException("Unknown or duplicate beta field: "+key);
                 fields.Add(key,line.Substring(at+1));
             }
-            foreach(string key in allowed) if(!fields.ContainsKey(key)) throw new InvalidDataException("Falta el campo beta "+key);
+            foreach(string key in allowed) if(!fields.ContainsKey(key)) throw new InvalidDataException("Missing beta field: "+key);
             if(fields["Format"]!="3" || fields["GameId"]!="bs2" ||
                 (fields["Version"]!="0.1.0-beta" && fields["Version"]!="0.1.1-beta"))
-                throw new InvalidDataException("La versión beta no admite migración automática.");
+                throw new InvalidDataException("This beta version does not support automatic migration.");
             if(!string.Equals(Full(DecodeLegacy(fields["GameDirectory"])),Full(data["Game"]),StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("La copia beta pertenece a otro juego o a otra carpeta.");
+                throw new InvalidDataException("The beta backup belongs to another game or directory.");
             string backupRoot=Full(DecodeLegacy(fields["BackupDirectory"]));
             if(!backupRoot.StartsWith(Full(root)+"\\",StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("La carpeta de copias beta está fuera del perfil.");
+                throw new InvalidDataException("The beta backup directory is outside the profile.");
             NoLegacyLinks(backupRoot,root);
-            if(rows.Count!=LegacyNames.Length) throw new InvalidDataException("Inventario beta incompleto.");
+            if(rows.Count!=LegacyNames.Length) throw new InvalidDataException("Incomplete beta inventory.");
             var result=new LegacyInstallation(); result.ManifestHash=initialHash;
             foreach(string[] row in rows) {
                 string name=LegacyRelative(DecodeLegacy(row[1]));
-                if(!IsLegacyName(name) || result.Records.ContainsKey(name)) throw new InvalidDataException("Archivo beta ajeno o duplicado: "+name);
+                if(!IsLegacyName(name) || result.Records.ContainsKey(name)) throw new InvalidDataException("Unknown or duplicate beta file: "+name);
                 var record=new LegacyRecord { Name=name, Existed=LegacySwitch(row[2]), Restored=LegacySwitch(row[6]) };
                 RequireHash(row[3]); // current bytes may be a legitimate launcher hotfix
                 record.Backup=Child(backupRoot,LegacyRelative(DecodeLegacy(row[4])));
                 if(record.Existed) {
                     record.OriginalHash=RequireHash(row[5]); NoLegacyLinks(record.Backup,root);
                     if(!File.Exists(record.Backup) || Hash(record.Backup)!=record.OriginalHash)
-                        throw new IOException("Falta la copia original verificada de "+name);
-                } else if(row[5].Length!=0) throw new InvalidDataException("Original inexistente con hash atribuido.");
+                        throw new IOException("The verified original backup is missing for "+name);
+                } else if(row[5].Length!=0) throw new InvalidDataException("A hash was assigned to a missing original.");
                 if(record.Restored) {
                     string live=Child(data["Game"],name);
                     if(File.Exists(live)!=record.Existed || (record.Existed && Hash(live)!=record.OriginalHash))
-                        throw new IOException("El archivo restaurado por la beta cambió después: "+name);
+                        throw new IOException("The file restored by the beta was changed afterwards: "+name);
                 }
                 result.Records.Add(name,record);
             }
             foreach(string dir in directories) {
                 if(!Array.Exists(LegacyNames,delegate(string name) { return name.StartsWith(dir+"\\",StringComparison.OrdinalIgnoreCase); }))
-                    throw new InvalidDataException("Directorio beta ajeno al inventario.");
+                    throw new InvalidDataException("Beta directory outside the inventory.");
             }
             bool managed=LegacySwitch(fields["ShortcutManaged"]);
             bool existed=LegacySwitch(fields["ShortcutExisted"]), restored=LegacySwitch(fields["ShortcutRestored"]);
@@ -152,7 +152,7 @@ namespace BioShockMsi
                 string shortcutPath=Full(DecodeLegacy(fields["ShortcutPath"]));
                 string token=string.Equals(shortcutPath,Full(data["Shortcut"]),StringComparison.OrdinalIgnoreCase) ? "@shortcut" :
                     string.Equals(shortcutPath,Destination(data,"@beta-shortcut"),StringComparison.OrdinalIgnoreCase) ? "@beta-shortcut" : null;
-                if(token==null) throw new InvalidDataException("El acceso de la beta no coincide con uno de sus nombres previstos en este escritorio.");
+                if(token==null) throw new InvalidDataException("The beta shortcut does not match an expected name on this desktop.");
                 NoLegacyLinks(shortcutPath,data["Desktop"]);
                 if(fields["ShortcutInstalledSha256"].Length!=0) RequireHash(fields["ShortcutInstalledSha256"]);
                 var shortcut=new LegacyRecord { Name=token, Existed=existed, Restored=restored };
@@ -160,14 +160,14 @@ namespace BioShockMsi
                     shortcut.Backup=Full(DecodeLegacy(fields["ShortcutBackupPath"])); NoLegacyLinks(shortcut.Backup,backupRoot);
                     shortcut.OriginalHash=RequireHash(fields["ShortcutOriginalSha256"]);
                     if(!File.Exists(shortcut.Backup)||Hash(shortcut.Backup)!=shortcut.OriginalHash)
-                        throw new IOException("Falta la copia del acceso anterior a la beta.");
+                        throw new IOException("The pre-beta shortcut backup is missing.");
                 }
                 result.Shortcut=shortcut;
                 if(restored && (File.Exists(shortcutPath)!=existed ||
                     (existed && Hash(shortcutPath)!=shortcut.OriginalHash)))
-                    throw new IOException("El acceso restaurado por la beta cambió después.");
+                    throw new IOException("The shortcut restored by the beta was changed afterwards.");
             }
-            if(Hash(path)!=initialHash) throw new IOException("El manifiesto beta cambió durante su lectura.");
+            if(Hash(path)!=initialHash) throw new IOException("The beta manifest changed while it was being read.");
             return result;
         }
         static Snapshot ImportLegacyOriginal(CustomActionData data, Snapshot current, LegacyInstallation legacy)
@@ -185,7 +185,7 @@ namespace BioShockMsi
                 if(record.Existed) {
                     string destination=Child(data["Transaction"],"LegacyOriginals\\"+original.Files.Count+".bin");
                     Copy(record.Backup,destination);
-                    if(Hash(destination)!=record.OriginalHash) throw new IOException("No se ha verificado el original beta importado.");
+                    if(Hash(destination)!=record.OriginalHash) throw new IOException("The imported beta original has not been verified.");
                     saved.Backup=destination.Substring(Full(data["Root"]).Length+1);
                 }
                 original.Files.Add(saved);

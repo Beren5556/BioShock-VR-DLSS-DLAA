@@ -1,50 +1,42 @@
-# Validación local · candidato 0.2.13 · 2026-09-10
+# Historical local validation · 0.2.13 candidate · 2026-09-10
 
-## Resultado
+## Result
 
-Candidato construido y verificaciones aisladas superadas. **No instalado en
-los juegos reales, no publicado y no validado todavía en visor.**
+Candidate built and isolated checks passed. **Not installed in real games, published or yet headset-validated at this stage.**
 
-Código de la integración: 27c175ca7d5e95bf5788265dc382b9b331dde7c7,
-rama codex/bioshock-1-2-v0.2.13. Merge local completado; la documentación
-posterior no modifica los binarios ensayados.
+Integration commit 27c175ca7d5e95bf5788265dc382b9b331dde7c7, branch codex/bioshock-1-2-v0.2.13. Local merge completed; subsequent documentation does not change tested binaries.
 
-## Artefactos identificados
+## Identified artifacts
 
-- EXE único: BioShock-1-2-VR-DLSS-DLAA-0.2.13-CANDIDATO.exe (70,9 MiB).
-  SHA-256: 63701688677BFF132917677893B60AE6460391719CA4793422ED94ECD4ED6E1A.
-- Dentro, MSI BS1 0.2.11 aceptado, sin regenerar:
-  2A5365E332DC311C0E010AD0BECEEAB34E905F66C6F40AB5CF44824EDAD9F660.
-- Dentro, MSI BS2 0.2.13 candidato:
-  EE45605FEC0BAD54D11EB48C29B13CED5041F1A884ED5A6F8B987AF080947033.
-- MSI de familia aislada, NO distribuible:
-  CF181C9DBEC5C47C1F97C73FCF3D24FC25F97D55A6D7E8E0D9F231010C1122C0.
-  Sus 23 archivos de payload coinciden con el MSI BS2 candidato.
+- Single BioShock-1-2-VR-DLSS-DLAA-0.2.13-CANDIDATO.exe (70.9 MiB):
+  `63701688677BFF132917677893B60AE6460391719CA4793422ED94ECD4ED6E1A`.
+- Embedded accepted BS1 0.2.11 MSI, not regenerated:
+  `2A5365E332DC311C0E010AD0BECEEAB34E905F66C6F40AB5CF44824EDAD9F660`.
+- Embedded candidate BS2 0.2.13 MSI:
+  `EE45605FEC0BAD54D11EB48C29B13CED5041F1A884ED5A6F8B987AF080947033`.
+- Nondistributable isolated-family MSI:
+  `CF181C9DBEC5C47C1F97C73FCF3D24FC25F97D55A6D7E8E0D9F231010C1122C0`.
+  Its 23 payload files match the BS2 candidate.
 
-Los archivos están bajo artifacts/integration-0.2.13/bundle y msi/bs2.
-Son artefactos locales ignorados por Git; sus hashes identifican esta build
-concreta, no una publicación estable.
+Under artifacts/integration-0.2.13/bundle and msi/bs2; local Git-ignored artifacts. Hashes identify this build, not a stable release.
 
-## Comprobaciones realizadas
+## Checks
 
-| Batería | Resultado |
+| Suite | Result |
 | --- | --- |
-| Núcleo | 12/12 ejecutables correctos |
-| Temporal WARP | BS1 y BS2 correctos, 13 casos de reutilización en cada uno |
-| Guardado BS2 | 20/20 casos, rollback y conflicto externo incluidos |
-| Lanzadores | Ambos compilan y pasan --self-test; Imagen revisada visualmente |
-| Migración beta | 29/29 comprobaciones unitarias |
-| MSI BS2 final | 114 comprobaciones, 21 ejecuciones MSI, 0 avisos de seguridad de rollback |
-| EXE común | 24/24: recursos, identidades separadas, interfaz y cierre |
-| Sintaxis PowerShell | 50 scripts sin errores de análisis |
-| Repositorio | Política, versiones, licencias/manifiestos y git diff --check correctos |
+| Core | 12/12 executables pass |
+| Temporal WARP | BS1/BS2 pass, 13 reuse cases each |
+| BS2 saving | 20/20 including rollback/external conflict |
+| Launchers | Both build/self-test; Image visually reviewed |
+| Beta migration | 29/29 unit checks |
+| Final BS2 MSI | 114 checks, 21 MSI runs, 0 rollback-security warnings |
+| Common EXE | 24/24 resources, separate identities, UI/exit |
+| PowerShell syntax | 50 scripts, no parse errors |
+| Repository | Policy, versions, licenses/manifests and git diff --check pass |
 
-El producto MSI aislado quedó desinstalado. Se conservaron los informes y
-sus copias recuperables. Los fixtures MSI usan solo el EXE legítimo necesario
-para comprobar el destino y datos ficticios; no se copió ni ejecutó el juego
-completo.
+Isolated MSI product uninstalled; reports/recovery copies retained. MSI fixtures use only the legitimate executable needed for target checks and fake data; no complete game copied or launched.
 
-Evidencias locales:
+Evidence:
 
 - artifacts/integration-0.2.13/tests/20260910-105023/results.json
 - artifacts/integration-0.2.13/migration-tests/results.txt
@@ -53,27 +45,18 @@ Evidencias locales:
 - artifacts/integration-0.2.13/bundle/manifest.json
 - artifacts/integration-0.2.13/bundle/selector-final.png
 
-La última batería MSI conserva su fixture BvrMsiBattery-18ac224b6a5b471db1b2cd71aeba8eef.
-Los 85 archivos modificados/nuevos de la referencia BS2 original siguen
-coincidiendo con el snapshot 7b4514090d5d1f319b463f158d076f4155a5347e.
-La referencia BS1 permanece en 065a43e y su payload aceptado conserva 23/23 hashes.
+Final MSI fixture: BvrMsiBattery-18ac224b6a5b471db1b2cd71aeba8eef.
+All 85 modified/new original-BS2-reference files still match snapshot 7b4514090d5d1f319b463f158d076f4155a5347e.
+BS1 reference remains 065a43e, accepted payload 23/23 hashes.
 
-Lectura del manifiesto BS2 realmente instalado: Format=3, GameId=bs2,
-0.1.1-beta, 21 registros. Sus cuatro archivos que tenían original previo
-conservan las copias con el SHA esperado. Esta lectura no ejecutó la migración.
+Read-only actual installed BS2 manifest: Format=3, GameId=bs2, 0.1.1-beta, 21 records. Four previously existing originals retain expected-hash backups. This inspection did not migrate them.
 
-## Lo que falta
+## Remaining work at that point
 
-- Acordar la instalación del candidato BS2 y probar NORMAL/DLSS/DLAA, cambios
-  de resolución, agua vista desde fuera, manos/HUD, carga y cierre en visor.
-- Comprobar la coexistencia real e instalación de los productos en ambos órdenes.
-  Las identidades no se solapan, pero eso no sustituye la prueba funcional.
-- Derivar F4 nativo para gráficos BS2 si se exige paridad en caliente.
-  Actualmente se cambian en el lanzador, se guardan y se reinicia.
-- Completar la revisión de paridad de arranque: el BS2 conserva inicio directo
-  cuando falla la solicitud Steam; la oferta adicional de inicio directo tras
-  agotar el timeout del BS1 no se ha trasladado todavía.
-- Validar en otro ordenador. Publicar solo tras aceptación.
+- Agree BS2 candidate installation; headset NORMAL/DLSS/DLAA, resolution changes, water viewed from outside, hands/HUD, loading and exit.
+- Real coexistence/install in both orders. Disjoint identities do not replace functional testing.
+- Derive native BS2 F4 if live parity required; currently launcher save/restart.
+- Complete launch parity: BS2 direct start on failed Steam request exists; BS1's additional direct-start offer after timeout was not yet ported.
+- Another computer; publish only after acceptance.
 
-No declarar idénticos FPS, paridad completa ni estabilidad de esta build en VR.
-No apagar el equipo: la autorización de apagado era excepcional de otra sesión.
+No identical-FPS, complete-parity or VR-stability claim. No PC shutdown: earlier shutdown authorization was exceptional to a different session.

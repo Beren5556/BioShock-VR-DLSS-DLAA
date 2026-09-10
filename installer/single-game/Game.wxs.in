@@ -26,11 +26,11 @@
                   Target="[@Upper@DIR]@Launcher@" WorkingDirectory="@Upper@DIR" Icon="ModIcon" Advertise="no" />
       </Component>
     </DirectoryRef>
-    <Feature Id="Game_@Game@" Title="@DisplayName@ Remastered · mod VR" Level="0" Display="hidden">
+    <Feature Id="Game_@Game@" Title="@DisplayName@ Remastered · VR mod" Level="0" Display="hidden">
       <Level Value="1" Condition="BVR_INSTANCE = &quot;@Game@&quot;" />
       <ComponentGroupRef Id="Files_@Game@" />
       <ComponentRef Id="Registration_@Game@" />
-      <Feature Id="Desktop_@Game@" Title="Acceso directo @DisplayName@" Level="0" Display="hidden">
+      <Feature Id="Desktop_@Game@" Title="@DisplayName@ shortcut" Level="0" Display="hidden">
         <Level Value="1" Condition="BVR_INSTANCE = &quot;@Game@&quot;" />
         <ComponentRef Id="ShortcutComponent_@Game@" />
       </Feature>

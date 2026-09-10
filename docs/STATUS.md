@@ -1,5 +1,16 @@
 # Project status
 
+## Current distribution: 0.2.17 English
+
+The English edition is derived from Spanish 0.2.16, which the user accepted
+in both BioShock Remastered and BioShock 2 Remastered. It translates display
+text and documentation while retaining runtime behavior and all four tested
+performance optimizations. See [English verification](ENGLISH-0.2.17.md).
+The Spanish release remains available. Earlier candidate/rejection decisions
+below are historical records, not the current distribution status.
+Physical-headset validation of the newly rebuilt English binaries and a
+second-computer test must not be inferred from earlier acceptance.
+
 ## BioShock 1–2 integration candidate (2026-09-10)
 
 Development of the shared 0.2.13 distribution is authorized. See

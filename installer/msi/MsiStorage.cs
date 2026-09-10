@@ -34,13 +34,13 @@ namespace BioShockMsi
             {
                 string version = name.Substring(prefix.Length);
                 if (!Regex.IsMatch(version, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))
-                    throw new InvalidDataException("Versión de acceso directo no válida.");
+                    throw new InvalidDataException("Invalid shortcut version.");
                 return Child(data["Desktop"], GamePackage.ShortcutBase + " " + version + ".lnk");
             }
             foreach (string[] item in PayloadPlan.Items)
                 if (item[0].Replace('/', '\\') == name) return Child(data["Game"], name);
             if (IsLegacyName(name)) return Child(data["Game"], name);
-            throw new InvalidDataException("Archivo no reconocido en la copia del instalador.");
+            throw new InvalidDataException("Unrecognized file in the installer backup.");
         }
         private static void SaveSnapshot(string path, Snapshot snapshot)
         {
@@ -65,7 +65,7 @@ namespace BioShockMsi
         private static void Copy(string source, string destination)
         {
             if (File.Exists(destination) && (File.GetAttributes(destination) & System.IO.FileAttributes.ReparsePoint) != 0)
-                throw new IOException("No se sobrescribirá un enlace de archivo: " + destination);
+                throw new IOException("A file link will not be overwritten: " + destination);
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
             File.Copy(source, destination, true);
         }
@@ -73,17 +73,17 @@ namespace BioShockMsi
         {
             if (snapshot.GameId != GamePackage.Id &&
                 !(GamePackage.Id == "bs1" && string.IsNullOrEmpty(snapshot.GameId)))
-                throw new InvalidDataException("La copia de seguridad pertenece a otro juego.");
+                throw new InvalidDataException("The backup belongs to another game.");
             if (!string.Equals(Full(snapshot.Game), Full(data["Game"]), StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("La copia pertenece a otra instalación del juego.");
+                throw new InvalidDataException("The backup belongs to another game installation.");
             HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (SavedFile file in snapshot.Files)
             {
                 Destination(data, file.Name);
-                if (!seen.Add(file.Name.Replace('/', '\\'))) throw new InvalidDataException("Copia con archivos duplicados.");
+                if (!seen.Add(file.Name.Replace('/', '\\'))) throw new InvalidDataException("The backup contains duplicate files.");
                 if (file.Existed && (!File.Exists(Child(data["Root"], file.Backup)) ||
                     Hash(Child(data["Root"], file.Backup)) != file.Hash))
-                    throw new IOException("Falta una copia original válida de " + file.Name + ". No se han retirado los archivos del mod.");
+                    throw new IOException("A valid original backup is missing for " + file.Name + ". The mod files have not been removed.");
             }
         }
 
@@ -115,7 +115,7 @@ namespace BioShockMsi
                 if (!string.IsNullOrEmpty(previousVersion) && previousVersion != PayloadPlan.Version)
                 {
                     if (!Regex.IsMatch(previousVersion, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))
-                        throw new InvalidDataException("La versión MSI anterior no es válida.");
+                        throw new InvalidDataException("The previous MSI version is invalid.");
                     names.Add("@shortcut:" + previousVersion);
                 }
                 if (registeredOriginal != null)
@@ -152,7 +152,7 @@ namespace BioShockMsi
                 SaveSnapshot(Child(data["Transaction"], "Snapshot.xml"), snapshot);
                 if (snapshot.NewOriginal && data["Removing"] != "1") {
                     if (legacy != null && Hash(data["Legacy"]) != legacy.ManifestHash)
-                        throw new IOException("La instalación beta cambió durante la copia; no se migra.");
+                        throw new IOException("The beta installation changed during backup; migration stopped.");
                     SaveSnapshot(original, legacy == null ? snapshot : ImportLegacyOriginal(data, snapshot, legacy));
                 }
                 // The per-user MSI cannot secure rollback files in a protected
@@ -163,8 +163,8 @@ namespace BioShockMsi
                 // shortcuts, registration and removal of the previous product.
                 RetireSnapshottedFiles(data, snapshot);
                 if (data["FailTest"] == "after-retire")
-                    throw new IOException("Fallo aislado tras retirar archivos, antes de InstallFiles.");
-                session.Log("Copia recuperable: " + data["Transaction"]);
+                    throw new IOException("Isolated failure after removing files, before InstallFiles.");
+                session.Log("Recoverable backup: " + data["Transaction"]);
                 return ActionResult.Success;
             }
             catch (Exception ex) { return Fail(session, ex); }
@@ -179,13 +179,13 @@ namespace BioShockMsi
                 string destination = Destination(data, file.Name);
                 if (!file.Existed)
                 {
-                    if (File.Exists(destination)) throw new IOException("El archivo cambió durante la instalación: " + file.Name);
+                    if (File.Exists(destination)) throw new IOException("The file changed during installation: " + file.Name);
                     continue;
                 }
                 if (!File.Exists(destination) || Hash(destination) != file.Hash)
-                    throw new IOException("El archivo cambió después de copiarlo: " + file.Name);
+                    throw new IOException("The file changed after it was copied: " + file.Name);
                 if ((File.GetAttributes(destination) & (System.IO.FileAttributes.ReparsePoint | System.IO.FileAttributes.ReadOnly)) != 0)
-                    throw new IOException("No se puede sustituir un enlace o archivo de solo lectura: " + file.Name);
+                    throw new IOException("Cannot replace a link or read-only file: " + file.Name);
             }
             foreach (SavedFile file in snapshot.Files)
                 if (file.Existed) File.Delete(Destination(data, file.Name));
@@ -204,7 +204,7 @@ namespace BioShockMsi
             {
                 string backup = Child(data["Root"], snapshot.IniBackup);
                 if (snapshot.GameIni != data["Ini"] || Hash(backup) != snapshot.IniHash)
-                    throw new InvalidDataException("La copia de configuración no es válida.");
+                    throw new InvalidDataException("The configuration backup is invalid.");
                 Copy(backup, snapshot.GameIni);
             }
         }
@@ -221,7 +221,7 @@ namespace BioShockMsi
                 RestoreSnapshot(data, snapshot, true);
                 string original = Child(data["Root"], "Original.xml");
                 if (snapshot.NewOriginal && File.Exists(original)) File.Delete(original);
-                session.Log("Estado anterior a la operación restaurado. Copia: " + data["Transaction"]);
+                session.Log("Pre-operation state restored. Backup: " + data["Transaction"]);
                 return ActionResult.Success;
             }
             catch (Exception ex) { return Fail(session, ex); }
@@ -241,7 +241,7 @@ namespace BioShockMsi
                 string replacement = key == "FluidSurfaceDetail" ? "High" :
                     key == "RealTimeReflection" || key == "UseRippleSystem" ? "False" : "True";
                 int count = setting.Matches(values).Count;
-                if (count > 1) throw new InvalidDataException("Hay una opción gráfica duplicada: " + key);
+                if (count > 1) throw new InvalidDataException("Duplicate graphics option: " + key);
                 if (count == 1) values = setting.Replace(values, delegate(Match m) { return m.Groups[1].Value + replacement; });
                 else values = values.TrimEnd('\r', '\n') + Environment.NewLine + key + "=" + replacement + Environment.NewLine;
             }
@@ -267,7 +267,7 @@ namespace BioShockMsi
                     {
                         string file = Destination(data, item[0]);
                         if (!File.Exists(file) || Hash(file) != item[1])
-                            throw new IOException("No se ha instalado correctamente " + item[0] + ". Se recuperará el estado anterior.");
+                            throw new IOException("Installation verification failed for " + item[0] + ". The previous state will be restored.");
                     }
                     Snapshot snapshot = LoadSnapshot(Child(data["Transaction"], "Snapshot.xml"));
                     if (snapshot.FreshMod && File.Exists(data["Ini"]))
@@ -288,7 +288,7 @@ namespace BioShockMsi
                         }
                     }
                 }
-                if (data["FailTest"] == "1") throw new IOException("Fallo controlado de la prueba aislada de rollback MSI.");
+                if (data["FailTest"] == "1") throw new IOException("Controlled failure in the isolated MSI rollback test.");
                 return ActionResult.Success;
             }
             catch (Exception ex) { return Fail(session, ex); }
@@ -307,7 +307,7 @@ namespace BioShockMsi
                     File.Move(original, archived);
                 }
                 // Recovery snapshots are intentionally retained. User preferences remain in place.
-                session.Log("Operación completada. Copias conservadas en " + data["Root"]);
+                session.Log("Operation completed. Backups retained in " + data["Root"]);
                 return ActionResult.Success;
             }
             catch (Exception ex) { return Fail(session, ex); }

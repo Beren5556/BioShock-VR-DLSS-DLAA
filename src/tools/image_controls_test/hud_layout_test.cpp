@@ -5,13 +5,13 @@
 namespace bvr::log { void write(const char*, ...) {} }
 int wmain(int argc, wchar_t** argv) {
     namespace hud = bvr::imagehud;
-    std::string text = "OPCIONES GRAFICAS\nF2 anterior | F3 siguiente | F4 cambiar | F1 cerrar\n";
+    std::string text = "GRAPHICS OPTIONS\nF2 previous | F3 next | F4 toggle | F1 close\n";
     for (const auto& option : bvr::b1r::graphics_options::kOptions) {
         text += "  "; text += option.label;
         if (option.impact) text += " *";
-        text += ": Alto  [F4: cambiar / Reinicio]\n";
+        text += ": High  [F4: toggle / Restart]\n";
     }
-    text += "* Alto impacto en el rendimiento\nNo disponible en caliente: cambia esta opcion en el lanzador y reinicia.";
+    text += "* High performance impact\nNo live changes: use the launcher and restart the game.";
     std::vector<uint32_t> pixels;
     if (!hud::rasterize(text, pixels) || pixels.size() != hud::kPixelCount) {
         std::printf("FAIL: HUD rasterization (pixels=%zu, expected=%zu)\n", pixels.size(), hud::kPixelCount); return 1;

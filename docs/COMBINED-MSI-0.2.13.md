@@ -1,103 +1,62 @@
-# MSI único BioShock 1–2 · 0.2.13
+# Single BioShock 1–2 MSI · historical 0.2.13
 
-> Histórico: Carlos descartó este flujo de casillas después de probarlo.
-> Sustituido por [MSI 0.2.14 con desplegable individual](SINGLE-GAME-MSI-0.2.14.md).
-> Se conserva el MSI entregado sin sobrescribirlo.
+> Carlos rejected this checkbox flow after testing. Superseded by [0.2.14 individual-dropdown MSI](SINGLE-GAME-MSI-0.2.14.md). The delivered MSI remains unmodified.
 
-## Requisito de entrega
+## Delivery requirement
 
-Corrección explícita de Carlos el 10 de septiembre de 2026: **un archivo MSI
-nativo basado en el MSI de BioShock 1**, con los dos mods dentro. No un EXE que
-abre dos MSI, ni un MSI que lanza instalaciones anidadas.
+Explicit September 10, 2026 correction: **one native MSI based on BioShock 1's MSI**, containing both mods. Not an EXE opening two MSIs, nor an MSI running nested installations.
 
-El EXE anterior de Escritorio / Lanzadores MOD VR queda descartado como entrega.
-No se ha eliminado, movido ni sobrescrito. No presentar ese EXE como instalador
-MSI. El nuevo MSI solo se copiará a esa carpeta cuando esté verificado.
-Los lanzadores siempre se instalan en Build/Final de cada juego; el escritorio
-recibe accesos directos opcionales.
+The old Desktop / Lanzadores MOD VR EXE was rejected as delivery; it was not deleted, moved or overwritten and must not be presented as an MSI. New MSI is copied there only after verification. Launchers always install in each game's Build/Final, with optional desktop shortcuts.
 
-## Implementación realizada
+## Historical implementation
 
-- Un ProductCode/UpgradeCode de distribución y una entrada en Aplicaciones.
-- Dos características MSI independientes: Game_bs1 y Game_bs2; cada una con su
-  propio destino, registro del mod, perfil, originales y acceso directo.
-- Asistente nativo de Windows Installer (Segoe UI, basado en el del 1):
-  selección de juegos, carpetas, accesos, reparación por juego, confirmación,
-  progreso y resultado. No arranca automáticamente el juego ni el lanzador.
-- Al volver a abrirlo, conserva seleccionados los mods instalados. Se puede
-  añadir el otro; desmarcar un mod instalado solicita quitarlo. Desmarcar el
-  último usa REMOVE=ALL para retirar también el producto.
-- BS1: los 23 archivos del manifiesto aceptado 0.2.11, sin recompilarlos.
-  El MSI original sigue intacto como referencia; no va anidado en el nuevo.
-- BS2: los 23 archivos del candidato ya compilado, verificados contra su
-  manifiesto. No se recompilaron el núcleo ni los lanzadores en esta corrección.
-- Las acciones recuperables del MSI del 1 se compilan dos veces, una por juego,
-  con nombres de propiedades y acciones independientes. Se reutiliza la lógica
-  de migración de la beta del 2.
-- Se conservan los GUID de componentes para las mismas rutas del MSI anterior.
-  La primera instalación conjunta adopta los MSI independientes ya registrados.
-  Se explica en el asistente y se impide desmarcarlos durante esa migración.
-  Así no quedan dos productos propietarios de los mismos archivos al añadir
-  el segundo juego en una operación posterior.
+- One distribution ProductCode/UpgradeCode and Windows Apps entry.
+- Independent Game_bs1/Game_bs2 features, each with own destination, mod record, profile, originals and shortcut.
+- Native Segoe UI wizard based on BS1: game selection, folders, shortcuts, per-game repair, confirmation, progress/result. No automatic game/launcher launch.
+- Reopening retains installed mods selected. Add the other; unchecking installed mod requests removal. Unchecking the last uses REMOVE=ALL.
+- BS1: 23 accepted 0.2.11 files without rebuilding. Original MSI remains reference, not nested.
+- BS2: 23 already-built candidate files verified against manifest. No core/launcher rebuild for this correction.
+- Recoverable BS1 actions compiled once per game with separate property/action names; BS2 beta migration reused.
+- Same-key-path predecessor component GUIDs retained. First combined install adopts registered standalone MSIs, explained in wizard and preventing deselection during migration, avoiding two products owning the same files when adding the second game later.
 
-## Estado actual: MSI entregado para pruebas locales
+## Local candidate delivery
 
-El bloqueo descrito en los primeros candidatos está resuelto. El 10/09/2026
-se verificó y copió a **Escritorio / Lanzadores MOD VR**:
+Initial blockage resolved. Verified/copied on 2026-09-10 to **Desktop / Lanzadores MOD VR**:
 
 `BioShock-1-2-VR-DLSS-DLAA-0.2.13-CANDIDATO.msi`
-
 SHA-256: `0F344B2160043A8D13695876A81B76A7BA19174BCDD68A4809AD673364AF3C1D`.
 
-El paquete entregado queda congelado. No reconstruirlo ni sustituirlo por bytes
-distintos conservando el mismo ProductCode/versión.
+Frozen: do not rebuild/replace different bytes with the same ProductCode/version.
 
-- Batería completa: **69 comprobaciones / 11 operaciones**, aprobada.
-- Migración aislada de predecesor BS1 simulado y beta BS2: **43 comprobaciones /
-  3 operaciones**, aprobada.
-- Validación de migración beta: **29 comprobaciones / 0 fallos**.
-- Extracción del MSI final: **46 archivos idénticos a los payloads verificados**,
-  cuatro características nativas y ninguna instalación MSI anidada.
-- Navegación visual revisada hasta la confirmación de ambos juegos, sin Aplicar.
-- Las dos instalaciones de prueba que habían quedado registradas se recuperaron
-  y desinstalaron con Windows Installer. Se conservan logs y copias de prueba.
+- Full suite: **69 checks / 11 operations**, pass.
+- Isolated simulated BS1 predecessor + BS2 beta migration: **43 / 3**, pass.
+- Beta migration validation: **29 checks / 0 failures**.
+- Final MSI extraction: **46 files identical to verified payloads**, four native features, no nested MSI.
+- Visual navigation to both-game confirmation, without Apply.
+- Two leftover test registrations recovered/uninstalled through Windows Installer; logs/backups retained.
 
-El MSI mantiene el alcance por usuario, pero permite solicitar elevación a
-Windows Installer. Con ello también se recupera el registro nativo cuando se
-provoca un fallo durante la desinstalación. No se cambiaron políticas ni ACL.
+MSI remains per-user but permits Windows Installer elevation requests, enabling native registration recovery after injected uninstall failure. No policies/ACLs changed.
+Evidence/identities/limits: [final MSI validation](COMBINED-MSI-VALIDATION-2026-09-10.md).
 
-Evidencia, identidades, alcance y límites:
-[validación final del MSI](COMBINED-MSI-VALIDATION-2026-09-10.md).
+No actual games changed, cores/launchers rebuilt or GitHub publication. Real installation, headset and other-PC tests were then pending. Fixture migration does not mean Carlos's games were upgraded.
 
-No se han modificado los juegos reales, recompilado los núcleos/lanzadores ni
-publicado en GitHub. La instalación real, la prueba en visor y la validación
-en otro ordenador siguen pendientes. La prueba de migración usa fixtures;
-no equivale a haber actualizado ya los juegos de Carlos.
-
-## Construcción y pruebas
+## Historical build and test
 
 ```powershell
 .\installer\combined\Build-Msi.ps1 `
-  -Bs1PayloadDirectory '<stable-0.2.11/msi-build-0.2.11/payload aceptado>' `
+  -Bs1PayloadDirectory '<accepted stable-0.2.11/msi-build-0.2.11/payload>' `
   -Bs2PayloadDirectory '.\artifacts\integration-0.2.13\msi\bs2\msi-build-0.2.13\payload' `
   -Bs2ManifestPath '.\artifacts\integration-0.2.13\msi\bs2\manifest-0.2.13.json' `
-  -BuildToolsDirectory '<WiX 6.0.2 verificado>' `
-  -TestFamily '<GUID minúsculas, 32 dígitos>'
+  -BuildToolsDirectory '<verified WiX 6.0.2>' `
+  -TestFamily '<lowercase GUID, 32 digits>'
 
 .\installer\combined\Test-Msi.ps1 `
-  -ManifestPath '<manifest.json aislado>' `
-  -Bs1Exe '<BioshockHD.exe legítimo>' `
-  -Bs2Exe '<Bioshock2HD.exe legítimo>'
+  -ManifestPath '<isolated manifest.json>' `
+  -Bs1Exe '<legitimate BioshockHD.exe>' `
+  -Bs2Exe '<legitimate Bioshock2HD.exe>'
 ```
 
-La batería copia exclusivamente los dos ejecutables legítimos y crea
-configuraciones ficticias: **no copia juegos completos ni los ejecuta**.
-Las identidades y destinos de prueba están separados de los productos reales.
-`-TestPredecessor bs1` genera una identidad anterior simulada para migración;
-no es una reconstrucción ni una distribución de código 0.2.12.
+Only two legitimate executables are copied with fake configuration: **no full-game copies or game execution**. Test identities/targets are separate from real products. -TestPredecessor bs1 creates a simulated predecessor identity, not rebuilt/distributed 0.2.12 code.
 
-Base técnica: [características MSI](https://learn.microsoft.com/en-us/windows/win32/msi/feature-table),
-[REINSTALL](https://learn.microsoft.com/en-us/windows/win32/msi/reinstall) y
-[RemoveExistingProducts](https://learn.microsoft.com/en-us/windows/win32/msi/removeexistingproducts-action).
-La retirada de productos anteriores ocurre durante la primera instalación, no
-en mantenimiento; por ello la adopción de los MSI anteriores es conjunta.
+Technical basis: [MSI features](https://learn.microsoft.com/en-us/windows/win32/msi/feature-table), [REINSTALL](https://learn.microsoft.com/en-us/windows/win32/msi/reinstall), [RemoveExistingProducts](https://learn.microsoft.com/en-us/windows/win32/msi/removeexistingproducts-action).
+Predecessor removal occurs during first installation, not maintenance; hence joint adoption in this historical architecture.

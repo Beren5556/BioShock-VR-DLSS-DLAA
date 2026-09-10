@@ -1,57 +1,66 @@
-# Arquitectura DLSS/DLAA
+# DLSS/DLAA architecture
 
-> Documento heredado de la edición **BioShock 1**. Los nombres de ejecutable,
-> rutas de datos y proveedor `bioshock1r` descritos aquí no son el contrato de
-> BioShock 2. Para el port BS2 y sus límites temporales, consulta
-> [BS2-TEMPORAL.md](BS2-TEMPORAL.md).
+> This document describes the original **BioShock 1** fork architecture.
+> Executable names, data paths and the bioshock1r provider here are not the
+> BioShock 2 contract. See [BS2-TEMPORAL.md](BS2-TEMPORAL.md) for that adapter.
 
-La Release v0.2.0-beta mantiene el mod dentro del proceso x86 de BioShock Remastered y ejecuta NVIDIA NGX en procesos auxiliares x64. Esta separación evita cargar una biblioteca x64 dentro del juego de 32 bits.
+Since v0.2.0-beta, the mod runs inside BioShock Remastered's x86 process
+while NVIDIA NGX runs in separate x64 helpers. This avoids attempting to
+load a 64-bit library into a 32-bit game.
 
-## Flujo por ojo
+## Per-eye flow
 
     BioshockHD.exe x86
-      -> xinput1_3.dll carga bioshockvr.dll
-      -> BioShock VR renderiza cada ojo en D3D11
-      -> se generan color, profundidad y vectores de movimiento
-      -> dlss45_client.cpp publica recursos y sincronización IPC
-      -> Host64 ojo izquierdo / Host64 ojo derecho
-      -> NVIDIA NGX DLAA o DLSS 4.5 Super Resolution
-      -> bioshockvr.dll copia cada resultado a su swapchain OpenXR
-      -> compositor del visor
+      -> xinput1_3.dll loads bioshockvr.dll
+      -> BioShock VR renders each eye in D3D11
+      -> color, depth and motion vectors are produced
+      -> dlss45_client.cpp publishes resources and IPC synchronization
+      -> left-eye Host64 / right-eye Host64
+      -> NVIDIA NGX DLAA or DLSS 4.5 Super Resolution
+      -> bioshockvr.dll copies each result to its eye's OpenXR swapchain
+      -> headset compositor
 
-Cada ojo tiene proceso, recursos, historial y sincronización independientes. Nunca se reutiliza el historial temporal del ojo contrario.
+Each eye has independent processes, resources, history and synchronization.
+Temporal history is never reused from the opposite eye.
 
-## Modos publicados
+## Public modes
 
-| Modo | Entrada | Salida | Host NGX |
+| Mode | Input | Output | NGX host |
 |---|---|---|---|
-| NORMAL | resolución de render | misma resolución | no |
-| DLAA | resolución de render | misma resolución, relación 1:1 | sí |
-| DLSS | resolución inferior | resolución de salida mayor con igual proporción | sí |
+| NORMAL | Render resolution | Same resolution | No |
+| DLAA | Render resolution | Same resolution, 1:1 | Yes |
+| DLSS | Lower resolution | Larger output, same aspect ratio | Yes |
 
-La configuración pública vive en %LOCALAPPDATA%\BioshockVR\dlss.ini. El lanzador valida dimensiones pares, límites, proporción y contrato del runtime antes de guardar. En esta edición también fuerza UseFxaa=0 y desactiva cualquier upscaler.ini heredado.
+The public configuration is in `%LOCALAPPDATA%\BioshockVR\dlss.ini`.
+The launcher validates even dimensions, limits, ratio and runtime contract
+before saving. It also forces UseFxaa=0 and disables any legacy upscaler.ini.
 
-## Componentes
+## Components
 
-- src/core/gfx/dlss45_client.*: cliente IPC, validación y ciclo de los dos hosts.
-- src/game/bioshock1r/temporal_guides.*: profundidad y movimiento necesarios para el procesamiento temporal.
-- src/core/vr/openxr_runtime.*: resolución de render/salida, envío por ojo y composición OpenXR.
-- components/dlss-host: host x64 adaptado y compilado en modo BVR_DLSS45_ONLY.
-- apps/launcher: configuración segura y lanzador WinForms.
-- installer: empaquetado autónomo, instalación transaccional y restauración.
+- `src/core/gfx/dlss45_client.*`: IPC client, validation and both host lifecycles.
+- `src/game/bioshock1r/temporal_guides.*`: depth and motion for temporal processing.
+- `src/core/vr/openxr_runtime.*`: render/output resolution, per-eye submission and OpenXR composition.
+- `components/dlss-host`: adapted x64 host built with BVR_DLSS45_ONLY.
+- `apps/launcher`: safe configuration and WinForms launcher.
+- `installer`: self-contained packaging, transactional installation and restoration.
 
-## Fallos y recuperación
+## Failures and recovery
 
-Las dimensiones o el manifiesto de capacidades inválidos impiden activar DLSS/DLAA. Una pérdida del host invalida el frame temporal y evita presentar una mezcla de ojos o historiales. Los registros distinguen el cliente del juego y cada host por ojo.
+Invalid dimensions or capabilities prevent DLSS/DLAA activation. Host loss
+invalidates the temporal frame rather than presenting mixed eyes or history.
+Logs distinguish the game client from each eye's helper.
 
-El instalador mantiene un manifiesto local fuera del juego y una copia por archivo sustituido. Restaurar utiliza ese estado para devolver el contenido anterior, no una aproximación de la versión original.
+The installer stores a local manifest outside the game and backs up every
+replaced file. Restore uses this state to return the previous contents, not
+an approximation of an original installation.
 
-## Fuera de alcance
+## Out of scope
 
 - DLSS 5 Neural Rendering.
-- Frame Generation o Multi Frame Generation.
+- Frame Generation or Multi Frame Generation.
 - Ray Reconstruction.
-- FXAA como opción pública.
-- Reescalado espacial como opción pública.
+- FXAA as a public option.
+- Spatial upscaling as a public option.
 
-Los nombres heredados que contienen dlss5 dentro del host se conservan únicamente como rastro del proyecto de origen; no describen la capacidad de esta Release.
+Historical host names containing dlss5 preserve upstream provenance only;
+they do not describe this release's capabilities.

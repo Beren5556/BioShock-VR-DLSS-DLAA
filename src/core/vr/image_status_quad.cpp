@@ -266,7 +266,7 @@ const XrCompositionLayerBaseHeader* layer(
         quad.space = viewSpace;
         quad.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
         quad.subImage.swapchain = g_state.swapchain;
-        const uint32_t visibleHeight = status.rfind("OPCIONES GRAFICAS\n", 0) == 0 ? kHeight : kCompactHeight;
+        const uint32_t visibleHeight = status.rfind("GRAPHICS OPTIONS\n", 0) == 0 ? kHeight : kCompactHeight;
         quad.subImage.imageRect = {{0, 0}, {static_cast<int32_t>(kWidth),
                                           static_cast<int32_t>(visibleHeight)}};
         quad.pose.orientation.w = 1.0f;
